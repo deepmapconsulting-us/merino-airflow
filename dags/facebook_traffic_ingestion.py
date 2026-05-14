@@ -14,7 +14,7 @@ from airflow.decorators import dag, task
 
 @dag(
     dag_id="facebook_traffic_ingestion",
-    schedule="@daily",
+    schedule="@hourly",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
     tags=["facebook", "traffic", "ingestion", "meta"],
