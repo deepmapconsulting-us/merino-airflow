@@ -2,7 +2,33 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+.eggs/
+dist/
+build/
+
+# local Python env (IDE / `airflow dags list` etc.)
 .venv/
+venv/
+
+# secrets / local env
 .env
+.env.*
+!.env.example
+
+# editors
 .idea/
 .vscode/
+
+# Airflow local home (if you run `airflow standalone` or `airflow db migrate` here)
+airflow.cfg
+webserver_config.py
+airflow.db
+logs/
+standalone_admin_password.txt
+
+# test / type / lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

@@ -1,0 +1,11 @@
+# Local IDE / CLI only — not used by the K8s image.
+# Python 3.11 (match constraints file minor version to your `python3 --version`):
+#
+#   python3 -m venv .venv
+#   .venv/bin/pip install --upgrade pip
+#   AIRFLOW_CONSTRAINTS_URL=https://raw.githubusercontent.com/apache/airflow/constraints-3.2.0/constraints-3.11.txt
+#   .venv/bin/pip install -r requirements-dev.txt --constraint "$AIRFLOW_CONSTRAINTS_URL"
+#
+# For 3.12: use constraints-3.12.txt in the same URL path.
+
+apache-airflow==3.2.0
