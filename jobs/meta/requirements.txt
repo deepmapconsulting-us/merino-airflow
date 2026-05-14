@@ -1,0 +1,2 @@
+# Meta Marketing API — official Python SDK (no Airflow in this image; keep it small).
+facebook-business==25.0.1

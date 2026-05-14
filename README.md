@@ -9,7 +9,10 @@ The Helm values point at this repo with `subPath: dags`, so the
 
 ```
 dags/        # Airflow DAGs (one .py file per DAG)
+jobs/        # Slim Docker images + Python libs for PodOperator / batch (not git-synced as DAGs)
 ```
+
+See `jobs/meta/README.md` for the Meta Marketing API job image build and push.
 
 ## Adding a DAG
 
