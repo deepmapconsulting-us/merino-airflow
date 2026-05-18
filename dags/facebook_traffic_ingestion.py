@@ -1,7 +1,7 @@
 """Sync current Facebook (Meta) ad objects to GCS and publish the latest pointer.
 
-Credentials are injected from the Airflow secrets backend / Kubernetes secret as
-environment variables. The snapshot payload intentionally excludes credentials.
+Meta access token is read from Airflow Variable `meta_access_token` (GSM:
+`airflow-variables-meta_access_token`). The snapshot payload excludes credentials.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 if MODULE_PATH.exists():
     sys.path.insert(0, str(MODULE_PATH))
 
+META_ACCESS_TOKEN_VARIABLE = "meta_access_token"
 SNAPSHOT_VARIABLE_NAME = "META_CURRENT_AD_OBJECT_SNAPSHOT"
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 DEFAULT_META_PAGE_LIMIT = 500
@@ -45,17 +46,20 @@ DEFAULT_META_PAGE_LIMIT = 500
 def facebook_traffic_ingestion():
     @task
     def sync_current_ad_objects() -> None:
-        access_token = os.environ.get("META_ACCESS_TOKEN", "").strip()
-        if not access_token:
-            raise RuntimeError("META_ACCESS_TOKEN is required to sync Meta ad objects")
-
+        access_token = _meta_access_token()
+        import google.auth  # type: ignore[import-not-found]
         from google.cloud import storage  # type: ignore[import-not-found]
         from merino_meta_jobs.account_snapshot import current_ad_object_snapshot  # type: ignore[import-not-found]
 
         page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
         snapshot = current_ad_object_snapshot(access_token, page_limit=page_limit)
         run_datetime = _run_datetime()
-        snapshot_uri = _write_snapshot_to_gcs(snapshot, run_datetime, storage.Client())
+        credentials, _project_id = google.auth.default()
+        snapshot_uri = _write_snapshot_to_gcs(
+            snapshot,
+            run_datetime,
+            storage.Client(credentials=credentials),
+        )
 
         Variable.set(
             SNAPSHOT_VARIABLE_NAME,
@@ -77,6 +81,16 @@ def facebook_traffic_ingestion():
 
 
 facebook_traffic_ingestion()
+
+
+def _meta_access_token() -> str:
+    token = Variable.get(META_ACCESS_TOKEN_VARIABLE, default_var="").strip()
+    if not token:
+        raise RuntimeError(
+            f"Airflow Variable {META_ACCESS_TOKEN_VARIABLE!r} is required "
+            f"(GSM secret airflow-variables-{META_ACCESS_TOKEN_VARIABLE})"
+        )
+    return token
 
 
 def _run_datetime() -> str:
