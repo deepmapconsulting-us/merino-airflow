@@ -1,7 +1,7 @@
 """Sync current Facebook (Meta) ad objects to GCS and publish the latest pointer.
 
 Meta access token is read from Airflow Variable `meta_access_token` (GSM:
-`airflow-variables-meta_access_token`). The snapshot payload excludes credentials.
+`airflow-variables-meta_access_token`), with fallback to env `META_ACCESS_TOKEN`.
 """
 
 from __future__ import annotations
@@ -13,12 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pendulum  # type: ignore[import-not-found]
-from airflow.decorators import dag, task  # type: ignore[import-not-found]
-
-try:
-    from airflow.sdk import Variable  # type: ignore[import-not-found]
-except ImportError:  # Airflow 2 compatibility for local tooling.
-    from airflow.models import Variable  # type: ignore[import-not-found,no-redef]
+from airflow.sdk import Variable, dag, task  # type: ignore[import-not-found]
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 if MODULE_PATH.exists():
@@ -83,25 +78,41 @@ def facebook_traffic_ingestion():
 facebook_traffic_ingestion()
 
 
+def _variable_get(key: str, default: str = "") -> str:
+    """Airflow 3 uses `default=`; Airflow 2 models used `default_var=`."""
+    try:
+        return str(Variable.get(key, default=default))
+    except TypeError:
+        return str(Variable.get(key, default_var=default))
+
+
 def _meta_access_token() -> str:
-    token = Variable.get(META_ACCESS_TOKEN_VARIABLE, default_var="").strip()
+    token = _variable_get(META_ACCESS_TOKEN_VARIABLE).strip()
+    if not token:
+        token = os.environ.get("META_ACCESS_TOKEN", "").strip()
     if not token:
         raise RuntimeError(
-            f"Airflow Variable {META_ACCESS_TOKEN_VARIABLE!r} is required "
-            f"(GSM secret airflow-variables-{META_ACCESS_TOKEN_VARIABLE})"
+            f"Meta access token missing. Set Airflow Variable {META_ACCESS_TOKEN_VARIABLE!r} "
+            f"(GSM secret airflow-variables-{META_ACCESS_TOKEN_VARIABLE}) "
+            "or env META_ACCESS_TOKEN."
         )
     return token
 
 
 def _run_datetime() -> str:
     try:
-        from airflow.operators.python import get_current_context  # type: ignore[import-not-found]
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
 
         logical_date = get_current_context()["logical_date"]
     except Exception:
-        logical_date = datetime.now(timezone.utc)
+        try:
+            from airflow.operators.python import get_current_context  # type: ignore[import-not-found]
 
-    if hasattr(logical_date, "to_datetime_string"):
+            logical_date = get_current_context()["logical_date"]
+        except Exception:
+            logical_date = datetime.now(timezone.utc)
+
+    if hasattr(logical_date, "strftime"):
         return logical_date.strftime("%Y%m%dT%H%M%SZ")
     return logical_date.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
