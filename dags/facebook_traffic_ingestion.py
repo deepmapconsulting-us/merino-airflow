@@ -2,6 +2,9 @@
 
 Meta access token is read from Airflow Variable `meta_access_token` (GSM:
 `airflow-variables-meta_access_token`), with fallback to env `META_ACCESS_TOKEN`.
+Latest snapshot pointer is written to GCS at
+`gs://airflow-run-us-west2/facebook_traffic_ingestion/latest_success.json`
+(and mirrored to Variable `META_CURRENT_AD_OBJECT_SNAPSHOT` when GSM allows).
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ if MODULE_PATH.exists():
 
 META_ACCESS_TOKEN_VARIABLE = "meta_access_token"
 SNAPSHOT_VARIABLE_NAME = "META_CURRENT_AD_OBJECT_SNAPSHOT"
+SNAPSHOT_LATEST_OBJECT = "facebook_traffic_ingestion/latest_success.json"
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 DEFAULT_META_PAGE_LIMIT = 500
 
@@ -50,26 +54,17 @@ def facebook_traffic_ingestion():
         snapshot = current_ad_object_snapshot(access_token, page_limit=page_limit)
         run_datetime = _run_datetime()
         credentials, _project_id = google.auth.default()
-        snapshot_uri = _write_snapshot_to_gcs(
-            snapshot,
+        storage_client = storage.Client(credentials=credentials)
+        snapshot_uri = _write_snapshot_to_gcs(snapshot, run_datetime, storage_client)
+        latest_pointer_uri = _publish_latest_pointer(
+            storage_client,
+            snapshot_uri,
             run_datetime,
-            storage.Client(credentials=credentials),
-        )
-
-        Variable.set(
-            SNAPSHOT_VARIABLE_NAME,
-            json.dumps(
-                {
-                    "final_output": snapshot_uri,
-                    "last_success_datetime": run_datetime,
-                },
-                separators=(",", ":"),
-                sort_keys=True,
-            ),
         )
         print(
             "facebook_traffic_ingestion: synced "
-            f"{len(snapshot['accounts'])} Meta ad account snapshots to {snapshot_uri}"
+            f"{len(snapshot['accounts'])} Meta ad account snapshots to {snapshot_uri}; "
+            f"latest pointer at {latest_pointer_uri}"
         )
 
     sync_current_ad_objects()
@@ -78,12 +73,12 @@ def facebook_traffic_ingestion():
 facebook_traffic_ingestion()
 
 
-def _variable_get(key: str, default: str = "") -> str:
-    """Airflow 3 uses `default=`; Airflow 2 models used `default_var=`."""
+def _variable_get(key: str, fallback: str = "") -> str:
+    """Read a Variable without Airflow 2 `default_var` (not valid in Airflow 3 SDK)."""
     try:
-        return str(Variable.get(key, default=default))
-    except TypeError:
-        return str(Variable.get(key, default_var=default))
+        return str(Variable.get(key))
+    except Exception:
+        return fallback
 
 
 def _meta_access_token() -> str:
@@ -125,3 +120,27 @@ def _write_snapshot_to_gcs(snapshot: dict, run_datetime: str, storage_client) ->
         content_type="application/json",
     )
     return f"gs://{SNAPSHOT_BUCKET}/{object_name}"
+
+
+def _publish_latest_pointer(storage_client, snapshot_uri: str, run_datetime: str) -> str:
+    """Write latest-success pointer to GCS; optionally mirror to Airflow Variable for UI."""
+    pointer = {
+        "final_output": snapshot_uri,
+        "last_success_datetime": run_datetime,
+    }
+    payload = json.dumps(pointer, separators=(",", ":"), sort_keys=True)
+    storage_client.bucket(SNAPSHOT_BUCKET).blob(SNAPSHOT_LATEST_OBJECT).upload_from_string(
+        payload,
+        content_type="application/json",
+    )
+    latest_uri = f"gs://{SNAPSHOT_BUCKET}/{SNAPSHOT_LATEST_OBJECT}"
+
+    try:
+        Variable.set(SNAPSHOT_VARIABLE_NAME, payload)
+    except Exception as exc:
+        print(
+            f"facebook_traffic_ingestion: skipped Variable.set({SNAPSHOT_VARIABLE_NAME!r}) "
+            f"because GSM Variable write failed: {exc}"
+        )
+
+    return latest_uri
