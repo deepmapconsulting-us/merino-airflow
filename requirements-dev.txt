@@ -9,3 +9,4 @@
 # For 3.12: use constraints-3.12.txt in the same URL path.
 
 apache-airflow==3.2.0
+requests>=2.32.3
