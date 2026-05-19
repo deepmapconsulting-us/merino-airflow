@@ -9,14 +9,11 @@ from typing import Any
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
+# Timestamps on campaigns/adsets (same field names as meta-ads-mcp get_campaigns / get_adsets).
 OBJECT_FIELDS = "id,status,effective_status,created_time,updated_time"
 ADSET_LIST_FIELDS = f"{OBJECT_FIELDS},campaign_id"
-AD_FIELDS = (
-    f"id,status,effective_status,created_time,updated_time,"
-    f"campaign{{{OBJECT_FIELDS}}},"
-    f"adset{{{OBJECT_FIELDS},campaign{{{OBJECT_FIELDS}}}}},"
-    f"creative{{id,status,created_time,updated_time}}"
-)
+# Account /ads: flat fields only. Nested campaign/adset/creative expansions reject created_time.
+AD_FIELDS = "id,status,effective_status,adset_id,campaign_id"
 
 
 def account_ids_from_env() -> list[str]:
@@ -67,7 +64,6 @@ def _account_snapshot(
     page_limit: int,
 ) -> dict[str, Any]:
     list_params = {"fields": OBJECT_FIELDS, "limit": page_limit}
-    ads = client.get_all(f"{account_id}/ads", {"fields": AD_FIELDS, "limit": page_limit})
     campaigns_by_id = _rows_by_id(
         client.get_all(f"{account_id}/campaigns", list_params),
     )
@@ -77,6 +73,7 @@ def _account_snapshot(
             {"fields": ADSET_LIST_FIELDS, "limit": page_limit},
         ),
     )
+    ads = client.get_all(f"{account_id}/ads", {"fields": AD_FIELDS, "limit": page_limit})
 
     return {
         "id": account.get("id") or account_id,
@@ -110,23 +107,22 @@ def _campaign_tree(
     adsets_by_campaign: dict[str, dict[str, dict[str, Any]]] = {}
 
     for ad in ads:
-        adset = ad.get("adset") if isinstance(ad.get("adset"), dict) else {}
-        campaign = _campaign_from_ad(ad, adset)
-        campaign_id = str(campaign.get("id") or "")
+        adset_id = str(ad.get("adset_id") or "")
+        adset_row = adsets_by_id.get(adset_id, {})
+        campaign_id = str(ad.get("campaign_id") or adset_row.get("campaign_id") or "")
         if not campaign_id:
             continue
 
         if campaign_id not in campaigns:
             campaigns[campaign_id] = {}
-        _merge_object_fields(campaigns[campaign_id], campaign)
         if campaign_id in campaigns_by_id:
             _merge_object_fields(campaigns[campaign_id], campaigns_by_id[campaign_id])
 
         adsets_for_campaign = adsets_by_campaign.setdefault(campaign_id, {})
-        adset_id = str(adset.get("id") or "_unknown_adset")
+        if not adset_id:
+            adset_id = "_unknown_adset"
         if adset_id not in adsets_for_campaign:
             adsets_for_campaign[adset_id] = {}
-        _merge_object_fields(adsets_for_campaign[adset_id], adset)
         if adset_id in adsets_by_id:
             _merge_object_fields(adsets_for_campaign[adset_id], adsets_by_id[adset_id])
 
@@ -157,20 +153,8 @@ def _campaign_tree(
     return list(campaigns.values())
 
 
-def _campaign_from_ad(ad: dict[str, Any], adset: dict[str, Any]) -> dict[str, Any]:
-    if isinstance(ad.get("campaign"), dict):
-        return ad["campaign"]
-    if isinstance(adset.get("campaign"), dict):
-        return adset["campaign"]
-    return {}
-
-
 def _ad_node(ad: dict[str, Any]) -> dict[str, Any]:
-    node = _object_node(ad)
-    creative = ad.get("creative") if isinstance(ad.get("creative"), dict) else {}
-    if creative.get("id"):
-        node["creative"] = _object_node(creative)
-    return node
+    return _object_node(ad)
 
 
 def _object_node(row: dict[str, Any]) -> dict[str, Any]:
