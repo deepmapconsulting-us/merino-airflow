@@ -2,8 +2,8 @@
 
 Meta access token is read from Airflow Variable `meta_access_token` (GSM:
 `airflow-variables-meta_access_token`), with fallback to env `META_ACCESS_TOKEN`.
-Each campaign and adset in the snapshot includes `created_at` and `updated_at`
-(from Meta `created_time` / `updated_time`). Snapshots are written to GCS at
+Each campaign, adset, and ad includes `created_at` and `updated_at` when Meta
+returns `created_time` / `updated_time`. Snapshots are written to GCS at
 `gs://airflow-run-us-west2/facebook_campaign_config_update/<date>/<datetime>/snapshot.json`.
 Latest pointer: `gs://airflow-run-us-west2/facebook_campaign_config_update/latest_success.json`
 (optional Variable mirror when GSM allows).

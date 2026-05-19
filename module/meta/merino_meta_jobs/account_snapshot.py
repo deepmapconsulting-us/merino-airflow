@@ -12,7 +12,7 @@ AD_ACCOUNT_FIELDS = "id,account_id,account_status"
 # Timestamps match meta-ads-mcp list endpoints (flat fields only; nested expansions reject some).
 CAMPAIGN_LIST_FIELDS = "id,status,created_time,updated_time"
 ADSET_LIST_FIELDS = "id,status,campaign_id,created_time,updated_time"
-AD_LIST_FIELDS = "id,status,adset_id,campaign_id,creative{id}"
+AD_LIST_FIELDS = "id,status,adset_id,campaign_id,created_time,updated_time,creative{id}"
 
 
 def account_ids_from_env() -> list[str]:
@@ -27,7 +27,7 @@ def current_ad_object_snapshot(
     account_ids: list[str] | None = None,
     page_limit: int = 500,
 ) -> dict[str, Any]:
-    """Fetch campaign → adset → ad snapshot; timestamps on campaigns and adsets when API returns them."""
+    """Fetch campaign → adset → ad snapshot; timestamps when the API returns created_time/updated_time."""
     client = MetaGraphClient(access_token)
     accounts = account_ids or account_ids_from_env()
     account_rows = _explicit_account_rows(client, accounts) if accounts else _discover_account_rows(client, page_limit)
@@ -156,7 +156,7 @@ def _campaign_tree(
 
 
 def _ad_node(ad: dict[str, Any]) -> dict[str, Any]:
-    node = _object_node(ad, include_timestamps=False)
+    node = _object_node(ad)
     creative = ad.get("creative") if isinstance(ad.get("creative"), dict) else {}
     if creative.get("id"):
         node["creative"] = {"id": creative.get("id")}
