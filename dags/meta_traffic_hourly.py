@@ -21,6 +21,11 @@ import pendulum  # type: ignore[import-not-found]
 from airflow.sdk import dag, task  # type: ignore[import-not-found]
 from airflow.utils.task_group import TaskGroup  # type: ignore[import-not-found]
 
+try:
+    from airflow.providers.standard.sensors.external_task import ExternalTaskSensor  # type: ignore[import-not-found]
+except ImportError:
+    from airflow.sensors.external_task import ExternalTaskSensor  # type: ignore[import-not-found,no-redef]
+
 from meta_gcs import (
     gcs_console_link,
     gcs_uri,
@@ -43,6 +48,7 @@ from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-
 )
 
 DAG_ID = "meta_traffic_hourly"
+CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
 ACTIVE_ACCOUNTS_VARIABLE_NAME = "facebook_active_accounts"
 ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
@@ -89,7 +95,7 @@ SNAPSHOT_INSERT_COLUMNS = (
 
 @dag(
     dag_id=DAG_ID,
-    schedule="@hourly",
+    schedule=timedelta(hours=4),
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
     tags=["meta", "traffic", "hourly"],
@@ -327,7 +333,18 @@ def meta_traffic_hourly():
             f"adset={snapshot_write['adset_id']} report_run_id={report_run_id}"
         )
 
+    wait_for_campaign_config = ExternalTaskSensor(
+        task_id="wait_for_facebook_campaign_config_update",
+        external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
+        external_task_id=None,
+        allowed_states=["success"],
+        failed_states=["failed"],
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3 * 60 * 60,
+    )
     config_task = log_campaign_config_source(config_log)
+    wait_for_campaign_config >> config_task
     accounts = config_source.get("accounts", [])
     if not accounts:
         config_task >> no_adsets_from_campaign_config(config_log)
