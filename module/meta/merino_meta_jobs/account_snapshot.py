@@ -9,11 +9,10 @@ from typing import Any
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
-# Timestamps on campaigns/adsets (same field names as meta-ads-mcp get_campaigns / get_adsets).
-OBJECT_FIELDS = "id,status,effective_status,created_time,updated_time"
-ADSET_LIST_FIELDS = f"{OBJECT_FIELDS},campaign_id"
-# Account /ads: flat fields only. Nested campaign/adset/creative expansions reject created_time.
-AD_FIELDS = "id,status,effective_status,adset_id,campaign_id"
+# Timestamps match meta-ads-mcp list endpoints (flat fields only; nested expansions reject some).
+CAMPAIGN_LIST_FIELDS = "id,status,created_time,updated_time"
+ADSET_LIST_FIELDS = "id,status,campaign_id,created_time,updated_time"
+AD_LIST_FIELDS = "id,status,adset_id,campaign_id,creative{id}"
 
 
 def account_ids_from_env() -> list[str]:
@@ -28,7 +27,7 @@ def current_ad_object_snapshot(
     account_ids: list[str] | None = None,
     page_limit: int = 500,
 ) -> dict[str, Any]:
-    """Fetch campaign → adset → ad snapshot with created_at/updated_at on each object."""
+    """Fetch campaign → adset → ad snapshot; timestamps on campaigns and adsets when API returns them."""
     client = MetaGraphClient(access_token)
     accounts = account_ids or account_ids_from_env()
     account_rows = _explicit_account_rows(client, accounts) if accounts else _discover_account_rows(client, page_limit)
@@ -63,17 +62,23 @@ def _account_snapshot(
     account: dict[str, Any],
     page_limit: int,
 ) -> dict[str, Any]:
-    list_params = {"fields": OBJECT_FIELDS, "limit": page_limit}
+    list_params = {"limit": page_limit}
+    ads = client.get_all(
+        f"{account_id}/ads",
+        {"fields": AD_LIST_FIELDS, **list_params},
+    )
     campaigns_by_id = _rows_by_id(
-        client.get_all(f"{account_id}/campaigns", list_params),
+        client.get_all(
+            f"{account_id}/campaigns",
+            {"fields": CAMPAIGN_LIST_FIELDS, **list_params},
+        ),
     )
     adsets_by_id = _rows_by_id(
         client.get_all(
             f"{account_id}/adsets",
-            {"fields": ADSET_LIST_FIELDS, "limit": page_limit},
+            {"fields": ADSET_LIST_FIELDS, **list_params},
         ),
     )
-    ads = client.get_all(f"{account_id}/ads", {"fields": AD_FIELDS, "limit": page_limit})
 
     return {
         "id": account.get("id") or account_id,
@@ -107,9 +112,7 @@ def _campaign_tree(
     adsets_by_campaign: dict[str, dict[str, dict[str, Any]]] = {}
 
     for ad in ads:
-        adset_id = str(ad.get("adset_id") or "")
-        adset_row = adsets_by_id.get(adset_id, {})
-        campaign_id = str(ad.get("campaign_id") or adset_row.get("campaign_id") or "")
+        campaign_id = str(ad.get("campaign_id") or "")
         if not campaign_id:
             continue
 
@@ -119,8 +122,7 @@ def _campaign_tree(
             _merge_object_fields(campaigns[campaign_id], campaigns_by_id[campaign_id])
 
         adsets_for_campaign = adsets_by_campaign.setdefault(campaign_id, {})
-        if not adset_id:
-            adset_id = "_unknown_adset"
+        adset_id = str(ad.get("adset_id") or "_unknown_adset")
         if adset_id not in adsets_for_campaign:
             adsets_for_campaign[adset_id] = {}
         if adset_id in adsets_by_id:
@@ -154,16 +156,26 @@ def _campaign_tree(
 
 
 def _ad_node(ad: dict[str, Any]) -> dict[str, Any]:
-    return _object_node(ad)
+    node = _object_node(ad, include_timestamps=False)
+    creative = ad.get("creative") if isinstance(ad.get("creative"), dict) else {}
+    if creative.get("id"):
+        node["creative"] = {"id": creative.get("id")}
+    return node
 
 
-def _object_node(row: dict[str, Any]) -> dict[str, Any]:
-    return {
+def _object_node(row: dict[str, Any], *, include_timestamps: bool = True) -> dict[str, Any]:
+    node: dict[str, Any] = {
         "id": row.get("id"),
         "status": _status(row),
-        "created_at": row.get("created_time"),
-        "updated_at": row.get("updated_time"),
     }
+    if include_timestamps:
+        created_time = row.get("created_time")
+        updated_time = row.get("updated_time")
+        if created_time is not None:
+            node["created_at"] = created_time
+        if updated_time is not None:
+            node["updated_at"] = updated_time
+    return node
 
 
 def _merge_object_fields(node: dict[str, Any], row: dict[str, Any]) -> None:
