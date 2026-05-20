@@ -36,7 +36,7 @@ from meta_gcs import (
     partition_hour as report_partition_hour,
     read_json_from_gcs,
     read_latest_snapshot_pointer,
-    report_datetime,
+    report_partition_datetime,
     variable_get,
 )
 
@@ -442,6 +442,7 @@ def meta_traffic_hourly():
         task_id="wait_for_facebook_campaign_config_update",
         external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
         external_task_id=None,
+        execution_date_fn=_campaign_config_logical_date,
         allowed_states=["success"],
         failed_states=["failed"],
         mode="reschedule",
@@ -804,13 +805,17 @@ def _delta_key_columns(level: str) -> tuple[str, ...]:
 
 
 def _is_first_report_run(value: Any) -> bool:
-    return report_datetime(value).hour == 0
+    return report_partition_datetime(value).hour == 0
 
 
 def _delta_run_is_stale(value: Any) -> bool:
-    run_hour = report_datetime(value).start_of("hour")
-    current_hour = pendulum.now(REPORT_TIMEZONE).start_of("hour")
+    run_hour = report_partition_datetime(value)
+    current_hour = report_partition_datetime(pendulum.now(REPORT_TIMEZONE))
     return run_hour < current_hour
+
+
+def _campaign_config_logical_date(logical_date=None, **context):
+    return report_partition_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
 
 
 meta_traffic_hourly()

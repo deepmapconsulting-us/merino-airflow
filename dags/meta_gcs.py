@@ -15,6 +15,7 @@ META_ACCESS_TOKEN_VARIABLE = "meta_access_token"
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 # Meta ad accounts report insights by calendar day in account TZ; default matches Merino US accounts.
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
+REPORT_PARTITION_HOURS = 4
 
 
 def variable_get(key: str, fallback: str = "") -> str:
@@ -67,9 +68,16 @@ def report_datetime(value: Any | None = None) -> pendulum.DateTime:
     return pendulum.now(_report_timezone())
 
 
+def report_partition_datetime(value: Any | None = None) -> pendulum.DateTime:
+    """Return the report-time 4-hour bucket for a run timestamp."""
+    local = report_datetime(value)
+    partition_hour = (local.hour // REPORT_PARTITION_HOURS) * REPORT_PARTITION_HOURS
+    return local.set(hour=partition_hour, minute=0, second=0, microsecond=0)
+
+
 def run_partition() -> tuple[str, str]:
-    """GCS path partition keys using the Meta reporting calendar day in REPORT_TIMEZONE."""
-    local = report_datetime()
+    """GCS path partition keys using the Meta 4-hour report bucket."""
+    local = report_partition_datetime()
     run_date = local.format("YYYY-MM-DD")
     run_datetime = local.format("YYYYMMDDTHHmmssZZ")
     return run_date, run_datetime
@@ -81,8 +89,8 @@ def metric_date() -> str:
 
 
 def partition_hour(value: Any | None = None) -> str:
-    """Hour bucket for snapshot/hourly tables, truncated in REPORT_TIMEZONE."""
-    return report_datetime(value).start_of("hour").isoformat()
+    """Four-hour bucket for snapshot/hourly tables in REPORT_TIMEZONE."""
+    return report_partition_datetime(value).isoformat()
 
 
 def snapshot_object_name(prefix: str, run_date: str, run_datetime: str) -> str:

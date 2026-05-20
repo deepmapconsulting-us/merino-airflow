@@ -34,9 +34,10 @@ The DAG is scheduled with `schedule=timedelta(hours=4)`, matching
 `facebook_campaign_config_update`.
 
 Before any traffic work starts, `wait_for_facebook_campaign_config_update` waits
-for the corresponding `facebook_campaign_config_update` DAG run to succeed. This
-keeps traffic ingestion behind the config refresh, so the traffic run uses a
-recent account/campaign/adset/ad tree.
+for the corresponding `facebook_campaign_config_update` 4-hour report bucket to
+succeed. Manual runs are floored to the same `00/04/08/12/16/20` Pacific bucket,
+so a `16:48` traffic run waits on the `16:00` campaign config run instead of a
+non-bucketed `16:48` logical date.
 
 The sensor runs in `reschedule` mode, so it does not hold a worker slot while it
 waits.
@@ -225,7 +226,7 @@ For each insight row, the DAG creates one snapshot row with:
 
 - deterministic `snapshot_run_id`
 - `snapshot_at` from the pull generation time
-- `partition_hour` from the Airflow logical date, truncated to the hour in
+- `partition_hour` from the Airflow logical date, floored to the 4-hour bucket in
   `META_REPORT_TIMEZONE` (default `America/Los_Angeles`)
 - fixed source fields: `company="merino"`, `platform="meta"`,
   `source="facebook"`
@@ -279,12 +280,12 @@ in `META_REPORT_TIMEZONE`, there is no earlier same-day snapshot to subtract, so
 the delta rows equal the snapshot rows. Later 4-hour runs subtract the previous
 same-day snapshot.
 
-If a run's report-hour bucket is already older than the current
-`META_REPORT_TIMEZONE` hour, the DAG skips delta writes for that run. This covers
-manual or delayed historical runs: Meta returns the latest daily total for the
-requested report date, not the value that existed at that old 4-hour boundary, so
-writing a delta would corrupt or backfill the wrong interval. Snapshot rows can
-still be written for audit/debugging.
+If a run's 4-hour report bucket is already older than the current
+`META_REPORT_TIMEZONE` 4-hour bucket, the DAG skips delta writes for that run.
+This covers manual or delayed historical runs: Meta returns the latest daily
+total for the requested report date, not the value that existed at that old
+4-hour boundary, so writing a delta would corrupt or backfill the wrong interval.
+Snapshot rows can still be written for audit/debugging.
 
 The results are inserted with deterministic `report_run_id` values. Inserts also
 use `ON CONFLICT DO NOTHING` to keep task retries idempotent.
