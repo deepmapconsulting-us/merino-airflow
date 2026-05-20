@@ -1,0 +1,47 @@
+{
+  "ad": {
+    "id": "6983577001652",
+    "name": "0520-Advantage+ 受众-排除已购",
+    "adset_id": "6983577001452",
+    "campaign_id": "6983577001252",
+    "status": "ACTIVE",
+    "created_time": "2026-05-19T21:21:26-0700",
+    "updated_time": "2026-05-19T21:30:11-0700",
+    "creative": { "id": "1501840674931595" },
+    "preview_shareable_link": "https://fb.me/28s22ttbuh8GGpg"
+  },
+  "creative": {
+    "id": "1501840674931595",
+    "name": "Merino Month — Final Days 2026-05-19-9046c15c337752fa54ff8bbbac089b22",
+    "status": "ACTIVE",
+    "object_type": "VIDEO",
+    "title": "Merino Month — Final Days",
+    "body": "We're preparing for what's next.\nBefore that happens\nthis is a rare window to build your Merino essentials\nMerino Month——is your best chance to get in\nTry one,or build your full set while it lasts.\nThe more you choose,the more it makes sense.\nDrop a comment with what you want next—colors, fits, styles.We're designing with you.",
+    "thumbnail_url": "https://scontent-lax3-1.xx.fbcdn.net/v/t15.5256-10/680286763_1002899828829834_7174488102236150483_n.jpg?...",
+    "effective_object_story_id": "101118664986964_1479461784194147",
+    "object_story_spec": {
+      "page_id": "101118664986964",
+      "instagram_user_id": "17841445442511996",
+      "video_data": {
+        "video_id": "979483705027596",
+        "title": "Merino Month — Final Days",
+        "message": "...",
+        "link_description": "Best time to start",
+        "call_to_action": {
+          "type": "SEE_DETAILS",
+          "value": { "link": "https://merinoprotect.com/collections/merino-wool-t-shirt-men" }
+        },
+        "image_hash": "410c7a3b112a359192ec0b926fcf0a4f"
+      }
+    },
+    "degrees_of_freedom_spec": {
+      "creative_features_spec": {
+        "enhance_cta": { "enroll_status": "OPT_IN" },
+        "inline_comment": { "enroll_status": "OPT_IN" },
+        "product_extensions": { "enroll_status": "OPT_IN" },
+        "text_optimizations": { "enroll_status": "OPT_OUT" },
+        "video_auto_crop": { "enroll_status": "OPT_IN" }
+      }
+    }
+  }
+}

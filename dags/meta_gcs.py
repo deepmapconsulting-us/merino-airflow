@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
+from typing import Any
 from urllib.parse import quote
 
+import pendulum  # type: ignore[import-not-found]
 from airflow.sdk import Variable  # type: ignore[import-not-found]
 
 META_ACCESS_TOKEN_VARIABLE = "meta_access_token"
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
+# Meta ad accounts report insights by calendar day in account TZ; default matches Merino US accounts.
+REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
 
 
 def variable_get(key: str, fallback: str = "") -> str:
@@ -34,7 +39,8 @@ def meta_access_token() -> str:
     return token
 
 
-def logical_date_utc():
+def logical_date():
+    """Airflow logical date for the current run, or now when called outside a task."""
     try:
         from airflow.sdk import get_current_context  # type: ignore[import-not-found]
 
@@ -48,17 +54,35 @@ def logical_date_utc():
             return datetime.now(timezone.utc)
 
 
+def _report_timezone():
+    return pendulum.timezone(REPORT_TIMEZONE)
+
+
+def report_datetime(value: Any | None = None) -> pendulum.DateTime:
+    """Convert a run timestamp to REPORT_TIMEZONE (default America/Los_Angeles)."""
+    if value is None:
+        value = logical_date()
+    if hasattr(value, "astimezone"):
+        return pendulum.instance(value).in_timezone(_report_timezone())
+    return pendulum.now(_report_timezone())
+
+
 def run_partition() -> tuple[str, str]:
-    logical_date = logical_date_utc()
-    if hasattr(logical_date, "astimezone"):
-        logical_date = logical_date.astimezone(timezone.utc)
-    run_date = logical_date.strftime("%Y-%m-%d")
-    run_datetime = logical_date.strftime("%Y%m%dT%H%M%SZ")
+    """GCS path partition keys using the Meta reporting calendar day in REPORT_TIMEZONE."""
+    local = report_datetime()
+    run_date = local.format("YYYY-MM-DD")
+    run_datetime = local.format("YYYYMMDDTHHmmssZZ")
     return run_date, run_datetime
 
 
 def metric_date() -> str:
+    """Calendar day sent to Meta insights time_range (account-local reporting day)."""
     return run_partition()[0]
+
+
+def partition_hour(value: Any | None = None) -> str:
+    """Hour bucket for snapshot/hourly tables, truncated in REPORT_TIMEZONE."""
+    return report_datetime(value).start_of("hour").isoformat()
 
 
 def snapshot_object_name(prefix: str, run_date: str, run_datetime: str) -> str:

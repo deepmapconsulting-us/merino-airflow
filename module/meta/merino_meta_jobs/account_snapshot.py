@@ -9,6 +9,7 @@ from typing import Any
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
+AD_ACCOUNT_TIMEZONE_FIELDS = "timezone_name"
 # Timestamps match meta-ads-mcp list endpoints (flat fields only; nested expansions reject some).
 CAMPAIGN_LIST_FIELDS = "id,status,created_time,updated_time"
 ADSET_LIST_FIELDS = "id,status,campaign_id,created_time,updated_time"
@@ -25,19 +26,27 @@ def current_ad_object_snapshot(
     access_token: str,
     *,
     account_ids: list[str] | None = None,
+    account_timezone_by_id: dict[str, str] | None = None,
     page_limit: int = 500,
 ) -> dict[str, Any]:
     """Fetch campaign → adset → ad snapshot; timestamps when the API returns created_time/updated_time."""
     client = MetaGraphClient(access_token)
     accounts = account_ids or account_ids_from_env()
     account_rows = _explicit_account_rows(client, accounts) if accounts else _discover_account_rows(client, page_limit)
+    account_timezone_by_id = account_timezone_by_id if account_timezone_by_id is not None else {}
 
     snapshot_accounts: dict[str, Any] = {}
     for account in account_rows:
         account_id = ensure_act_prefix(str(account.get("id") or account.get("account_id") or ""))
         if not account_id:
             continue
-        snapshot_accounts[account_id] = _account_snapshot(client, account_id, account, page_limit)
+        snapshot_accounts[account_id] = _account_snapshot(
+            client,
+            account_id,
+            account,
+            page_limit,
+            timezone_name=_account_timezone_name(client, account_id, account, account_timezone_by_id),
+        )
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -56,11 +65,32 @@ def _explicit_account_rows(client: MetaGraphClient, account_ids: list[str]) -> l
     ]
 
 
+def _account_timezone_name(
+    client: MetaGraphClient,
+    account_id: str,
+    account: dict[str, Any],
+    account_timezone_by_id: dict[str, str],
+) -> str | None:
+    timezone_name = account_timezone_by_id.get(account_id)
+    if timezone_name:
+        return timezone_name
+
+    timezone_name = account.get("timezone_name")
+    if timezone_name is None:
+        timezone_name = client.get(account_id, {"fields": AD_ACCOUNT_TIMEZONE_FIELDS}).get("timezone_name")
+    if timezone_name:
+        account_timezone_by_id[account_id] = str(timezone_name)
+        return str(timezone_name)
+    return None
+
+
 def _account_snapshot(
     client: MetaGraphClient,
     account_id: str,
     account: dict[str, Any],
     page_limit: int,
+    *,
+    timezone_name: str | None = None,
 ) -> dict[str, Any]:
     list_params = {"limit": page_limit}
     ads = client.get_all(
@@ -83,6 +113,7 @@ def _account_snapshot(
     return {
         "id": account.get("id") or account_id,
         "status": account.get("account_status"),
+        "timezone_name": timezone_name,
         "campaigns": _campaign_tree(
             ads,
             campaigns_by_id=campaigns_by_id,

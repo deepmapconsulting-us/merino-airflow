@@ -7,22 +7,26 @@ returns `created_time` / `updated_time`. Snapshots are written to GCS at
 `gs://airflow-run-us-west2/facebook_campaign_config_update/<date>/<datetime>/snapshot.json`.
 Latest pointer: `gs://airflow-run-us-west2/facebook_campaign_config_update/latest_success.json`.
 Airflow Variable `META_CAMPAIGN_CONFIG_SNAPSHOT` mirrors the full snapshot JSON (not the pointer).
+Airflow Variable `FACEBOOK_AD_ACCOUNT_TIMEZONE` caches account timezone names by ad account id.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import sys
 from datetime import timedelta
 from pathlib import Path
 
 import pendulum  # type: ignore[import-not-found]
-from airflow.sdk import dag, task  # type: ignore[import-not-found]
+from airflow.sdk import Variable, dag, task  # type: ignore[import-not-found]
 
 from meta_gcs import (
+    REPORT_TIMEZONE,
     meta_access_token,
     publish_latest_pointer,
     run_partition,
+    variable_get,
     write_snapshot_to_gcs,
 )
 
@@ -33,13 +37,42 @@ if MODULE_PATH.exists():
 DAG_ID = "facebook_campaign_config_update"
 GCS_PREFIX = "facebook_campaign_config_update"
 SNAPSHOT_VARIABLE_NAME = "META_CAMPAIGN_CONFIG_SNAPSHOT"
+TIMEZONE_VARIABLE_NAME = "FACEBOOK_AD_ACCOUNT_TIMEZONE"
 DEFAULT_META_PAGE_LIMIT = 500
+
+
+def _account_timezone_cache() -> dict[str, str]:
+    value = variable_get(TIMEZONE_VARIABLE_NAME).strip()
+    if not value:
+        return {}
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError:
+        print(f"{DAG_ID}: ignoring invalid JSON in Airflow Variable {TIMEZONE_VARIABLE_NAME!r}")
+        return {}
+    if not isinstance(payload, dict):
+        print(f"{DAG_ID}: ignoring non-dict Airflow Variable {TIMEZONE_VARIABLE_NAME!r}")
+        return {}
+    return {str(account_id): str(timezone_name) for account_id, timezone_name in payload.items() if timezone_name}
+
+
+def _save_account_timezone_cache(account_timezone_by_id: dict[str, str]) -> None:
+    try:
+        Variable.set(
+            TIMEZONE_VARIABLE_NAME,
+            json.dumps(account_timezone_by_id, separators=(",", ":"), sort_keys=True),
+        )
+    except Exception as exc:
+        print(
+            f"{DAG_ID}: skipped Variable.set({TIMEZONE_VARIABLE_NAME!r}) "
+            f"because GSM Variable write failed: {exc}"
+        )
 
 
 @dag(
     dag_id=DAG_ID,
     schedule=timedelta(hours=4),
-    start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
+    start_date=pendulum.datetime(2026, 1, 1, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["facebook", "campaign", "config", "meta"],
     default_args={
@@ -58,7 +91,12 @@ def facebook_campaign_config_update():
         from merino_meta_jobs.account_snapshot import current_ad_object_snapshot  # type: ignore[import-not-found]
 
         page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
-        snapshot = current_ad_object_snapshot(access_token, page_limit=page_limit)
+        account_timezone_by_id = _account_timezone_cache()
+        snapshot = current_ad_object_snapshot(
+            access_token,
+            account_timezone_by_id=account_timezone_by_id,
+            page_limit=page_limit,
+        )
         run_date, run_datetime = run_partition()
         credentials, _project_id = google.auth.default()
         storage_client = storage.Client(credentials=credentials)
@@ -79,6 +117,7 @@ def facebook_campaign_config_update():
             variable_name=SNAPSHOT_VARIABLE_NAME,
             variable_snapshot=snapshot,
         )
+        _save_account_timezone_cache(account_timezone_by_id)
         print(
             f"{DAG_ID}: synced "
             f"{len(snapshot['accounts'])} Meta ad account config snapshots to {snapshot_uri}; "

@@ -13,11 +13,13 @@ from merino_meta_jobs.account_snapshot import account_ids_from_env
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
-INSIGHT_FIELDS = (
-    "ad_id,ad_name,campaign_id,adset_id,"
+COMMON_INSIGHT_FIELDS = (
     "impressions,clicks,spend,reach,frequency,ctr,cpc,cpm,"
     "actions,action_values,cost_per_action_type,conversions"
 )
+CAMPAIGN_INSIGHT_FIELDS = f"campaign_id,campaign_name,{COMMON_INSIGHT_FIELDS}"
+ADSET_INSIGHT_FIELDS = f"campaign_id,campaign_name,adset_id,adset_name,{COMMON_INSIGHT_FIELDS}"
+AD_INSIGHT_FIELDS = f"ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,{COMMON_INSIGHT_FIELDS}"
 FACEBOOK_ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
 FACEBOOK_TRAFFIC_LOOKUP_WINDOWS_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS = 3
@@ -49,7 +51,7 @@ def traffic_hourly_snapshot(
             f"{account_id}/insights",
             {
                 "level": "ad",
-                "fields": INSIGHT_FIELDS,
+                "fields": AD_INSIGHT_FIELDS,
                 "time_range": time_range,
                 "limit": page_limit,
             },
@@ -76,12 +78,86 @@ def adset_traffic_hourly_snapshot(
     page_limit: int = 500,
 ) -> dict[str, Any]:
     """Fetch ad-level insights for one adset and one calendar day."""
+    return ad_traffic_snapshot(
+        access_token,
+        account_id,
+        adset_id,
+        metric_date,
+        page_limit=page_limit,
+    )
+
+
+def campaign_traffic_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_id: str,
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch campaign-level insights for one campaign and one calendar day."""
+    client = MetaGraphClient(access_token)
+    insights = client.get_all(
+        f"{campaign_id}/insights",
+        {
+            "level": "campaign",
+            "fields": CAMPAIGN_INSIGHT_FIELDS,
+            "time_range": {"since": metric_date, "until": metric_date},
+            "limit": page_limit,
+        },
+    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "metric_date": metric_date,
+        "account_id": ensure_act_prefix(account_id),
+        "campaign_id": str(campaign_id),
+        "insights": insights,
+    }
+
+
+def adset_traffic_snapshot(
+    access_token: str,
+    account_id: str,
+    adset_id: str,
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch adset-level insights for one adset and one calendar day."""
+    client = MetaGraphClient(access_token)
+    insights = client.get_all(
+        f"{adset_id}/insights",
+        {
+            "level": "adset",
+            "fields": ADSET_INSIGHT_FIELDS,
+            "time_range": {"since": metric_date, "until": metric_date},
+            "limit": page_limit,
+        },
+    )
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "metric_date": metric_date,
+        "account_id": ensure_act_prefix(account_id),
+        "adset_id": str(adset_id),
+        "insights": insights,
+    }
+
+
+def ad_traffic_snapshot(
+    access_token: str,
+    account_id: str,
+    adset_id: str,
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch ad-level insights for one adset and one calendar day."""
     client = MetaGraphClient(access_token)
     insights = client.get_all(
         f"{adset_id}/insights",
         {
             "level": "ad",
-            "fields": INSIGHT_FIELDS,
+            "fields": AD_INSIGHT_FIELDS,
             "time_range": {"since": metric_date, "until": metric_date},
             "limit": page_limit,
         },
@@ -103,7 +179,7 @@ def traffic_accounts_from_config(
     lookup_window_days: int | None = None,
     now: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Select account/adset work from a campaign config snapshot."""
+    """Select account/campaign/adset work from a campaign config snapshot."""
     active_accounts = {
         ensure_act_prefix(account_id)
         for account_id in account_ids_from_text(
@@ -127,26 +203,42 @@ def traffic_accounts_from_config(
         if active_accounts and account_id not in active_accounts:
             continue
 
-        selected_adsets: list[dict[str, Any]] = []
+        selected_campaigns: list[dict[str, Any]] = []
         for campaign in account.get("campaigns", []):
             campaign_id = str(campaign.get("id") or "")
+            if not campaign_id:
+                continue
+            selected_adsets: list[dict[str, Any]] = []
             for adset in campaign.get("adsets", []):
-                if _adset_should_import(adset, cutoff):
+                adset_id = str(adset.get("id") or "")
+                if adset_id and _object_should_import(adset, cutoff):
                     selected_adsets.append(
                         {
-                            "id": str(adset.get("id")),
+                            "id": adset_id,
                             "status": adset.get("status"),
                             "updated_at": adset.get("updated_at"),
                             "campaign_id": campaign_id,
+                            "ads": _ad_nodes_from_config(adset.get("ads", [])),
                         }
                     )
 
-        if selected_adsets:
+            if selected_adsets or _object_should_import(campaign, cutoff):
+                selected_campaigns.append(
+                    {
+                        "id": campaign_id,
+                        "status": campaign.get("status"),
+                        "updated_at": campaign.get("updated_at"),
+                        "adsets": selected_adsets,
+                    }
+                )
+
+        if selected_campaigns:
             selected_accounts.append(
                 {
                     "id": account_id,
                     "status": account.get("status"),
-                    "adsets": selected_adsets,
+                    "timezone_name": account.get("timezone_name"),
+                    "campaigns": selected_campaigns,
                 }
             )
 
@@ -168,12 +260,32 @@ def _explicit_account_rows(client: MetaGraphClient, account_ids: list[str]) -> l
     ]
 
 
-def _adset_should_import(adset: dict[str, Any], cutoff: datetime) -> bool:
-    status = str(adset.get("status") or "").upper()
+def _ad_nodes_from_config(rows: Any) -> list[dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+
+    ads: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("id"):
+            continue
+        creative = row.get("creative") if isinstance(row.get("creative"), dict) else {}
+        ads.append(
+            {
+                "id": str(row["id"]),
+                "status": row.get("status"),
+                "updated_at": row.get("updated_at"),
+                "creative_id": str(creative["id"]) if creative.get("id") else None,
+            }
+        )
+    return ads
+
+
+def _object_should_import(row: dict[str, Any], cutoff: datetime) -> bool:
+    status = str(row.get("status") or "").upper()
     if status == "ACTIVE":
         return True
 
-    updated_at = _meta_datetime(adset.get("updated_at"))
+    updated_at = _meta_datetime(row.get("updated_at"))
     return updated_at is not None and updated_at >= cutoff
 
 
