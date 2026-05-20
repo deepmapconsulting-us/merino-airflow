@@ -45,7 +45,7 @@ saving time, `2026-05-19T11:10:00Z` is `2026-05-19 04:10` in
 Before any traffic work starts, `wait_for_facebook_campaign_config_update` waits
 for the corresponding `facebook_campaign_config_update` 4-hour report bucket to
 succeed. Manual runs are floored to the same Pacific report bucket, so a `16:48`
-traffic run waits on the matching campaign config bucket instead of a
+traffic run waits on the matching campaign config boundary instead of a
 non-bucketed `16:48` logical date.
 
 The midnight run is special: `00:10` closes the previous report day, so it maps

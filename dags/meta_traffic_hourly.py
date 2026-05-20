@@ -37,7 +37,6 @@ from meta_gcs import (
     read_json_from_gcs,
     read_latest_snapshot_pointer,
     report_partition_datetime,
-    report_schedule_datetime,
     variable_get,
 )
 
@@ -830,7 +829,7 @@ def _delta_write_skip_reason(value: Any) -> str | None:
 
 
 def _campaign_config_logical_date(logical_date=None, **context):
-    return report_schedule_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
+    return report_partition_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
 
 
 meta_traffic_hourly()
