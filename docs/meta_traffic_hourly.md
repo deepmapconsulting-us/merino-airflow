@@ -38,6 +38,9 @@ The DAG is scheduled at 10 minutes after each 4-hour boundary, matching
 ```
 
 The 10-minute delay gives Meta time to settle reporting data after the boundary.
+Airflow graph tooltips may show these runs in UTC. For example, during daylight
+saving time, `2026-05-19T11:10:00Z` is `2026-05-19 04:10` in
+`America/Los_Angeles`, and `2026-05-19T15:10:00Z` is `08:10` Pacific.
 
 Before any traffic work starts, `wait_for_facebook_campaign_config_update` waits
 for the corresponding `facebook_campaign_config_update` 4-hour report bucket to
@@ -292,12 +295,16 @@ same-day snapshot to subtract, so the delta rows equal the snapshot rows. Later
 run for the previous report day and subtracts that previous day's `20:00`
 snapshot while writing the `00:00` partition boundary.
 
-If a run's 4-hour report bucket is already older than the current
-`META_REPORT_TIMEZONE` 4-hour bucket, the DAG skips delta writes for that run.
-This covers manual or delayed historical runs: Meta returns the latest daily
-total for the requested report date, not the value that existed at that old
-4-hour boundary, so writing a delta would corrupt or backfill the wrong interval.
-Snapshot rows can still be written for audit/debugging.
+For manual or delayed historical runs, the DAG writes deltas only for buckets
+that can still represent the latest daily value:
+
+- the current active report bucket
+- the current day's `00:00` bucket, which is the final pull for the previous
+  report date
+
+Older same-day buckets are skipped because Meta returns the latest daily total
+for the requested report date, not the value that existed at that old 4-hour
+boundary. Snapshot rows can still be written for audit/debugging.
 
 The results are inserted with deterministic `report_run_id` values. Inserts also
 use `ON CONFLICT DO NOTHING` to keep task retries idempotent.

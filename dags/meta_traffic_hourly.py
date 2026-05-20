@@ -419,11 +419,11 @@ def meta_traffic_hourly():
         )
         hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
         metric_hour = report_partition_hour(context["logical_date"])
-        if _delta_run_is_stale(context["logical_date"]):
+        skip_reason = _delta_write_skip_reason(context["logical_date"])
+        if skip_reason:
             print(
-                f"{DAG_ID}: skipped {level} delta rows for stale run "
-                f"metric_hour={metric_hour}; Meta returns latest daily totals, "
-                "so historical/manual runs should not write deltas"
+                f"{DAG_ID}: skipped {level} delta rows for metric_hour={metric_hour}: "
+                f"{skip_reason}"
             )
             return
 
@@ -809,10 +809,24 @@ def _is_first_report_run(value: Any) -> bool:
     return report_partition_datetime(value).hour == 4
 
 
-def _delta_run_is_stale(value: Any) -> bool:
+def _delta_write_skip_reason(value: Any) -> str | None:
     run_hour = report_partition_datetime(value)
     current_hour = report_partition_datetime(pendulum.now(REPORT_TIMEZONE))
-    return run_hour < current_hour
+    if run_hour == current_hour:
+        return None
+    if run_hour.date() == current_hour.date() and run_hour.hour == 0:
+        return None
+    if run_hour.date() == current_hour.date() and run_hour < current_hour:
+        return (
+            "older than the latest current-day bucket; Meta returns latest daily totals, "
+            "not historical intraday values"
+        )
+    if run_hour < current_hour:
+        return (
+            "older than the current final previous-day bucket; Meta returns latest daily totals, "
+            "not historical intraday values"
+        )
+    return "future bucket is not ready"
 
 
 def _campaign_config_logical_date(logical_date=None, **context):
