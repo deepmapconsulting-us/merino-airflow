@@ -71,8 +71,8 @@ def _save_account_timezone_cache(account_timezone_by_id: dict[str, str]) -> None
 
 @dag(
     dag_id=DAG_ID,
-    schedule="10 0,4,8,12,16,20 * * *",
-    start_date=pendulum.datetime(2026, 1, 1, 0, 10, tz=REPORT_TIMEZONE),
+    schedule="0 0,4,8,12,16,20 * * *",
+    start_date=pendulum.datetime(2026, 1, 1, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["facebook", "campaign", "config", "meta"],
     default_args={

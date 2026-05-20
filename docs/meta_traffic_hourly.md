@@ -30,8 +30,7 @@ account and adset instead of running one large traffic import task.
 
 ## Schedule And Dependency
 
-The DAG is scheduled at 10 minutes after each 4-hour boundary, matching
-`facebook_campaign_config_update`:
+The traffic DAG is scheduled at 10 minutes after each 4-hour boundary:
 
 ```text
 10 0,4,8,12,16,20 * * *
@@ -42,11 +41,17 @@ Airflow graph tooltips may show these runs in UTC. For example, during daylight
 saving time, `2026-05-19T11:10:00Z` is `2026-05-19 04:10` in
 `America/Los_Angeles`, and `2026-05-19T15:10:00Z` is `08:10` Pacific.
 
-Before any traffic work starts, `wait_for_facebook_campaign_config_update` waits
-for the corresponding `facebook_campaign_config_update` 4-hour report bucket to
-succeed. Manual runs are floored to the same Pacific report bucket, so a `16:48`
-traffic run waits on the matching campaign config boundary instead of a
-non-bucketed `16:48` logical date.
+`facebook_campaign_config_update` runs on the exact boundary logical dates:
+
+```text
+0 0,4,8,12,16,20 * * *
+```
+
+Before any traffic work starts, `wait_for_facebook_campaign_config_update` checks
+Airflow for a successful `facebook_campaign_config_update` DagRun at the
+corresponding bucket-boundary logical date. It does not check GCS. A `00:10`
+traffic run waits on the config DagRun with logical date `00:00`; a manual
+`16:48` traffic run waits on the config DagRun with logical date `16:00`.
 
 The midnight run is special: `00:10` closes the previous report day, so it maps
 to the `00:00` partition boundary while pulling the previous report date. The
