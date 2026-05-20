@@ -149,20 +149,31 @@ def ad_traffic_snapshot(
     adset_id: str,
     metric_date: str,
     *,
+    ad_ids: list[str] | None = None,
     page_limit: int = 500,
 ) -> dict[str, Any]:
     """Fetch ad-level insights for one adset and one calendar day."""
-    client = MetaGraphClient(access_token)
-    insights = client.get_all(
-        f"{adset_id}/insights",
-        {
-            "level": "ad",
-            "fields": AD_INSIGHT_FIELDS,
-            "time_range": {"since": metric_date, "until": metric_date},
-            "limit": page_limit,
-        },
-    )
     account_id = ensure_act_prefix(account_id)
+    if ad_ids is not None and not ad_ids:
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "metric_date": metric_date,
+            "account_id": account_id,
+            "adset_id": adset_id,
+            "insights": [],
+        }
+
+    client = MetaGraphClient(access_token)
+    params: dict[str, Any] = {
+        "level": "ad",
+        "fields": AD_INSIGHT_FIELDS,
+        "time_range": {"since": metric_date, "until": metric_date},
+        "limit": page_limit,
+    }
+    if ad_ids:
+        params["filtering"] = [{"field": "ad.id", "operator": "IN", "value": ad_ids}]
+
+    insights = client.get_all(f"{adset_id}/insights", params)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "metric_date": metric_date,
@@ -243,6 +254,15 @@ def traffic_accounts_from_config(
             )
 
     return selected_accounts
+
+
+def ad_ids_from_config(adset: dict[str, Any]) -> list[str]:
+    """Return ad IDs listed in a campaign config adset node."""
+    return [str(ad["id"]) for ad in adset.get("ads", []) if ad.get("id")]
+
+
+def insight_ad_is_configured(insight: dict[str, Any], adset: dict[str, Any]) -> bool:
+    return str(insight.get("ad_id") or "") in set(ad_ids_from_config(adset))
 
 
 def account_ids_from_text(value: str) -> list[str]:

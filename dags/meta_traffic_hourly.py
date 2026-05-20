@@ -46,9 +46,11 @@ if MODULE_PATH.exists():
 
 from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-found]
     DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS,
+    ad_ids_from_config,
     ad_traffic_snapshot,
     adset_traffic_snapshot,
     campaign_traffic_snapshot,
+    insight_ad_is_configured,
     traffic_accounts_from_config,
 )
 
@@ -261,6 +263,7 @@ def meta_traffic_hourly():
             account["id"],
             adset["id"],
             metric_date(),
+            ad_ids=ad_ids_from_config(adset),
             page_limit=page_limit,
         )
         snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
@@ -340,7 +343,7 @@ def meta_traffic_hourly():
                 report_partition_hour(context["logical_date"]),
             )
             for insight in adset_snapshot.get("insights", [])
-            if insight.get("adset_id") or adset.get("id")
+            if _insight_adset_id(insight, adset)
         ]
         _insert_snapshot_rows(ADSET_SNAPSHOT_TABLE, ADSET_SNAPSHOT_INSERT_COLUMNS, rows)
         print(
@@ -385,7 +388,7 @@ def meta_traffic_hourly():
                 report_partition_hour(context["logical_date"]),
             )
             for insight in ad_snapshot.get("insights", [])
-            if insight.get("ad_id")
+            if insight_ad_is_configured(insight, adset) and _insight_adset_id(insight, adset)
         ]
         _insert_snapshot_rows(AD_SNAPSHOT_TABLE, AD_SNAPSHOT_INSERT_COLUMNS, rows)
         print(
@@ -617,7 +620,10 @@ def _campaign_snapshot_row(
     partition_hour: str,
 ) -> tuple[Any, ...]:
     return (
-        *_campaign_values(campaign_snapshot, insight, account, campaign, snapshot_run_id, partition_hour),
+        *_snapshot_prefix_values(
+            campaign_snapshot, insight, account, campaign, snapshot_run_id, partition_hour
+        ),
+        "",
         *_metric_values(insight),
     )
 
@@ -632,9 +638,12 @@ def _adset_snapshot_row(
     partition_hour: str,
 ) -> tuple[Any, ...]:
     return (
-        *_campaign_values(adset_snapshot, insight, account, campaign, snapshot_run_id, partition_hour),
-        insight.get("adset_id") or adset["id"],
+        *_snapshot_prefix_values(
+            adset_snapshot, insight, account, campaign, snapshot_run_id, partition_hour
+        ),
+        _insight_adset_id(insight, adset),
         insight.get("adset_name"),
+        "",
         *_metric_values(insight),
     )
 
@@ -650,17 +659,23 @@ def _ad_snapshot_row(
 ) -> tuple[Any, ...]:
     ad_id = str(insight["ad_id"])
     return (
-        *_campaign_values(ad_snapshot, insight, account, campaign, snapshot_run_id, partition_hour),
-        insight.get("adset_id") or adset["id"],
+        *_snapshot_prefix_values(ad_snapshot, insight, account, campaign, snapshot_run_id, partition_hour),
+        _insight_adset_id(insight, adset),
         insight.get("adset_name"),
         ad_id,
         insight.get("ad_name"),
         insight.get("creative_id") or _creative_id_by_ad_id(adset).get(ad_id),
+        "",
         *_metric_values(insight),
     )
 
 
-def _campaign_values(
+def _insight_adset_id(insight: dict[str, Any], adset: dict[str, Any]) -> str:
+    adset_id = str(insight.get("adset_id") or adset.get("id") or "").strip()
+    return adset_id
+
+
+def _snapshot_prefix_values(
     snapshot: dict[str, Any],
     insight: dict[str, Any],
     account: dict[str, Any],
@@ -682,7 +697,6 @@ def _campaign_values(
         "1",
         insight.get("campaign_id") or campaign["id"],
         insight.get("campaign_name"),
-        "",
     )
 
 
