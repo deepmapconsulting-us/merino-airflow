@@ -16,6 +16,7 @@ SNAPSHOT_BUCKET = "airflow-run-us-west2"
 # Meta ad accounts report insights by calendar day in account TZ; default matches Merino US accounts.
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
 REPORT_PARTITION_HOURS = 4
+REPORT_SCHEDULE_DELAY_MINUTES = 10
 
 
 def variable_get(key: str, fallback: str = "") -> str:
@@ -75,6 +76,11 @@ def report_partition_datetime(value: Any | None = None) -> pendulum.DateTime:
     return local.set(hour=partition_hour, minute=0, second=0, microsecond=0)
 
 
+def report_schedule_datetime(value: Any | None = None) -> pendulum.DateTime:
+    """Return the scheduled run timestamp for a report bucket."""
+    return report_partition_datetime(value).add(minutes=REPORT_SCHEDULE_DELAY_MINUTES)
+
+
 def run_partition() -> tuple[str, str]:
     """GCS path partition keys using the Meta 4-hour report bucket."""
     local = report_partition_datetime()
@@ -85,7 +91,10 @@ def run_partition() -> tuple[str, str]:
 
 def metric_date() -> str:
     """Calendar day sent to Meta insights time_range (account-local reporting day)."""
-    return run_partition()[0]
+    local = report_partition_datetime()
+    if local.hour == 0:
+        return local.subtract(days=1).format("YYYY-MM-DD")
+    return local.format("YYYY-MM-DD")
 
 
 def partition_hour(value: Any | None = None) -> str:

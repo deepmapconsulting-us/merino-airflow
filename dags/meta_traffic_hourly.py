@@ -37,6 +37,7 @@ from meta_gcs import (
     read_json_from_gcs,
     read_latest_snapshot_pointer,
     report_partition_datetime,
+    report_schedule_datetime,
     variable_get,
 )
 
@@ -149,8 +150,8 @@ METRIC_COLUMNS = ("impressions", "clicks", "spend", "reach", "frequency", "ctr",
 
 @dag(
     dag_id=DAG_ID,
-    schedule=timedelta(hours=4),
-    start_date=pendulum.datetime(2026, 1, 1, tz=REPORT_TIMEZONE),
+    schedule="10 0,4,8,12,16,20 * * *",
+    start_date=pendulum.datetime(2026, 1, 1, 0, 10, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["meta", "traffic", "hourly"],
     default_args={
@@ -805,7 +806,7 @@ def _delta_key_columns(level: str) -> tuple[str, ...]:
 
 
 def _is_first_report_run(value: Any) -> bool:
-    return report_partition_datetime(value).hour == 0
+    return report_partition_datetime(value).hour == 4
 
 
 def _delta_run_is_stale(value: Any) -> bool:
@@ -815,7 +816,7 @@ def _delta_run_is_stale(value: Any) -> bool:
 
 
 def _campaign_config_logical_date(logical_date=None, **context):
-    return report_partition_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
+    return report_schedule_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
 
 
 meta_traffic_hourly()

@@ -30,14 +30,24 @@ account and adset instead of running one large traffic import task.
 
 ## Schedule And Dependency
 
-The DAG is scheduled with `schedule=timedelta(hours=4)`, matching
-`facebook_campaign_config_update`.
+The DAG is scheduled at 10 minutes after each 4-hour boundary, matching
+`facebook_campaign_config_update`:
+
+```text
+10 0,4,8,12,16,20 * * *
+```
+
+The 10-minute delay gives Meta time to settle reporting data after the boundary.
 
 Before any traffic work starts, `wait_for_facebook_campaign_config_update` waits
 for the corresponding `facebook_campaign_config_update` 4-hour report bucket to
-succeed. Manual runs are floored to the same `00/04/08/12/16/20` Pacific bucket,
-so a `16:48` traffic run waits on the `16:00` campaign config run instead of a
+succeed. Manual runs are floored to the same Pacific report bucket, so a `16:48`
+traffic run waits on the matching campaign config bucket instead of a
 non-bucketed `16:48` logical date.
+
+The midnight run is special: `00:10` closes the previous report day, so it maps
+to the `00:00` partition boundary while pulling the previous report date. The
+first current-day traffic delta is the `04:10` run.
 
 The sensor runs in `reschedule` mode, so it does not hold a worker slot while it
 waits.
@@ -226,8 +236,9 @@ For each insight row, the DAG creates one snapshot row with:
 
 - deterministic `snapshot_run_id`
 - `snapshot_at` from the pull generation time
-- `partition_hour` from the Airflow logical date, floored to the 4-hour bucket in
-  `META_REPORT_TIMEZONE` (default `America/Los_Angeles`)
+- `partition_hour` from the Airflow logical date, floored to the report bucket in
+  `META_REPORT_TIMEZONE` (default `America/Los_Angeles`); `00:10` maps to the
+  `00:00` bucket
 - fixed source fields: `company="merino"`, `platform="meta"`,
   `source="facebook"`
 - account, campaign, adset, ad, and creative identity when present for that
@@ -275,10 +286,11 @@ metrics currently handled by the DAG:
 - cpc
 - cpm
 
-On the first run of the report day, where the Airflow logical date is hour `00`
-in `META_REPORT_TIMEZONE`, there is no earlier same-day snapshot to subtract, so
-the delta rows equal the snapshot rows. Later 4-hour runs subtract the previous
-same-day snapshot.
+On the first run of the report day, the `04:10` run, there is no earlier
+same-day snapshot to subtract, so the delta rows equal the snapshot rows. Later
+4-hour runs subtract the previous same-day snapshot. The `00:10` run is the final
+run for the previous report day and subtracts that previous day's `20:00`
+snapshot while writing the `00:00` partition boundary.
 
 If a run's 4-hour report bucket is already older than the current
 `META_REPORT_TIMEZONE` 4-hour bucket, the DAG skips delta writes for that run.
