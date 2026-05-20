@@ -279,6 +279,13 @@ in `META_REPORT_TIMEZONE`, there is no earlier same-day snapshot to subtract, so
 the delta rows equal the snapshot rows. Later 4-hour runs subtract the previous
 same-day snapshot.
 
+If a run's report-hour bucket is already older than the current
+`META_REPORT_TIMEZONE` hour, the DAG skips delta writes for that run. This covers
+manual or delayed historical runs: Meta returns the latest daily total for the
+requested report date, not the value that existed at that old 4-hour boundary, so
+writing a delta would corrupt or backfill the wrong interval. Snapshot rows can
+still be written for audit/debugging.
+
 The results are inserted with deterministic `report_run_id` values. Inserts also
 use `ON CONFLICT DO NOTHING` to keep task retries idempotent.
 

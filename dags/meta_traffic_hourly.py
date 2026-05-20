@@ -418,6 +418,14 @@ def meta_traffic_hourly():
         )
         hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
         metric_hour = report_partition_hour(context["logical_date"])
+        if _delta_run_is_stale(context["logical_date"]):
+            print(
+                f"{DAG_ID}: skipped {level} delta rows for stale run "
+                f"metric_hour={metric_hour}; Meta returns latest daily totals, "
+                "so historical/manual runs should not write deltas"
+            )
+            return
+
         _write_delta_rows(
             hook,
             snapshot_write=snapshot_write,
@@ -797,6 +805,12 @@ def _delta_key_columns(level: str) -> tuple[str, ...]:
 
 def _is_first_report_run(value: Any) -> bool:
     return report_datetime(value).hour == 0
+
+
+def _delta_run_is_stale(value: Any) -> bool:
+    run_hour = report_datetime(value).start_of("hour")
+    current_hour = pendulum.now(REPORT_TIMEZONE).start_of("hour")
+    return run_hour < current_hour
 
 
 meta_traffic_hourly()
