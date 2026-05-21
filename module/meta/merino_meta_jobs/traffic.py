@@ -351,7 +351,7 @@ def insight_metric_values(insight: dict[str, Any]) -> dict[str, Any]:
         "ctr": _number(insight.get("ctr")),
         "cpc": _number(insight.get("cpc")),
         "cpm": _number(insight.get("cpm")),
-        "actions": _json_array(actions),
+        "actions": _json_object(actions),
         "link_clicks": _action_integer(actions, ACTION_TYPE_ALIASES["link_clicks"]),
         "landing_page_views": _action_integer(actions, ACTION_TYPE_ALIASES["landing_page_views"]),
         "page_engagement": _action_integer(actions, ACTION_TYPE_ALIASES["page_engagement"]),
@@ -366,11 +366,11 @@ def insight_metric_values(insight: dict[str, Any]) -> dict[str, Any]:
         "results": _action_integer(actions, ACTION_TYPE_ALIASES["results"]),
         "cost_per_result": _number(cost_per_result),
         "cost_per_app_install": _action_number(costs, ACTION_TYPE_ALIASES["app_installs"]),
-        "cost_per_action_type": _json_array(costs),
-        "action_values": _json_array(insight.get("action_values")),
-        "conversions": _json_array(insight.get("conversions")),
+        "cost_per_action_type": _json_object(costs),
+        "action_values": _json_object(insight.get("action_values")),
+        "conversions": _json_object(insight.get("conversions")),
         "attribution_setting": insight.get("attribution_setting"),
-        "video_avg_time_watched_actions": _json_array(insight.get("video_avg_time_watched_actions")),
+        "video_avg_time_watched_actions": _json_object(insight.get("video_avg_time_watched_actions")),
     }
 
 
@@ -499,8 +499,38 @@ def _empty_daily_snapshot(account_id: str, metric_date: str, **ids: str) -> dict
     return _daily_snapshot(account_id, metric_date, [], **ids)
 
 
-def _json_array(value: Any) -> list[Any]:
-    return value if isinstance(value, list) else []
+def _json_object(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, list):
+        return {}
+
+    by_action_type: dict[str, Any] = {}
+    for item in value:
+        if not isinstance(item, dict) or not item.get("action_type"):
+            continue
+        action_type = str(item["action_type"])
+        keys = set(item) - {"action_type"}
+        if keys == {"value"}:
+            by_action_type[action_type] = _json_scalar(item.get("value"))
+        else:
+            by_action_type[action_type] = {
+                key: _json_scalar(item[key])
+                for key in sorted(keys)
+            }
+    return by_action_type
+
+
+def _json_scalar(value: Any) -> Any:
+    if not isinstance(value, str):
+        return value
+    try:
+        number = float(value)
+    except ValueError:
+        return value
+    if number.is_integer():
+        return int(number)
+    return number
 
 
 def _integer(value: Any) -> int | None:

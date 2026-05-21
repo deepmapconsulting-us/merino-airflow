@@ -60,8 +60,10 @@ class AdHourlyMetricTest(unittest.TestCase):
 
         self.assertNotIn("source_account_id TEXT", schema_sql)
         self.assertNotIn("company TEXT", schema_sql)
+        self.assertIn("meta_ad_hourly_metric_metric_hour_ad_id_unique_idx", schema_sql)
         self.assertIn("metric_hour,\n        ad_id", schema_sql)
         self.assertIn('AD_HOURLY_CONFLICT_COLUMNS = ("metric_hour", "ad_id")', dag_py)
+        self.assertIn("CREATE UNIQUE INDEX IF NOT EXISTS meta_ad_hourly_metric_metric_hour_ad_id_unique_idx", dag_py)
         self.assertIn('schedule="0 */2 * * *"', dag_py)
         self.assertIn("AD_BATCH_SIZE = 5", dag_py)
         self.assertIn("LOOKBACK_HOURS = 12", dag_py)

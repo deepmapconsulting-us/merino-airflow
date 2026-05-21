@@ -96,8 +96,11 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
         self.assertEqual(values["landing_page_views"], 3)
         self.assertEqual(values["results"], 2)
         self.assertEqual(values["cost_per_result"], 6.17)
-        self.assertEqual(values["action_values"], [{"action_type": "purchase", "value": "88.00"}])
-        self.assertEqual(values["conversions"], [{"action_type": "purchase", "value": "2"}])
+        self.assertEqual(values["actions"], {"landing_page_view": 3, "link_click": 5, "purchase": 2})
+        self.assertEqual(values["action_values"], {"purchase": 88})
+        self.assertEqual(values["cost_per_action_type"], {"purchase": 6.17})
+        self.assertEqual(values["conversions"], {"purchase": 2})
+        self.assertEqual(values["video_avg_time_watched_actions"], {"video_view": 4})
 
     def test_schema_and_dag_use_daily_snapshot_upsert_keys(self) -> None:
         repo = Path(__file__).resolve().parents[1]

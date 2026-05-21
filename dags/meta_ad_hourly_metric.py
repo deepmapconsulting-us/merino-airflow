@@ -505,6 +505,7 @@ def _upsert_hourly_rows(
         WHERE {changed}
     """
     hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+    _ensure_hourly_conflict_index(hook)
     conn = hook.get_conn()
     try:
         with conn.cursor() as cursor:
@@ -512,6 +513,15 @@ def _upsert_hourly_rows(
         conn.commit()
     finally:
         conn.close()
+
+
+def _ensure_hourly_conflict_index(hook) -> None:
+    hook.run(
+        """
+        CREATE UNIQUE INDEX IF NOT EXISTS meta_ad_hourly_metric_metric_hour_ad_id_unique_idx
+            ON marketing.meta_ad_hourly_metric (metric_hour, ad_id)
+        """
+    )
 
 
 def _hourly_run_id(run_id: str, account_id: str, campaign_id: str) -> str:
