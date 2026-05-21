@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import pendulum  # type: ignore[import-not-found]
+from pendulum.parsing.exceptions import ParserError  # type: ignore[import-not-found]
 from airflow.sdk import dag, task  # type: ignore[import-not-found]
 from airflow.utils.task_group import TaskGroup  # type: ignore[import-not-found]
 
@@ -663,12 +664,22 @@ def _report_dates(logical_date: Any) -> list[str]:
 def _context_logical_date(context: dict[str, Any]) -> Any:
     if context.get("logical_date"):
         return context["logical_date"]
-    dag_run = context.get("dag_run")
-    if dag_run is not None and getattr(dag_run, "logical_date", None):
-        return dag_run.logical_date
     for key in ("data_interval_start", "execution_date", "ts"):
         if context.get(key):
             return context[key]
+    for source in (context.get("dag_run"), context.get("task_instance"), context.get("ti")):
+        if source is None:
+            continue
+        for attr in ("logical_date", "data_interval_start", "execution_date", "run_after", "start_date"):
+            value = getattr(source, attr, None)
+            if value:
+                return value
+    run_id = str(context.get("run_id") or getattr(context.get("dag_run"), "run_id", ""))
+    if "__" in run_id:
+        try:
+            return pendulum.parse(run_id.split("__", 1)[1])
+        except ParserError:
+            pass
     raise KeyError(f"No logical date found in Airflow context keys: {sorted(context)}")
 
 
