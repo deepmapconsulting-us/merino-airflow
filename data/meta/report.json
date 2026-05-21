@@ -1,0 +1,4392 @@
+{
+    "data": [
+      {
+        "id": "6983577001652",
+        "name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "adset_id": "6983577001452",
+        "campaign_id": "6983577001252",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1501840674931595"
+        },
+        "created_time": "2026-05-19T21:21:26-0700",
+        "updated_time": "2026-05-19T21:30:11-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1479461784194147"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1479461784194147"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1479461784194147"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6982938515652",
+        "name": "0519-\u653e\u91cf\u5e7f\u544a\u7ec4-1",
+        "adset_id": "6982938515852",
+        "campaign_id": "6982911456452",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "999534326361398"
+        },
+        "created_time": "2026-05-19T03:09:46-0700",
+        "updated_time": "2026-05-19T19:05:09-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1479371964203129"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1479371964203129"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1479371964203129"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6982452110852",
+        "name": "0519-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4+\u7d20\u6750",
+        "adset_id": "6973015953252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "2227992681306306"
+        },
+        "created_time": "2026-05-18T19:06:45-0700",
+        "updated_time": "2026-05-19T19:02:36-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1479371577536501"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478471520959840",
+              "1479371577536501"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1478471520959840",
+              "1479371577536501"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6973015953052",
+        "name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4-\u5b9e\u62cd\u591a\u8272\u6df7\u5408",
+        "adset_id": "6973015953252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1802633167127383"
+        },
+        "created_time": "2026-05-06T20:10:13-0700",
+        "updated_time": "2026-05-19T18:36:40-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992148674444"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1467992148674444"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992148674444"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6982939244452",
+        "name": "0519-\u653e\u91cf\u5e7f\u544a\u7ec4-1",
+        "adset_id": "6982939244252",
+        "campaign_id": "6982911456452",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "3073689516165800"
+        },
+        "created_time": "2026-05-19T03:11:14-0700",
+        "updated_time": "2026-05-19T03:14:57-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478764434263882"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478764434263882"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1478764434263882"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6982939484452",
+        "name": "0519-\u653e\u91cf\u5e7f\u544a\u7ec4-1",
+        "adset_id": "6982939484652",
+        "campaign_id": "6982911456452",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "912546671804018"
+        },
+        "created_time": "2026-05-19T03:11:43-0700",
+        "updated_time": "2026-05-19T03:14:00-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478764804263845"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478764804263845"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1478764804263845"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6982939088652",
+        "name": "0519-\u653e\u91cf\u5e7f\u544a\u7ec4-1",
+        "adset_id": "6982939088452",
+        "campaign_id": "6982911456452",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1067927549746403"
+        },
+        "created_time": "2026-05-19T03:10:52-0700",
+        "updated_time": "2026-05-19T03:12:55-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478758557597803"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1478758557597803"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478758557597803"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6982911456652",
+        "name": "0519-\u653e\u91cf\u5e7f\u544a\u7ec4-1",
+        "adset_id": "6982911456852",
+        "campaign_id": "6982911456452",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1067927549746403"
+        },
+        "created_time": "2026-05-19T03:04:17-0700",
+        "updated_time": "2026-05-19T03:12:39-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478758557597803"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1478758557597803"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1478758557597803"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6973021121252",
+        "name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4-\u5973\u767d\u6a21\u89c6\u9891\u5355\u8272",
+        "adset_id": "6973015953252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1510247743964179"
+        },
+        "created_time": "2026-05-06T20:10:13-0700",
+        "updated_time": "2026-05-17T19:23:22-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992138674445"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992138674445"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1467992138674445"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6976373137452",
+        "name": "0511-\u52a0\u7d20\u67501\u6761",
+        "adset_id": "6973015953252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "952114060965496"
+        },
+        "created_time": "2026-05-10T18:51:08-0700",
+        "updated_time": "2026-05-17T19:23:17-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1471443378329321"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1471443378329321"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1471443378329321"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6973025112252",
+        "name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4-\u60c5\u4fa3\u84dd\u8272",
+        "adset_id": "6973015953252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "859652027178059"
+        },
+        "created_time": "2026-05-06T20:10:13-0700",
+        "updated_time": "2026-05-15T01:59:44-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992168674442"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992168674442"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1467992168674442"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6973024476252",
+        "name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4-\u7537\u6a21polo-\u5b9e\u62cd",
+        "adset_id": "6973015953252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "2829648460721497"
+        },
+        "created_time": "2026-05-06T20:10:13-0700",
+        "updated_time": "2026-05-15T01:59:39-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992182007774"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1467992182007774"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1467992182007774"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968430411652",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u9ed1\u5973\u6a21",
+        "adset_id": "6968427994652",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1031328872884799"
+        },
+        "created_time": "2026-04-29T21:16:29-0700",
+        "updated_time": "2026-05-06T19:34:47-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462165982590394"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462165982590394"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462165982590394"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968431402252",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u7537\u6a21",
+        "adset_id": "6968427994652",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "26825162683840213"
+        },
+        "created_time": "2026-04-29T21:16:29-0700",
+        "updated_time": "2026-05-02T21:16:54-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462165969257062"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462165969257062"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462165969257062"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968460305052",
+        "name": "0430-\u77ed\u8896\u540c\u6b3e\u52a8\u4f5c-\u6e56\u84dd\u8272",
+        "adset_id": "6968432883452",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "2183565762380625"
+        },
+        "created_time": "2026-04-29T22:28:19-0700",
+        "updated_time": "2026-05-02T21:08:40-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207285919597"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207285919597"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462207285919597"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968466184452",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u6d4b\u8bd5\u7ec42-\u5973\u82b1\u7d6e",
+        "adset_id": "6968463198452",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "3456308107877820"
+        },
+        "created_time": "2026-04-29T22:48:10-0700",
+        "updated_time": "2026-05-02T20:54:53-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462220082584984"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220082584984"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220082584984"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968465814652",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u6d4b\u8bd5\u7ec42-\u6df1\u84dd\u8272\u5b9e\u62cd",
+        "adset_id": "6968463198452",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1520429039711652"
+        },
+        "created_time": "2026-04-29T22:48:10-0700",
+        "updated_time": "2026-05-02T20:54:17-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462220072584985"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220072584985"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220072584985"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968460590652",
+        "name": "0430-\u77ed\u8896\u540c\u6b3e\u52a8\u4f5c-\u7d2b\u8272",
+        "adset_id": "6968432883452",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1499241374887998"
+        },
+        "created_time": "2026-04-29T22:28:19-0700",
+        "updated_time": "2026-05-02T03:27:29-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207315919594"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462207315919594"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207315919594"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968465474652",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u6d4b\u8bd5\u7ec42-\u5973\u767d\u4eba-\u6e56\u84dd\u8272",
+        "adset_id": "6968463198452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "4207211956257220"
+        },
+        "created_time": "2026-04-29T22:48:10-0700",
+        "updated_time": "2026-04-29T22:52:25-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220079251651"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462220079251651"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220079251651"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968463198252",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u6d4b\u8bd5\u7ec42-\u5973\u767d\u4eba-\u6df1\u84dd\u8272",
+        "adset_id": "6968463198452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1482232126611501"
+        },
+        "created_time": "2026-04-29T22:48:10-0700",
+        "updated_time": "2026-04-29T22:51:42-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220075918318"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462220075918318"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462220075918318"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968432883252",
+        "name": "0430-\u77ed\u8896\u540c\u6b3e\u52a8\u4f5c-\u65b0\u6b3e\u84dd\u6ce2\u7eb9",
+        "adset_id": "6968432883452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "941582741995517"
+        },
+        "created_time": "2026-04-29T22:28:19-0700",
+        "updated_time": "2026-04-29T22:32:22-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462207292586263"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207292586263"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207292586263"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968460816252",
+        "name": "0430-\u77ed\u8896\u540c\u6b3e\u52a8\u4f5c-\u94c1\u9508\u7ea2",
+        "adset_id": "6968432883452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1396560595570790"
+        },
+        "created_time": "2026-04-29T22:28:19-0700",
+        "updated_time": "2026-04-29T22:32:12-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207279252931"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462207279252931"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462207279252931"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6968427994452",
+        "name": "0430-\u5916\u6a21\u89c6\u9891-\u5973\u767d\u4eba\u6a21\u7279",
+        "adset_id": "6968427994652",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "954309270633338"
+        },
+        "created_time": "2026-04-29T21:16:29-0700",
+        "updated_time": "2026-04-29T21:22:50-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462165912590401"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1462165912590401"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1462165912590401"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6967750649652",
+        "name": "0429-\u7537\u6027\u5e7f\u544a\u7d20\u6750\u5355\u7ec4\u6d4b\u8bd5-\u751f\u6d3b\u72b6\u6001",
+        "adset_id": "6967737262252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "967554239213100"
+        },
+        "created_time": "2026-04-28T20:44:53-0700",
+        "updated_time": "2026-04-28T20:53:36-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252112681781"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252112681781"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1461252112681781"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6967737262052",
+        "name": "0429-\u7537\u6027\u5e7f\u544a\u7d20\u6750\u5355\u7ec4\u6d4b\u8bd5-POLO\u5b9e\u62cd",
+        "adset_id": "6967737262252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "965049332561850"
+        },
+        "created_time": "2026-04-28T20:44:53-0700",
+        "updated_time": "2026-04-28T20:48:48-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252182681774"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252182681774"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1461252182681774"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6967750359452",
+        "name": "0429-\u7537\u6027\u5e7f\u544a\u7d20\u6750\u5355\u7ec4\u6d4b\u8bd5-\u53e3\u64ad",
+        "adset_id": "6967737262252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1320630639956728"
+        },
+        "created_time": "2026-04-28T20:44:53-0700",
+        "updated_time": "2026-04-28T20:48:36-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1461252106015115"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252106015115"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252106015115"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6967745909852",
+        "name": "0429-\u7537\u6027\u5e7f\u544a\u7d20\u6750\u5355\u7ec4\u6d4b\u8bd5-\u51fa\u5355\u82b1\u7d6e",
+        "adset_id": "6967737262252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "950177624411184"
+        },
+        "created_time": "2026-04-28T20:44:53-0700",
+        "updated_time": "2026-04-28T20:48:36-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252099348449"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1461252099348449"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1461252099348449"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963040840652",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u82b1\u7d6e\u6d4b\u8bd5-\u9ed1\u4eba\u5973\u6a21",
+        "adset_id": "6963033961852",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "991093529924377"
+        },
+        "created_time": "2026-04-24T01:05:12-0700",
+        "updated_time": "2026-04-27T19:09:11-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456914929782166"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456914929782166"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456914929782166"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6965693588252",
+        "name": "0427-\u7537\u6a21\u771f\u4eba\u51fa\u5355\u7d20\u6750-\u82b1\u7d6e",
+        "adset_id": "6965691064652",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1470530014729832"
+        },
+        "created_time": "2026-04-26T19:28:18-0700",
+        "updated_time": "2026-04-26T19:32:32-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1459399062867086"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1459399062867086"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1459399062867086"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6965691064452",
+        "name": "0427-\u7537\u6a21\u771f\u4eba\u51fa\u5355\u7d20\u6750-\u82b1\u7d6e-2",
+        "adset_id": "6965691064652",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "2124528055071837"
+        },
+        "created_time": "2026-04-26T19:28:18-0700",
+        "updated_time": "2026-04-26T19:32:27-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1459399096200416"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1459399096200416"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1459399096200416"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963033962052",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u82b1\u7d6e\u6d4b\u8bd5-\u767d\u4eba\u5973\u6a21",
+        "adset_id": "6963033961852",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1873989633094784"
+        },
+        "created_time": "2026-04-24T01:05:12-0700",
+        "updated_time": "2026-04-26T18:44:51-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456914963115496"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456914963115496"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456914963115496"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6960951558652",
+        "name": "0422-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u7537\u7eff\u8272POLO",
+        "adset_id": "6960945699252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1461990145405318"
+        },
+        "created_time": "2026-04-22T01:32:58-0700",
+        "updated_time": "2026-04-24T20:25:42-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1455192156621110"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192156621110"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192156621110"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6960953212452",
+        "name": "0422-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u7537\u84dd\u8272POLO",
+        "adset_id": "6960945699252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1451924276667479"
+        },
+        "created_time": "2026-04-22T01:32:58-0700",
+        "updated_time": "2026-04-24T20:25:39-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192169954442"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192169954442"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1455192169954442"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963087321452",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u897f\u73ed\u7259\u8bed-\u53e3\u64ad",
+        "adset_id": "6963087321252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "964965536114057"
+        },
+        "created_time": "2026-04-24T02:20:42-0700",
+        "updated_time": "2026-04-24T03:59:30-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456961629777496"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456961629777496"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456961629777496"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963082546452",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u7537\u82b1\u7d6e",
+        "adset_id": "6963076027452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "961056223386030"
+        },
+        "created_time": "2026-04-24T02:10:42-0700",
+        "updated_time": "2026-04-24T03:10:10-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456954263111566"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456954263111566"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456954263111566"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963076027652",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u53e3\u64ad-\u82f1\u8bed\u53e3\u64ad",
+        "adset_id": "6963076027452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1639648877758718"
+        },
+        "created_time": "2026-04-24T02:10:42-0700",
+        "updated_time": "2026-04-24T02:54:54-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456954299778229"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456954299778229"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456954299778229"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963092172452",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u897f\u73ed\u7259\u8bed-\u82b1\u7d6e",
+        "adset_id": "6963087321252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "2720600461656246"
+        },
+        "created_time": "2026-04-24T02:20:42-0700",
+        "updated_time": "2026-04-24T02:41:08-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456961829777476"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456961829777476"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456961829777476"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963084517052",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u7537\u82b1\u7d6e -\u590d\u5236\u6d4b\u8bd5",
+        "adset_id": "6963076027452",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1537927637739476"
+        },
+        "created_time": "2026-04-24T02:10:42-0700",
+        "updated_time": "2026-04-24T02:21:25-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456954256444900"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456954256444900"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456954256444900"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6963041324652",
+        "name": "0424-\u5916\u6a21\u89c6\u9891-\u82b1\u7d6e\u6d4b\u8bd5-\u767d\u4eba\u7537\u6a21",
+        "adset_id": "6963033961852",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "790686543898683"
+        },
+        "created_time": "2026-04-24T01:05:12-0700",
+        "updated_time": "2026-04-24T01:15:18-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456914919782167"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1456914919782167"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1456914919782167"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6960950557652",
+        "name": "0422-\u65b0\u7d20\u6750\u6d4b\u8bd5- \u6df1\u84dd\u8272",
+        "adset_id": "6960945699252",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1306111844733841"
+        },
+        "created_time": "2026-04-22T01:32:58-0700",
+        "updated_time": "2026-04-23T18:48:42-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192176621108"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1455192176621108"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192176621108"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6960945699052",
+        "name": "0422-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u771f\u4eba\u62cd\u6444",
+        "adset_id": "6960945699252",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "2807040489632226"
+        },
+        "created_time": "2026-04-22T01:32:58-0700",
+        "updated_time": "2026-04-22T01:42:08-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192173287775"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1455192173287775"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1455192173287775"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6955268311052",
+        "name": "0416-\u77ed\u8896\u540c\u52a8\u4f5c\u6d4b\u8bd5--\u6df1\u84dd\u8272",
+        "adset_id": "6954671221052",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "2334096693784904"
+        },
+        "created_time": "2026-04-16T03:06:32-0700",
+        "updated_time": "2026-04-19T20:55:51-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1450344167105909"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1450344167105909"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1450344167105909"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6954674205252",
+        "name": "0416-\u77ed\u8896\u540c\u52a8\u4f5c\u6d4b\u8bd5--\u7816\u7ea2\u8272",
+        "adset_id": "6954671221052",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "974399261722739"
+        },
+        "created_time": "2026-04-15T23:36:04-0700",
+        "updated_time": "2026-04-16T23:13:35-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1451029213704071"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1451029213704071"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1451029213704071"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6950876118852",
+        "name": "0410-\u77ed\u8896\u4e0d\u540c\u8272\u6d4b\u8bd5-\u6e56\u84dd\u8272",
+        "adset_id": "6950876118652",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1793375155341082"
+        },
+        "created_time": "2026-04-10T01:11:37-0700",
+        "updated_time": "2026-04-16T19:15:14-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1445348454272147"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1445348454272147"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1445348454272147"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6954671221252",
+        "name": "0416-\u77ed\u8896\u540c\u52a8\u4f5c\u6d4b\u8bd5--\u6e56\u84dd\u8272",
+        "adset_id": "6954671221052",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "2209716489844013"
+        },
+        "created_time": "2026-04-15T23:36:04-0700",
+        "updated_time": "2026-04-15T23:45:05-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1450212637119062"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1450212637119062"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1450212637119062"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6953372449252",
+        "name": "0414-\u5f31\u66dd\u5149\u6f5c\u529b\u7d20\u6750\u7ec4-\u9ed1\u8272",
+        "adset_id": "6953372449052",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "991779333530392"
+        },
+        "created_time": "2026-04-13T19:34:12-0700",
+        "updated_time": "2026-04-13T21:53:02-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1448398877300438"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1448398877300438"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1448398877300438"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6953372514052",
+        "name": "0414-\u5f31\u66dd\u5149\u6f5c\u529b\u7d20\u6750\u7ec4-\u6df1\u84dd\u8272\u77ed\u8896",
+        "adset_id": "6953372449052",
+        "campaign_id": "6938541188052",
+        "status": "ACTIVE",
+        "creative": {
+          "id": "1123247410861314"
+        },
+        "created_time": "2026-04-13T19:34:12-0700",
+        "updated_time": "2026-04-13T21:51:44-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1448398883967104"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1448398883967104"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1448398883967104"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6950882088852",
+        "name": "0410-\u77ed\u8896\u4e0d\u540c\u8272\u6d4b\u8bd5-\u6df1\u84dd\u8272",
+        "adset_id": "6950876118652",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "834068189032864"
+        },
+        "created_time": "2026-04-10T01:11:37-0700",
+        "updated_time": "2026-04-13T19:42:24-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1445348420938817"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1445348420938817"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1445348420938817"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6950880045252",
+        "name": "0410-\u77ed\u8896\u4e0d\u540c\u8272\u6d4b\u8bd5-\u8ff7\u5f69\u8272",
+        "adset_id": "6950876118652",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "3043157682543414"
+        },
+        "created_time": "2026-04-10T01:11:37-0700",
+        "updated_time": "2026-04-11T20:54:11-0700",
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1445348400938819"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1445348400938819"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1445348400938819"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "6948471406052",
+        "name": "0407-\u51fa\u5355\u7070\u8272\u77ed\u8896 - \u5361CPA-18",
+        "adset_id": "6948469450052",
+        "campaign_id": "6938541188052",
+        "status": "PAUSED",
+        "creative": {
+          "id": "1314469297253023"
+        },
+        "created_time": "2026-04-06T23:39:03-0700",
+        "updated_time": "2026-04-10T21:34:30-0700",
+        "bid_amount": 2600,
+        "tracking_specs": [
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "9989740294482893",
+              "25630050753353121",
+              "25661726303479575",
+              "25687916454208337",
+              "25736536799299139",
+              "25919705727697380",
+              "25974788592132800",
+              "26509078055347164",
+              "33664670246512425",
+              "34993041440294611"
+            ]
+          },
+          {
+            "action.type": [
+              "offsite_conversion"
+            ],
+            "fb_pixel": [
+              "754340063959950"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ]
+          },
+          {
+            "action.type": [
+              "commerce_event"
+            ],
+            "page": [
+              "101118664986964"
+            ]
+          },
+          {
+            "action.type": [
+              "onsite_conversion"
+            ],
+            "conversion_id": [
+              "25340744775625643"
+            ]
+          },
+          {
+            "action.type": [
+              "post_interaction_gross"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1446037187536607"
+            ]
+          },
+          {
+            "action.type": [
+              "post_engagement"
+            ],
+            "page": [
+              "101118664986964"
+            ],
+            "post": [
+              "1446037187536607"
+            ]
+          },
+          {
+            "action.type": [
+              "link_click"
+            ],
+            "post": [
+              "1446037187536607"
+            ],
+            "post.wall": [
+              "101118664986964"
+            ]
+          }
+        ]
+      }
+    ],
+    "paging": {
+      "cursors": {
+        "before": "QVFIU3pOQ245cy1DRllpcVd2b2R3NDBKM3hyOUpmOUZACSUVkZAHo3WW1IOUQ4M0s4b3hCOGVPNHVWSXdvNFVYZAXVDZAWJ2eHhhVTEycTU3RmRiRXFra0Rpb0NB",
+        "after": "QVFIU0NOM0JaTThqTS1IV0ZAEeG9aTk12czJsRVdCWmJSV3c2RmZAzWTFKOUs5VUw0cTVKeGE5SlBFZAkY0eEozN0tEQkx2c0VmUEJ5RC1ZAMl9MWG5CRnVjTVpR"
+      },
+      "next": "https://graph.facebook.com/v25.0/act_4157857287789311/ads?fields=id%2Cname%2Cadset_id%2Ccampaign_id%2Cstatus%2Ccreative%2Ccreated_time%2Cupdated_time%2Cbid_amount%2Cconversion_domain%2Ctracking_specs&limit=50&access_token=EAAa4k6DTRfwBRYpteQaBbfMsuuWrVZCzmB4cwU3MCs2ZA5mEZAt6ZBoGSmasZByZBIeeEYSzyor20fibvfPo92TqdH97ZCHy9wq6zWjJumEa1vP6I5WSQlJ20Yk5j3ONkAgd9BbmMzWnf7pdZBNhq6HsrRxQfZBLQ3Q7vsK0LWKZAzryPJmjIuKd3bwsaeUyUoiQZDZD&after=QVFIU0NOM0JaTThqTS1IV0ZAEeG9aTk12czJsRVdCWmJSV3c2RmZAzWTFKOUs5VUw0cTVKeGE5SlBFZAkY0eEozN0tEQkx2c0VmUEJ5RC1ZAMl9MWG5CRnVjTVpR"
+    }
+  }

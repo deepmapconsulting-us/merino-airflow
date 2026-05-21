@@ -15,14 +15,50 @@ from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
 COMMON_INSIGHT_FIELDS = (
     "impressions,clicks,spend,reach,frequency,ctr,cpc,cpm,"
-    "actions,action_values,cost_per_action_type,conversions"
+    "unique_clicks,actions,action_values,cost_per_action_type,conversions,"
+    "attribution_setting,video_avg_time_watched_actions"
 )
-CAMPAIGN_INSIGHT_FIELDS = f"campaign_id,campaign_name,{COMMON_INSIGHT_FIELDS}"
-ADSET_INSIGHT_FIELDS = f"campaign_id,campaign_name,adset_id,adset_name,{COMMON_INSIGHT_FIELDS}"
-AD_INSIGHT_FIELDS = f"ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,{COMMON_INSIGHT_FIELDS}"
+CAMPAIGN_INSIGHT_FIELDS = f"account_id,account_name,campaign_id,campaign_name,{COMMON_INSIGHT_FIELDS}"
+ADSET_INSIGHT_FIELDS = f"account_id,account_name,campaign_id,campaign_name,adset_id,adset_name,{COMMON_INSIGHT_FIELDS}"
+AD_INSIGHT_FIELDS = f"account_id,account_name,ad_id,ad_name,campaign_id,campaign_name,adset_id,adset_name,{COMMON_INSIGHT_FIELDS}"
 FACEBOOK_ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
 FACEBOOK_TRAFFIC_LOOKUP_WINDOWS_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS = 3
+JSON_INSIGHT_COLUMNS = (
+    "actions",
+    "action_values",
+    "cost_per_action_type",
+    "conversions",
+    "video_avg_time_watched_actions",
+)
+ACTION_TYPE_ALIASES = {
+    "link_clicks": ("link_click",),
+    "landing_page_views": ("landing_page_view",),
+    "page_engagement": ("page_engagement",),
+    "post_reactions": ("post_reaction",),
+    "post_comments": ("comment", "post_comment"),
+    "post_saves": ("post_save", "onsite_conversion.post_save"),
+    "post_shares": ("post", "share", "post_share"),
+    "facebook_likes": ("like", "page_like"),
+    "instagram_follows": (
+        "instagram_profile_follow",
+        "onsite_conversion.instagram_profile_follow",
+        "ig_profile_follow",
+    ),
+    "app_installs": ("app_install", "mobile_app_install"),
+    "mobile_app_installs": ("mobile_app_install", "app_install"),
+    "results": (
+        "purchase",
+        "lead",
+        "complete_registration",
+        "app_install",
+        "mobile_app_install",
+        "link_click",
+        "landing_page_view",
+        "page_engagement",
+        "post_engagement",
+    ),
+}
 
 
 def traffic_hourly_snapshot(
@@ -115,6 +151,34 @@ def campaign_traffic_snapshot(
     }
 
 
+def campaign_daily_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch campaign-level daily insights for selected campaigns in one account."""
+    account_id = ensure_act_prefix(account_id)
+    if not campaign_ids:
+        return _empty_daily_snapshot(account_id, metric_date)
+
+    client = MetaGraphClient(access_token)
+    insights = client.get_all(
+        f"{account_id}/insights",
+        _insight_params(
+            level="campaign",
+            fields=CAMPAIGN_INSIGHT_FIELDS,
+            metric_date=metric_date,
+            page_limit=page_limit,
+            id_field="campaign.id",
+            ids=campaign_ids,
+        ),
+    )
+    return _daily_snapshot(account_id, metric_date, insights)
+
+
 def adset_traffic_snapshot(
     access_token: str,
     account_id: str,
@@ -141,6 +205,35 @@ def adset_traffic_snapshot(
         "adset_id": str(adset_id),
         "insights": insights,
     }
+
+
+def adset_daily_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_id: str,
+    adset_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch adset-level daily insights for selected adsets in one campaign."""
+    account_id = ensure_act_prefix(account_id)
+    if not adset_ids:
+        return _empty_daily_snapshot(account_id, metric_date, campaign_id=campaign_id)
+
+    client = MetaGraphClient(access_token)
+    insights = client.get_all(
+        f"{campaign_id}/insights",
+        _insight_params(
+            level="adset",
+            fields=ADSET_INSIGHT_FIELDS,
+            metric_date=metric_date,
+            page_limit=page_limit,
+            id_field="adset.id",
+            ids=adset_ids,
+        ),
+    )
+    return _daily_snapshot(account_id, metric_date, insights, campaign_id=campaign_id)
 
 
 def ad_traffic_snapshot(
@@ -180,6 +273,104 @@ def ad_traffic_snapshot(
         "account_id": account_id,
         "adset_id": adset_id,
         "insights": insights,
+    }
+
+
+def ad_daily_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_id: str,
+    ad_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch ad-level daily insights for selected ads in one campaign."""
+    account_id = ensure_act_prefix(account_id)
+    if not ad_ids:
+        return _empty_daily_snapshot(account_id, metric_date, campaign_id=campaign_id)
+
+    client = MetaGraphClient(access_token)
+    insights = client.get_all(
+        f"{campaign_id}/insights",
+        _insight_params(
+            level="ad",
+            fields=AD_INSIGHT_FIELDS,
+            metric_date=metric_date,
+            page_limit=page_limit,
+            id_field="ad.id",
+            ids=ad_ids,
+        ),
+    )
+    return _daily_snapshot(account_id, metric_date, insights, campaign_id=campaign_id)
+
+
+def ad_hourly_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_id: str,
+    ad_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch ad-level hourly insights for selected ads in one campaign and date."""
+    account_id = ensure_act_prefix(account_id)
+    if not ad_ids:
+        return _empty_daily_snapshot(account_id, metric_date, campaign_id=campaign_id)
+
+    client = MetaGraphClient(access_token)
+    params = _insight_params(
+        level="ad",
+        fields=AD_INSIGHT_FIELDS,
+        metric_date=metric_date,
+        page_limit=page_limit,
+        id_field="ad.id",
+        ids=ad_ids,
+    )
+    params["breakdowns"] = "hourly_stats_aggregated_by_advertiser_time_zone"
+    insights = client.get_all(f"{campaign_id}/insights", params)
+    return _daily_snapshot(account_id, metric_date, insights, campaign_id=campaign_id)
+
+
+def insight_metric_values(insight: dict[str, Any]) -> dict[str, Any]:
+    """Return typed daily snapshot metric columns from a raw Meta insight row."""
+    actions = insight.get("actions", [])
+    costs = insight.get("cost_per_action_type", [])
+    cost_per_result = insight.get("cost_per_result")
+    if isinstance(cost_per_result, list) or cost_per_result in (None, ""):
+        cost_per_result = _action_number(costs, ACTION_TYPE_ALIASES["results"])
+
+    return {
+        "spend": _number(insight.get("spend")),
+        "impressions": _integer(insight.get("impressions")),
+        "reach": _integer(insight.get("reach")),
+        "frequency": _number(insight.get("frequency")),
+        "clicks": _integer(insight.get("clicks")),
+        "unique_clicks": _integer(insight.get("unique_clicks")),
+        "ctr": _number(insight.get("ctr")),
+        "cpc": _number(insight.get("cpc")),
+        "cpm": _number(insight.get("cpm")),
+        "actions": _json_array(actions),
+        "link_clicks": _action_integer(actions, ACTION_TYPE_ALIASES["link_clicks"]),
+        "landing_page_views": _action_integer(actions, ACTION_TYPE_ALIASES["landing_page_views"]),
+        "page_engagement": _action_integer(actions, ACTION_TYPE_ALIASES["page_engagement"]),
+        "post_reactions": _action_integer(actions, ACTION_TYPE_ALIASES["post_reactions"]),
+        "post_comments": _action_integer(actions, ACTION_TYPE_ALIASES["post_comments"]),
+        "post_saves": _action_integer(actions, ACTION_TYPE_ALIASES["post_saves"]),
+        "post_shares": _action_integer(actions, ACTION_TYPE_ALIASES["post_shares"]),
+        "facebook_likes": _action_integer(actions, ACTION_TYPE_ALIASES["facebook_likes"]),
+        "instagram_follows": _action_integer(actions, ACTION_TYPE_ALIASES["instagram_follows"]),
+        "app_installs": _action_integer(actions, ACTION_TYPE_ALIASES["app_installs"]),
+        "mobile_app_installs": _action_integer(actions, ACTION_TYPE_ALIASES["mobile_app_installs"]),
+        "results": _action_integer(actions, ACTION_TYPE_ALIASES["results"]),
+        "cost_per_result": _number(cost_per_result),
+        "cost_per_app_install": _action_number(costs, ACTION_TYPE_ALIASES["app_installs"]),
+        "cost_per_action_type": _json_array(costs),
+        "action_values": _json_array(insight.get("action_values")),
+        "conversions": _json_array(insight.get("conversions")),
+        "attribution_setting": insight.get("attribution_setting"),
+        "video_avg_time_watched_actions": _json_array(insight.get("video_avg_time_watched_actions")),
     }
 
 
@@ -267,6 +458,85 @@ def insight_ad_is_configured(insight: dict[str, Any], adset: dict[str, Any]) -> 
 
 def account_ids_from_text(value: str) -> list[str]:
     return [account_id.strip() for account_id in value.split(",") if account_id.strip()]
+
+
+def _insight_params(
+    *,
+    level: str,
+    fields: str,
+    metric_date: str,
+    page_limit: int,
+    id_field: str | None = None,
+    ids: list[str] | None = None,
+) -> dict[str, Any]:
+    params: dict[str, Any] = {
+        "level": level,
+        "fields": fields,
+        "time_range": {"since": metric_date, "until": metric_date},
+        "limit": page_limit,
+    }
+    if id_field and ids:
+        params["filtering"] = [{"field": id_field, "operator": "IN", "value": ids}]
+    return params
+
+
+def _daily_snapshot(
+    account_id: str,
+    metric_date: str,
+    insights: list[dict[str, Any]],
+    **ids: str,
+) -> dict[str, Any]:
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "metric_date": metric_date,
+        "account_id": account_id,
+        "insights": insights,
+        **ids,
+    }
+
+
+def _empty_daily_snapshot(account_id: str, metric_date: str, **ids: str) -> dict[str, Any]:
+    return _daily_snapshot(account_id, metric_date, [], **ids)
+
+
+def _json_array(value: Any) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _integer(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _number(value: Any) -> float | None:
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _action_integer(items: Any, action_types: tuple[str, ...]) -> int | None:
+    return _integer(_action_value(items, action_types)) or 0
+
+
+def _action_number(items: Any, action_types: tuple[str, ...]) -> float | None:
+    return _number(_action_value(items, action_types))
+
+
+def _action_value(items: Any, action_types: tuple[str, ...]) -> Any:
+    if not isinstance(items, list):
+        return None
+    for action_type in action_types:
+        for item in items:
+            if isinstance(item, dict) and item.get("action_type") == action_type:
+                return item.get("value")
+    return None
 
 
 def _discover_account_rows(client: MetaGraphClient, page_limit: int) -> list[dict[str, Any]]:

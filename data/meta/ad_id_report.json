@@ -1,0 +1,1247 @@
+{
+    "data": [
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "447",
+        "clicks": "12",
+        "spend": "15.14",
+        "cpc": "1.261667",
+        "cpm": "33.870246",
+        "ctr": "2.684564",
+        "actions": [
+          {
+            "action_type": "web_in_store_purchase",
+            "value": "1"
+          },
+          {
+            "action_type": "link_click",
+            "value": "6"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "1"
+          },
+          {
+            "action_type": "offsite_purchase_add_20_s_calls",
+            "value": "1"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "1"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "81"
+          },
+          {
+            "action_type": "purchase",
+            "value": "1"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "4"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "81"
+          },
+          {
+            "action_type": "view_content",
+            "value": "5"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "5"
+          },
+          {
+            "action_type": "video_view",
+            "value": "75"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "add_to_cart",
+            "value": "44.99"
+          },
+          {
+            "action_type": "purchase",
+            "value": "84.98"
+          },
+          {
+            "action_type": "view_content",
+            "value": "245.95"
+          },
+          {
+            "action_type": "web_in_store_purchase",
+            "value": "84.98"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "web_in_store_purchase",
+            "value": "15.14"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "15.14"
+          },
+          {
+            "action_type": "offsite_purchase_add_20_s_calls",
+            "value": "15.14"
+          },
+          {
+            "action_type": "video_view",
+            "value": "0.201867"
+          },
+          {
+            "action_type": "link_click",
+            "value": "2.523333"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.186914"
+          },
+          {
+            "action_type": "view_content",
+            "value": "3.028"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "3.028"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "15.14"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "3.785"
+          },
+          {
+            "action_type": "purchase",
+            "value": "15.14"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.186914"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "00:00:00 - 00:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "264",
+        "clicks": "18",
+        "spend": "10.4",
+        "cpc": "0.577778",
+        "cpm": "39.393939",
+        "ctr": "6.818182",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "10"
+          },
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "1"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "68"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "8"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "68"
+          },
+          {
+            "action_type": "post_interaction_gross",
+            "value": "1"
+          },
+          {
+            "action_type": "post_interaction_net",
+            "value": "1"
+          },
+          {
+            "action_type": "post",
+            "value": "1"
+          },
+          {
+            "action_type": "view_content",
+            "value": "7"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "7"
+          },
+          {
+            "action_type": "search",
+            "value": "1"
+          },
+          {
+            "action_type": "video_view",
+            "value": "57"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "320.93"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "10.4"
+          },
+          {
+            "action_type": "video_view",
+            "value": "0.182456"
+          },
+          {
+            "action_type": "search",
+            "value": "10.4"
+          },
+          {
+            "action_type": "link_click",
+            "value": "1.04"
+          },
+          {
+            "action_type": "post_interaction_gross",
+            "value": "10.4"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.152941"
+          },
+          {
+            "action_type": "view_content",
+            "value": "1.485714"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "1.485714"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "1.3"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.152941"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "01:00:00 - 01:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "421",
+        "clicks": "15",
+        "spend": "13.55",
+        "cpc": "0.903333",
+        "cpm": "32.185273",
+        "ctr": "3.562945",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "7"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "1"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "1"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "57"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "3"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "57"
+          },
+          {
+            "action_type": "view_content",
+            "value": "5"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "5"
+          },
+          {
+            "action_type": "video_view",
+            "value": "50"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "add_to_cart",
+            "value": "89.99"
+          },
+          {
+            "action_type": "view_content",
+            "value": "261.95"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "initiate_checkout",
+            "value": "13.55"
+          },
+          {
+            "action_type": "video_view",
+            "value": "0.271"
+          },
+          {
+            "action_type": "link_click",
+            "value": "1.935714"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.237719"
+          },
+          {
+            "action_type": "view_content",
+            "value": "2.71"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "2.71"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "13.55"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "4.516667"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.237719"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "02:00:00 - 02:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "583",
+        "clicks": "11",
+        "spend": "18.89",
+        "cpc": "1.717273",
+        "cpm": "32.401372",
+        "ctr": "1.886792",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "5"
+          },
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "1"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "47"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "7"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "47"
+          },
+          {
+            "action_type": "view_content",
+            "value": "9"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "9"
+          },
+          {
+            "action_type": "search",
+            "value": "1"
+          },
+          {
+            "action_type": "video_view",
+            "value": "42"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "422.91"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "18.89"
+          },
+          {
+            "action_type": "video_view",
+            "value": "0.449762"
+          },
+          {
+            "action_type": "search",
+            "value": "18.89"
+          },
+          {
+            "action_type": "link_click",
+            "value": "3.778"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.401915"
+          },
+          {
+            "action_type": "view_content",
+            "value": "2.098889"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "2.098889"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "2.698571"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.401915"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "03:00:00 - 03:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "573",
+        "clicks": "26",
+        "spend": "19.86",
+        "cpc": "0.763846",
+        "cpm": "34.659686",
+        "ctr": "4.537522",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "17"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "2"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "4"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "64"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "14"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "64"
+          },
+          {
+            "action_type": "view_content",
+            "value": "16"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "16"
+          },
+          {
+            "action_type": "video_view",
+            "value": "47"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "add_to_cart",
+            "value": "179.96"
+          },
+          {
+            "action_type": "view_content",
+            "value": "922.84"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "149.96"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "initiate_checkout",
+            "value": "9.93"
+          },
+          {
+            "action_type": "video_view",
+            "value": "0.422553"
+          },
+          {
+            "action_type": "link_click",
+            "value": "1.168235"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.310313"
+          },
+          {
+            "action_type": "view_content",
+            "value": "1.24125"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "1.24125"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "4.965"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "1.418571"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.310313"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "04:00:00 - 04:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "568",
+        "clicks": "11",
+        "spend": "16.75",
+        "cpc": "1.522727",
+        "cpm": "29.489437",
+        "ctr": "1.93662",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "3"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "33"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "4"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "33"
+          },
+          {
+            "action_type": "view_content",
+            "value": "2"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "2"
+          },
+          {
+            "action_type": "video_view",
+            "value": "30"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "89.98"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "video_view",
+            "value": "0.558333"
+          },
+          {
+            "action_type": "link_click",
+            "value": "5.583333"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.507576"
+          },
+          {
+            "action_type": "view_content",
+            "value": "8.375"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "8.375"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "4.1875"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.507576"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "05:00:00 - 05:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "559",
+        "clicks": "32",
+        "spend": "16.12",
+        "cpc": "0.50375",
+        "cpm": "28.837209",
+        "ctr": "5.724508",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "15"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "52"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "7"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "52"
+          },
+          {
+            "action_type": "view_content",
+            "value": "6"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "6"
+          },
+          {
+            "action_type": "video_view",
+            "value": "37"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "262.94"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "video_view",
+            "value": "0.435676"
+          },
+          {
+            "action_type": "link_click",
+            "value": "1.074667"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.31"
+          },
+          {
+            "action_type": "view_content",
+            "value": "2.686667"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "2.686667"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "2.302857"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.31"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "06:00:00 - 06:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "581",
+        "clicks": "32",
+        "spend": "20.8",
+        "cpc": "0.65",
+        "cpm": "35.800344",
+        "ctr": "5.507745",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "15"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "71"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "13"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "71"
+          },
+          {
+            "action_type": "post_interaction_gross",
+            "value": "1"
+          },
+          {
+            "action_type": "post_interaction_net",
+            "value": "1"
+          },
+          {
+            "action_type": "view_content",
+            "value": "10"
+          },
+          {
+            "action_type": "onsite_conversion.post_net_like",
+            "value": "1"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "10"
+          },
+          {
+            "action_type": "video_view",
+            "value": "55"
+          },
+          {
+            "action_type": "post_reaction",
+            "value": "1"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "596.9"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "video_view",
+            "value": "0.378182"
+          },
+          {
+            "action_type": "link_click",
+            "value": "1.386667"
+          },
+          {
+            "action_type": "post_interaction_gross",
+            "value": "20.8"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.292958"
+          },
+          {
+            "action_type": "view_content",
+            "value": "2.08"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "2.08"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "1.6"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.292958"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "07:00:00 - 07:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "104",
+        "clicks": "3",
+        "spend": "3.24",
+        "cpc": "1.08",
+        "cpm": "31.153846",
+        "ctr": "2.884615",
+        "actions": [
+          {
+            "action_type": "link_click",
+            "value": "2"
+          },
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "1"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "10"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "17"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "3"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "17"
+          },
+          {
+            "action_type": "view_content",
+            "value": "16"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "16"
+          },
+          {
+            "action_type": "search",
+            "value": "1"
+          },
+          {
+            "action_type": "video_view",
+            "value": "15"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "add_to_cart",
+            "value": "451.9"
+          },
+          {
+            "action_type": "view_content",
+            "value": "820.84"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "3.24"
+          },
+          {
+            "action_type": "video_view",
+            "value": "0.216"
+          },
+          {
+            "action_type": "search",
+            "value": "3.24"
+          },
+          {
+            "action_type": "link_click",
+            "value": "1.62"
+          },
+          {
+            "action_type": "post_engagement",
+            "value": "0.190588"
+          },
+          {
+            "action_type": "view_content",
+            "value": "0.2025"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "0.2025"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "0.324"
+          },
+          {
+            "action_type": "landing_page_view",
+            "value": "1.08"
+          },
+          {
+            "action_type": "page_engagement",
+            "value": "0.190588"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "08:00:00 - 08:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "0",
+        "clicks": "0",
+        "spend": "0",
+        "actions": [
+          {
+            "action_type": "landing_page_view",
+            "value": "1"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "landing_page_view",
+            "value": "0"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "09:00:00 - 09:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "0",
+        "clicks": "0",
+        "spend": "0",
+        "actions": [
+          {
+            "action_type": "web_in_store_purchase",
+            "value": "1"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "1"
+          },
+          {
+            "action_type": "offsite_purchase_add_20_s_calls",
+            "value": "1"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "2"
+          },
+          {
+            "action_type": "purchase",
+            "value": "1"
+          },
+          {
+            "action_type": "view_content",
+            "value": "1"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "1"
+          },
+          {
+            "action_type": "add_payment_info",
+            "value": "1"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "add_payment_info",
+            "value": "90.98"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "105.98"
+          },
+          {
+            "action_type": "purchase",
+            "value": "90.98"
+          },
+          {
+            "action_type": "view_content",
+            "value": "52.99"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "90.98"
+          },
+          {
+            "action_type": "web_in_store_purchase",
+            "value": "90.98"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "web_in_store_purchase",
+            "value": "0"
+          },
+          {
+            "action_type": "initiate_checkout",
+            "value": "0"
+          },
+          {
+            "action_type": "offsite_purchase_add_20_s_calls",
+            "value": "0"
+          },
+          {
+            "action_type": "add_payment_info",
+            "value": "0"
+          },
+          {
+            "action_type": "view_content",
+            "value": "0"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "0"
+          },
+          {
+            "action_type": "add_to_cart",
+            "value": "0"
+          },
+          {
+            "action_type": "purchase",
+            "value": "0"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "10:00:00 - 10:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "0",
+        "clicks": "0",
+        "spend": "0",
+        "actions": [
+          {
+            "action_type": "view_content",
+            "value": "1"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "1"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "39.99"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "view_content",
+            "value": "0"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "0"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "11:00:00 - 11:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "0",
+        "clicks": "0",
+        "spend": "0",
+        "actions": [
+          {
+            "action_type": "view_content",
+            "value": "4"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "4"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "251.96"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "view_content",
+            "value": "0"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "0"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "14:00:00 - 14:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6983577001252",
+        "campaign_name": "0520-Advantage+ \u53d7\u4f17",
+        "adset_id": "6983577001452",
+        "adset_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "ad_id": "6983577001652",
+        "ad_name": "0520-Advantage+ \u53d7\u4f17-\u6392\u9664\u5df2\u8d2d",
+        "impressions": "0",
+        "clicks": "0",
+        "spend": "0",
+        "actions": [
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "1"
+          },
+          {
+            "action_type": "view_content",
+            "value": "1"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "1"
+          },
+          {
+            "action_type": "search",
+            "value": "1"
+          }
+        ],
+        "action_values": [
+          {
+            "action_type": "view_content",
+            "value": "63.99"
+          }
+        ],
+        "cost_per_action_type": [
+          {
+            "action_type": "offsite_search_add_meta_leads",
+            "value": "0"
+          },
+          {
+            "action_type": "search",
+            "value": "0"
+          },
+          {
+            "action_type": "view_content",
+            "value": "0"
+          },
+          {
+            "action_type": "offsite_content_view_add_meta_leads",
+            "value": "0"
+          }
+        ],
+        "date_start": "2026-05-20",
+        "date_stop": "2026-05-20",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "15:00:00 - 15:59:59"
+      }
+    ],
+    "paging": {
+      "cursors": {
+        "before": "MAZDZD",
+        "after": "MTMZD"
+      }
+    }
+  }
