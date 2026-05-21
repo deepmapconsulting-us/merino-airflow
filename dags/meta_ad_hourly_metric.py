@@ -173,7 +173,7 @@ def meta_ad_hourly_metric():
         access_token = meta_access_token()
         context = get_current_context()
         page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
-        window_start, window_end = _hourly_window(context["logical_date"])
+        window_start, window_end = _hourly_window(_context_logical_date(context))
         ad_batches = _ad_id_batches(campaign, AD_BATCH_SIZE)
         snapshots: list[dict[str, Any]] = []
         for report_date in _hourly_report_dates(window_start, window_end):
@@ -210,7 +210,7 @@ def meta_ad_hourly_metric():
 
         context = get_current_context()
         hourly_run_id = _hourly_run_id(context["run_id"], account["id"], campaign["id"])
-        report_datetime = report_datetime_for_row(context["logical_date"])
+        report_datetime = report_datetime_for_row(_context_logical_date(context))
         window_start = pendulum.parse(hourly_snapshots["window_start"])
         window_end = pendulum.parse(hourly_snapshots["window_end"])
         adset_by_ad_id = _ad_context_by_ad_id(campaign)
@@ -360,6 +360,18 @@ def _ad_id_batches(campaign: dict[str, Any], size: int) -> list[list[str]]:
 def _hourly_window(logical_date: Any) -> tuple[pendulum.DateTime, pendulum.DateTime]:
     window_end = report_datetime(logical_date).replace(minute=0, second=0, microsecond=0)
     return window_end.subtract(hours=LOOKBACK_HOURS), window_end
+
+
+def _context_logical_date(context: dict[str, Any]) -> Any:
+    if context.get("logical_date"):
+        return context["logical_date"]
+    dag_run = context.get("dag_run")
+    if dag_run is not None and getattr(dag_run, "logical_date", None):
+        return dag_run.logical_date
+    for key in ("data_interval_start", "execution_date", "ts"):
+        if context.get(key):
+            return context[key]
+    raise KeyError(f"No logical date found in Airflow context keys: {sorted(context)}")
 
 
 def _hourly_report_dates(
@@ -537,7 +549,7 @@ def _airflow_id(value: str) -> str:
 
 
 def _campaign_config_logical_date(logical_date=None, **context):
-    return report_partition_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
+    return report_partition_datetime(logical_date or _context_logical_date(context))
 
 
 meta_ad_hourly_metric()

@@ -229,7 +229,7 @@ def meta_traffic_snapshot():
                 report_date,
                 page_limit=page_limit,
             )
-            for report_date in _report_dates(context["logical_date"])
+            for report_date in _report_dates(_context_logical_date(context))
         ]
         for snapshot in snapshots:
             snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
@@ -248,7 +248,7 @@ def meta_traffic_snapshot():
 
         context = get_current_context()
         snapshot_run_id = _snapshot_run_id(context["run_id"], "campaign", account["id"])
-        report_date = _snapshot_report_date(context["logical_date"])
+        report_date = _snapshot_report_date(_context_logical_date(context))
         rows = [
             _campaign_row(snapshot, insight, account, snapshot_run_id, report_date)
             for snapshot in campaign_snapshots.get("snapshots", [])
@@ -280,7 +280,7 @@ def meta_traffic_snapshot():
                 report_date,
                 page_limit=page_limit,
             )
-            for report_date in _report_dates(context["logical_date"])
+            for report_date in _report_dates(_context_logical_date(context))
         ]
         for snapshot in snapshots:
             snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
@@ -300,7 +300,7 @@ def meta_traffic_snapshot():
 
         context = get_current_context()
         snapshot_run_id = _snapshot_run_id(context["run_id"], "adset", account["id"], campaign["id"])
-        report_date = _snapshot_report_date(context["logical_date"])
+        report_date = _snapshot_report_date(_context_logical_date(context))
         rows = [
             _adset_row(snapshot, insight, account, campaign, snapshot_run_id, report_date)
             for snapshot in adset_snapshots.get("snapshots", [])
@@ -339,7 +339,7 @@ def meta_traffic_snapshot():
                 report_date,
                 page_limit=page_limit,
             )
-            for report_date in _report_dates(context["logical_date"])
+            for report_date in _report_dates(_context_logical_date(context))
         ]
         for snapshot in snapshots:
             snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
@@ -359,7 +359,7 @@ def meta_traffic_snapshot():
 
         context = get_current_context()
         snapshot_run_id = _snapshot_run_id(context["run_id"], "ad", account["id"], campaign["id"])
-        report_date = _snapshot_report_date(context["logical_date"])
+        report_date = _snapshot_report_date(_context_logical_date(context))
         adset_by_ad_id = _adset_by_ad_id(campaign)
         rows = [
             _ad_row(snapshot, insight, account, campaign, adset_by_ad_id, snapshot_run_id, report_date)
@@ -660,6 +660,18 @@ def _report_dates(logical_date: Any) -> list[str]:
     return [current.format("YYYY-MM-DD"), current.subtract(days=1).format("YYYY-MM-DD")]
 
 
+def _context_logical_date(context: dict[str, Any]) -> Any:
+    if context.get("logical_date"):
+        return context["logical_date"]
+    dag_run = context.get("dag_run")
+    if dag_run is not None and getattr(dag_run, "logical_date", None):
+        return dag_run.logical_date
+    for key in ("data_interval_start", "execution_date", "ts"):
+        if context.get(key):
+            return context[key]
+    raise KeyError(f"No logical date found in Airflow context keys: {sorted(context)}")
+
+
 def _adset_by_ad_id(campaign: dict[str, Any]) -> dict[str, dict[str, Any]]:
     adset_by_id: dict[str, dict[str, Any]] = {}
     for adset in campaign.get("adsets", []):
@@ -682,7 +694,7 @@ def _airflow_id(value: str) -> str:
 
 
 def _campaign_config_logical_date(logical_date=None, **context):
-    local = report_datetime(logical_date or context.get("logical_date") or context.get("execution_date"))
+    local = report_datetime(logical_date or _context_logical_date(context))
     config_hour = 0 if local.hour < 12 else 12
     return local.set(hour=config_hour, minute=0, second=0, microsecond=0)
 
