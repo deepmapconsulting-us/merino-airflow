@@ -120,7 +120,6 @@ BASE_INSERT_COLUMNS = (
     "timezone_name",
     "report_start_date",
     "report_end_date",
-    "time_increment",
     "campaign_id",
     "campaign_name",
 )
@@ -584,7 +583,6 @@ def _base_values(
         account.get("timezone_name"),
         insight.get("date_start") or snapshot["metric_date"],
         insight.get("date_stop") or snapshot["metric_date"],
-        "1",
         insight.get("campaign_id") or (campaign or {}).get("id"),
         insight.get("campaign_name"),
     )
