@@ -166,7 +166,7 @@ def publish_latest_pointer(
     snapshot_uri: str,
     run_date: str,
     run_datetime: str,
-    variable_name: str,
+    variable_name: str | None = None,
     variable_snapshot: dict | None = None,
 ) -> str:
     pointer = {
@@ -182,17 +182,18 @@ def publish_latest_pointer(
     )
     latest_uri = gcs_uri(SNAPSHOT_BUCKET, latest_object)
 
-    if variable_snapshot is not None:
-        variable_payload = json.dumps(variable_snapshot, separators=(",", ":"), sort_keys=True)
-    else:
-        variable_payload = pointer_payload
+    if variable_name:
+        if variable_snapshot is not None:
+            variable_payload = json.dumps(variable_snapshot, separators=(",", ":"), sort_keys=True)
+        else:
+            variable_payload = pointer_payload
 
-    try:
-        Variable.set(variable_name, variable_payload)
-    except Exception as exc:
-        print(
-            f"{dag_id}: skipped Variable.set({variable_name!r}) "
-            f"because GSM Variable write failed: {exc}"
-        )
+        try:
+            Variable.set(variable_name, variable_payload)
+        except Exception as exc:
+            print(
+                f"{dag_id}: skipped Variable.set({variable_name!r}) "
+                f"because GSM Variable write failed: {exc}"
+            )
 
     return latest_uri
