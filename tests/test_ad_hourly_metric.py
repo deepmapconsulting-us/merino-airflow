@@ -11,7 +11,7 @@ DAGS_PATH = Path(__file__).resolve().parents[1] / "dags"
 sys.path.insert(0, str(DAGS_PATH))
 
 import meta_status  # noqa: E402
-from meta_status import ACTIVE_STATUS, NOT_ACTIVE_STATUS, HourlyStatusResolver  # noqa: E402
+from meta_status import ACTIVE_STATUS, NOT_ACTIVE_STATUS, HourlyStatusResolver, load_config_snapshot  # noqa: E402
 from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-found]
 
 
@@ -116,6 +116,44 @@ class AdHourlyMetricTest(unittest.TestCase):
             meta_status.load_config_snapshot = original_load
 
         self.assertEqual(calls, [("2026-05-23", 12)])
+
+    def test_config_loader_uses_closest_gcs_snapshot_on_exact_miss(self) -> None:
+        class FakeRedis:
+            def __init__(self) -> None:
+                self.values: dict[str, str] = {}
+
+            def get(self, key: str):
+                return self.values.get(key)
+
+            def set(self, key: str, value: str, ex: int) -> None:
+                self.values[key] = value
+
+        class FakeBlob:
+            def __init__(self, object_name: str) -> None:
+                self.object_name = object_name
+
+            def download_as_text(self) -> str:
+                if "/20260523T120000-0700/" in self.object_name:
+                    return '{"accounts":{"act_1":{"campaigns":[]}}}'
+                raise FileNotFoundError(self.object_name)
+
+        class FakeBucket:
+            def blob(self, object_name: str) -> FakeBlob:
+                return FakeBlob(object_name)
+
+        class FakeStorage:
+            def bucket(self, bucket_name: str) -> FakeBucket:
+                return FakeBucket()
+
+        snapshot = load_config_snapshot(
+            FakeStorage(),
+            "facebook_campaign_config_update",
+            "2026-05-23",
+            8,
+            FakeRedis(),
+        )
+
+        self.assertEqual(snapshot, {"accounts": {"act_1": {"campaigns": []}}})
 
 
 if __name__ == "__main__":

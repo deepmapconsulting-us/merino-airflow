@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -15,6 +15,7 @@ REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
 REPORT_PARTITION_HOURS = 4
 CONFIG_CACHE_TTL_SECONDS = 2 * 24 * 60 * 60
 CONFIG_BUCKET_HOURS = tuple(range(0, 24, REPORT_PARTITION_HOURS))
+CONFIG_FALLBACK_DAYS = 2
 ACTIVE_STATUS = "active"
 NOT_ACTIVE_STATUS = "not_active"
 HYBRID_STATUS = "hybrid"
@@ -69,7 +70,9 @@ def load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, 
         snapshot = _read_json_from_gcs(storage_client, config_snapshot_uri(prefix, run_date, hour))
     except Exception as exc:
         print(f"meta_status: no campaign config for {run_date} {hour:02d}:00: {exc}")
-        return None
+        snapshot = _closest_config_snapshot(storage_client, prefix, run_date, hour)
+        if snapshot is None:
+            return None
 
     redis_client.set(
         key,
@@ -82,6 +85,34 @@ def load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, 
 def _read_json_from_gcs(storage_client, uri: str) -> dict[str, Any]:
     bucket_name, _, object_name = uri[5:].partition("/")
     return json.loads(storage_client.bucket(bucket_name).blob(object_name).download_as_text())
+
+
+def _closest_config_snapshot(storage_client, prefix: str, run_date: str, hour: int) -> dict[str, Any] | None:
+    target = datetime.fromisoformat(run_date).replace(hour=hour, tzinfo=ZoneInfo(REPORT_TIMEZONE))
+    candidates: list[tuple[float, str, int]] = []
+    for day_offset in range(-CONFIG_FALLBACK_DAYS, CONFIG_FALLBACK_DAYS + 1):
+        candidate_date = (target + timedelta(days=day_offset)).strftime("%Y-%m-%d")
+        for candidate_hour in CONFIG_BUCKET_HOURS:
+            if candidate_date == run_date and candidate_hour == hour:
+                continue
+            candidate = datetime.fromisoformat(candidate_date).replace(
+                hour=candidate_hour,
+                tzinfo=ZoneInfo(REPORT_TIMEZONE),
+            )
+            candidates.append((abs((candidate - target).total_seconds()), candidate_date, candidate_hour))
+
+    for _distance, candidate_date, candidate_hour in sorted(candidates):
+        try:
+            snapshot = _read_json_from_gcs(storage_client, config_snapshot_uri(prefix, candidate_date, candidate_hour))
+        except Exception:
+            continue
+        print(
+            "meta_status: using closest campaign config "
+            f"{candidate_date} {candidate_hour:02d}:00 for requested {run_date} {hour:02d}:00"
+        )
+        return snapshot
+    print(f"meta_status: no nearby campaign config found for {run_date} {hour:02d}:00")
+    return None
 
 
 @dataclass(frozen=True)
