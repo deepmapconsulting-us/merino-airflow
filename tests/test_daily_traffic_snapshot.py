@@ -7,7 +7,10 @@ from typing import Any
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 sys.path.insert(0, str(MODULE_PATH))
+DAGS_PATH = Path(__file__).resolve().parents[1] / "dags"
+sys.path.insert(0, str(DAGS_PATH))
 
+from meta_status import ACTIVE_STATUS, HYBRID_STATUS, NOT_ACTIVE_STATUS, ConfigStatusMap, status_from_checks  # noqa: E402
 from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-found]
 
 
@@ -112,6 +115,61 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
         self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", dag_py)
         self.assertIn("update_count = target.update_count + 1", dag_py)
         self.assertIn('f"target.{column} IS DISTINCT FROM EXCLUDED.{column}"', dag_py)
+
+    def test_daily_active_status_can_be_hybrid(self) -> None:
+        active_snapshot = {
+            "accounts": {
+                "act_1": {
+                    "campaigns": [
+                        {
+                            "id": "campaign_1",
+                            "status": "ACTIVE",
+                            "adsets": [
+                                {
+                                    "id": "adset_1",
+                                    "status": "ACTIVE",
+                                    "ads": [{"id": "ad_1", "status": "ACTIVE"}],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+        inactive_snapshot = {
+            "accounts": {
+                "act_1": {
+                    "campaigns": [
+                        {
+                            "id": "campaign_1",
+                            "status": "PAUSED",
+                            "adsets": [
+                                {
+                                    "id": "adset_1",
+                                    "status": "ACTIVE",
+                                    "ads": [{"id": "ad_1", "status": "ACTIVE"}],
+                                }
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        active = ConfigStatusMap.from_snapshot(active_snapshot)
+        inactive = ConfigStatusMap.from_snapshot(inactive_snapshot)
+
+        self.assertEqual(status_from_checks([active.ad_status("campaign_1", "adset_1", "ad_1")]), ACTIVE_STATUS)
+        self.assertEqual(status_from_checks([inactive.ad_status("campaign_1", "adset_1", "ad_1")]), NOT_ACTIVE_STATUS)
+        self.assertEqual(
+            status_from_checks(
+                [
+                    active.ad_status("campaign_1", "adset_1", "ad_1"),
+                    inactive.ad_status("campaign_1", "adset_1", "ad_1"),
+                ]
+            ),
+            HYBRID_STATUS,
+        )
 
 
 if __name__ == "__main__":

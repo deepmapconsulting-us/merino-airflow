@@ -1,0 +1,98 @@
+{
+  "request": {
+    "mcp_server": "user-meta-ads-local",
+    "tool": "get_insights",
+    "arguments": {
+      "ad_id": "6982452110852",
+      "level": "ad",
+      "time_range": "last_7d",
+      "limit": 100,
+      "compact": true
+    }
+  },
+  "response": {
+    "data": [
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6938541188052",
+        "campaign_name": "0323-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u6253\u5e95\u8863+\u889c\u5b50",
+        "adset_id": "6973015953252",
+        "adset_name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4",
+        "ad_id": "6982452110852",
+        "ad_name": "0519-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4+\u7d20\u6750",
+        "impressions": "23222",
+        "clicks": "1938",
+        "spend": "782.65",
+        "cpc": "0.403844",
+        "cpm": "33.702954",
+        "ctr": "8.345534",
+        "reach": "17871",
+        "frequency": "1.299424",
+        "actions": [
+          {"action_type": "web_in_store_purchase", "value": "20"},
+          {"action_type": "link_click", "value": "953"},
+          {"action_type": "initiate_checkout", "value": "33"},
+          {"action_type": "offsite_search_add_meta_leads", "value": "22"},
+          {"action_type": "offsite_purchase_add_20_s_calls", "value": "20"},
+          {"action_type": "add_to_cart", "value": "130"},
+          {"action_type": "page_engagement", "value": "8494"},
+          {"action_type": "purchase", "value": "20"},
+          {"action_type": "landing_page_view", "value": "850"},
+          {"action_type": "post_engagement", "value": "8491"},
+          {"action_type": "like", "value": "3"},
+          {"action_type": "post_interaction_gross", "value": "48"},
+          {"action_type": "comment", "value": "3"},
+          {"action_type": "post_interaction_net", "value": "48"},
+          {"action_type": "post", "value": "2"},
+          {"action_type": "view_content", "value": "968"},
+          {"action_type": "onsite_conversion.post_save", "value": "5"},
+          {"action_type": "onsite_conversion.post_net_comment", "value": "3"},
+          {"action_type": "onsite_conversion.post_net_save", "value": "5"},
+          {"action_type": "onsite_conversion.post_net_like", "value": "38"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "968"},
+          {"action_type": "add_payment_info", "value": "3"},
+          {"action_type": "search", "value": "22"},
+          {"action_type": "video_view", "value": "7490"},
+          {"action_type": "post_reaction", "value": "38"}
+        ],
+        "action_values": [
+          {"action_type": "add_payment_info", "value": "219.95"},
+          {"action_type": "add_to_cart", "value": "5771.7"},
+          {"action_type": "purchase", "value": "1544.63"},
+          {"action_type": "view_content", "value": "43016.09"},
+          {"action_type": "initiate_checkout", "value": "1375.75"},
+          {"action_type": "web_in_store_purchase", "value": "1544.63"}
+        ],
+        "unique_clicks": "1436",
+        "cost_per_action_type": [
+          {"action_type": "web_in_store_purchase", "value": "39.1325"},
+          {"action_type": "initiate_checkout", "value": "23.716667"},
+          {"action_type": "offsite_search_add_meta_leads", "value": "35.575"},
+          {"action_type": "offsite_purchase_add_20_s_calls", "value": "39.1325"},
+          {"action_type": "video_view", "value": "0.104493"},
+          {"action_type": "search", "value": "35.575"},
+          {"action_type": "add_payment_info", "value": "260.883333"},
+          {"action_type": "link_click", "value": "0.821249"},
+          {"action_type": "like", "value": "260.883333"},
+          {"action_type": "post_interaction_gross", "value": "16.305208"},
+          {"action_type": "post_engagement", "value": "0.092174"},
+          {"action_type": "view_content", "value": "0.808523"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "0.808523"},
+          {"action_type": "add_to_cart", "value": "6.020385"},
+          {"action_type": "landing_page_view", "value": "0.920765"},
+          {"action_type": "purchase", "value": "39.1325"},
+          {"action_type": "page_engagement", "value": "0.092142"}
+        ],
+        "date_start": "2026-05-16",
+        "date_stop": "2026-05-22"
+      }
+    ],
+    "paging": {
+      "cursors": {
+        "before": "MAZDZD",
+        "after": "MAZDZD"
+      }
+    }
+  }
+}

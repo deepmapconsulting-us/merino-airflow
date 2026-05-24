@@ -38,6 +38,7 @@ from meta_gcs import (
     snapshot_object_name,
     variable_get,
 )
+from meta_status import HourlyStatusResolver
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 if MODULE_PATH.exists():
@@ -101,13 +102,11 @@ METRIC_COLUMNS = (
     "attribution_setting",
     "video_avg_time_watched_actions",
 )
-CHANGE_COLUMNS = ("spend", "clicks", "impressions", "unique_clicks", "ctr")
+CHANGE_COLUMNS = ("active_status", "spend", "clicks", "impressions", "unique_clicks", "ctr")
 AD_HOURLY_INSERT_COLUMNS = (
     "hourly_run_id",
     "report_datetime",
     "metric_hour",
-    "report_start_date",
-    "report_end_date",
     "campaign_id",
     "campaign_name",
     "adset_id",
@@ -121,6 +120,7 @@ AD_HOURLY_INSERT_COLUMNS = (
     "effective_object_story_id",
     "video_ids",
     "attribution_window",
+    "active_status",
     *METRIC_COLUMNS,
 )
 AD_HOURLY_CONFLICT_COLUMNS = ("metric_hour", "ad_id")
@@ -214,8 +214,17 @@ def meta_ad_hourly_metric():
         window_start = pendulum.parse(hourly_snapshots["window_start"])
         window_end = pendulum.parse(hourly_snapshots["window_end"])
         adset_by_ad_id = _ad_context_by_ad_id(campaign)
+        status_resolver = _hourly_status_resolver()
         rows = [
-            _ad_hourly_row(snapshot, insight, campaign, adset_by_ad_id, hourly_run_id, report_datetime)
+            _ad_hourly_row(
+                snapshot,
+                insight,
+                campaign,
+                adset_by_ad_id,
+                hourly_run_id,
+                report_datetime,
+                status_resolver,
+            )
             for snapshot in hourly_snapshots.get("snapshots", [])
             for insight in snapshot.get("insights", [])
             if _include_hourly_row(insight, adset_by_ad_id, window_start, window_end)
@@ -418,21 +427,22 @@ def _ad_hourly_row(
     adset_by_ad_id: dict[str, dict[str, Any]],
     hourly_run_id: str,
     report_datetime: str,
+    status_resolver: HourlyStatusResolver,
 ) -> tuple[Any, ...]:
     ad_id = str(insight["ad_id"])
     adset = adset_by_ad_id[ad_id]
     metric_hour = _metric_hour_from_insight(insight)
     if metric_hour is None:
         raise ValueError(f"Missing hourly breakdown for ad_id={ad_id}")
+    campaign_id = str(insight.get("campaign_id") or campaign["id"])
+    adset_id = str(insight.get("adset_id") or adset["id"])
     return (
         hourly_run_id,
         report_datetime,
         metric_hour.isoformat(),
-        insight.get("date_start") or snapshot["metric_date"],
-        insight.get("date_stop") or snapshot["metric_date"],
-        insight.get("campaign_id") or campaign["id"],
+        campaign_id,
         insight.get("campaign_name"),
-        insight.get("adset_id") or adset["id"],
+        adset_id,
         insight.get("adset_name"),
         ad_id,
         insight.get("ad_name"),
@@ -443,6 +453,7 @@ def _ad_hourly_row(
         None,
         None,
         insight.get("attribution_window"),
+        status_resolver.ad_status(metric_hour, campaign_id, adset_id, ad_id),
         *_metric_values(insight),
     )
 
@@ -543,6 +554,14 @@ def _ensure_hourly_conflict_index(hook) -> None:
             ON marketing.meta_ad_hourly_metric (metric_hour, ad_id)
         """
     )
+
+
+def _hourly_status_resolver() -> HourlyStatusResolver:
+    import google.auth  # type: ignore[import-not-found]
+    from google.cloud import storage  # type: ignore[import-not-found]
+
+    credentials, _project_id = google.auth.default()
+    return HourlyStatusResolver(storage.Client(credentials=credentials), CONFIG_GCS_PREFIX)
 
 
 def _hourly_run_id(run_id: str, account_id: str, campaign_id: str) -> str:

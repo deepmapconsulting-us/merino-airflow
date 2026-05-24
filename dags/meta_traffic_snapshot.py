@@ -39,6 +39,7 @@ from meta_gcs import (
     report_datetime,
     variable_get,
 )
+from meta_status import DailyStatusResolver
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 if MODULE_PATH.exists():
@@ -107,7 +108,7 @@ METRIC_COLUMNS = (
     "attribution_setting",
     "video_avg_time_watched_actions",
 )
-CHANGE_COLUMNS = ("spend", "clicks", "impressions", "unique_clicks", "ctr")
+CHANGE_COLUMNS = ("active_status", "spend", "clicks", "impressions", "unique_clicks", "ctr")
 BASE_INSERT_COLUMNS = (
     "snapshot_run_id",
     "report_date",
@@ -118,17 +119,16 @@ BASE_INSERT_COLUMNS = (
     "source_account_name",
     "currency_code",
     "timezone_name",
-    "report_start_date",
-    "report_end_date",
     "campaign_id",
     "campaign_name",
 )
-CAMPAIGN_INSERT_COLUMNS = (*BASE_INSERT_COLUMNS, "attribution_window", *METRIC_COLUMNS)
+CAMPAIGN_INSERT_COLUMNS = (*BASE_INSERT_COLUMNS, "attribution_window", "active_status", *METRIC_COLUMNS)
 ADSET_INSERT_COLUMNS = (
     *BASE_INSERT_COLUMNS,
     "adset_id",
     "adset_name",
     "attribution_window",
+    "active_status",
     *METRIC_COLUMNS,
 )
 AD_INSERT_COLUMNS = (
@@ -140,14 +140,13 @@ AD_INSERT_COLUMNS = (
     "creative_id",
     "creative_name",
     "attribution_window",
+    "active_status",
     *METRIC_COLUMNS,
 )
 CAMPAIGN_CONFLICT_COLUMNS = (
     "report_date",
     "source_account_id",
     "campaign_id",
-    "report_start_date",
-    "report_end_date",
     "(COALESCE(attribution_window, ''))",
 )
 ADSET_CONFLICT_COLUMNS = (
@@ -155,8 +154,6 @@ ADSET_CONFLICT_COLUMNS = (
     "source_account_id",
     "campaign_id",
     "adset_id",
-    "report_start_date",
-    "report_end_date",
     "(COALESCE(attribution_window, ''))",
 )
 AD_CONFLICT_COLUMNS = (
@@ -165,8 +162,6 @@ AD_CONFLICT_COLUMNS = (
     "campaign_id",
     "adset_id",
     "ad_id",
-    "report_start_date",
-    "report_end_date",
     "(COALESCE(attribution_window, ''))",
 )
 
@@ -249,8 +244,9 @@ def meta_traffic_snapshot():
         context = get_current_context()
         snapshot_run_id = _snapshot_run_id(context["run_id"], "campaign", account["id"])
         report_date = _snapshot_report_date(_context_logical_date(context))
+        status_resolver = _daily_status_resolver()
         rows = [
-            _campaign_row(snapshot, insight, account, snapshot_run_id, report_date)
+            _campaign_row(snapshot, insight, account, snapshot_run_id, report_date, status_resolver)
             for snapshot in campaign_snapshots.get("snapshots", [])
             for insight in snapshot.get("insights", [])
             if insight.get("campaign_id")
@@ -301,8 +297,9 @@ def meta_traffic_snapshot():
         context = get_current_context()
         snapshot_run_id = _snapshot_run_id(context["run_id"], "adset", account["id"], campaign["id"])
         report_date = _snapshot_report_date(_context_logical_date(context))
+        status_resolver = _daily_status_resolver()
         rows = [
-            _adset_row(snapshot, insight, account, campaign, snapshot_run_id, report_date)
+            _adset_row(snapshot, insight, account, campaign, snapshot_run_id, report_date, status_resolver)
             for snapshot in adset_snapshots.get("snapshots", [])
             for insight in snapshot.get("insights", [])
             if insight.get("adset_id")
@@ -361,8 +358,9 @@ def meta_traffic_snapshot():
         snapshot_run_id = _snapshot_run_id(context["run_id"], "ad", account["id"], campaign["id"])
         report_date = _snapshot_report_date(_context_logical_date(context))
         adset_by_ad_id = _adset_by_ad_id(campaign)
+        status_resolver = _daily_status_resolver()
         rows = [
-            _ad_row(snapshot, insight, account, campaign, adset_by_ad_id, snapshot_run_id, report_date)
+            _ad_row(snapshot, insight, account, campaign, adset_by_ad_id, snapshot_run_id, report_date, status_resolver)
             for snapshot in ad_snapshots.get("snapshots", [])
             for insight in snapshot.get("insights", [])
             if insight.get("ad_id") in adset_by_ad_id
@@ -514,10 +512,14 @@ def _campaign_row(
     account: dict[str, Any],
     snapshot_run_id: str,
     report_date: str,
+    status_resolver: DailyStatusResolver,
 ) -> tuple[Any, ...]:
+    row_report_date = _row_report_date(snapshot, insight, report_date)
+    campaign_id = str(insight.get("campaign_id") or "")
     return (
         *_base_values(snapshot, insight, account, snapshot_run_id, report_date),
         insight.get("attribution_window"),
+        status_resolver.campaign_status(row_report_date, campaign_id),
         *_metric_values(insight),
     )
 
@@ -529,12 +531,17 @@ def _adset_row(
     campaign: dict[str, Any],
     snapshot_run_id: str,
     report_date: str,
+    status_resolver: DailyStatusResolver,
 ) -> tuple[Any, ...]:
+    row_report_date = _row_report_date(snapshot, insight, report_date)
+    campaign_id = str(insight.get("campaign_id") or campaign["id"])
+    adset_id = str(insight.get("adset_id") or "")
     return (
         *_base_values(snapshot, insight, account, snapshot_run_id, report_date, campaign),
-        insight.get("adset_id"),
+        adset_id,
         insight.get("adset_name"),
         insight.get("attribution_window"),
+        status_resolver.adset_status(row_report_date, campaign_id, adset_id),
         *_metric_values(insight),
     )
 
@@ -547,18 +554,23 @@ def _ad_row(
     adset_by_ad_id: dict[str, dict[str, Any]],
     snapshot_run_id: str,
     report_date: str,
+    status_resolver: DailyStatusResolver,
 ) -> tuple[Any, ...]:
     ad_id = str(insight["ad_id"])
     adset = adset_by_ad_id[ad_id]
+    row_report_date = _row_report_date(snapshot, insight, report_date)
+    campaign_id = str(insight.get("campaign_id") or campaign["id"])
+    adset_id = str(insight.get("adset_id") or adset["id"])
     return (
         *_base_values(snapshot, insight, account, snapshot_run_id, report_date, campaign),
-        insight.get("adset_id") or adset["id"],
+        adset_id,
         insight.get("adset_name"),
         ad_id,
         insight.get("ad_name"),
         _creative_id_by_ad_id(adset).get(ad_id),
         None,
         insight.get("attribution_window"),
+        status_resolver.ad_status(row_report_date, campaign_id, adset_id, ad_id),
         *_metric_values(insight),
     )
 
@@ -573,7 +585,7 @@ def _base_values(
 ) -> tuple[Any, ...]:
     return (
         snapshot_run_id,
-        report_date,
+        _row_report_date(snapshot, insight, report_date),
         COMPANY,
         PLATFORM,
         SOURCE,
@@ -581,11 +593,21 @@ def _base_values(
         insight.get("account_name"),
         None,
         account.get("timezone_name"),
-        insight.get("date_start") or snapshot["metric_date"],
-        insight.get("date_stop") or snapshot["metric_date"],
         insight.get("campaign_id") or (campaign or {}).get("id"),
         insight.get("campaign_name"),
     )
+
+
+def _row_report_date(snapshot: dict[str, Any], insight: dict[str, Any], fallback: str) -> str:
+    return str(insight.get("date_start") or snapshot["metric_date"] or fallback)
+
+
+def _daily_status_resolver() -> DailyStatusResolver:
+    import google.auth  # type: ignore[import-not-found]
+    from google.cloud import storage  # type: ignore[import-not-found]
+
+    credentials, _project_id = google.auth.default()
+    return DailyStatusResolver(storage.Client(credentials=credentials), CONFIG_GCS_PREFIX)
 
 
 def _metric_values(insight: dict[str, Any]) -> tuple[Any, ...]:

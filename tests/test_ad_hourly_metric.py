@@ -7,7 +7,11 @@ from typing import Any
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 sys.path.insert(0, str(MODULE_PATH))
+DAGS_PATH = Path(__file__).resolve().parents[1] / "dags"
+sys.path.insert(0, str(DAGS_PATH))
 
+import meta_status  # noqa: E402
+from meta_status import ACTIVE_STATUS, NOT_ACTIVE_STATUS, HourlyStatusResolver  # noqa: E402
 from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-found]
 
 
@@ -70,6 +74,48 @@ class AdHourlyMetricTest(unittest.TestCase):
         self.assertIn("report_partition_datetime", dag_py)
         self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", dag_py)
         self.assertIn("update_count = target.update_count + 1", dag_py)
+
+    def test_hourly_active_status_uses_same_four_hour_bucket(self) -> None:
+        calls: list[tuple[str, int]] = []
+
+        def fake_load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, redis_client=None):
+            calls.append((run_date, hour))
+            return {
+                "accounts": {
+                    "act_1": {
+                        "campaigns": [
+                            {
+                                "id": "campaign_1",
+                                "status": "ACTIVE",
+                                "adsets": [
+                                    {
+                                        "id": "adset_1",
+                                        "status": "ACTIVE",
+                                        "ads": [{"id": "ad_1", "status": "ACTIVE"}],
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+                }
+            }
+
+        original_load = meta_status.load_config_snapshot
+        meta_status.load_config_snapshot = fake_load_config_snapshot
+        try:
+            resolver = HourlyStatusResolver(None, "facebook_campaign_config_update", redis_client=object())
+            self.assertEqual(
+                resolver.ad_status("2026-05-23T13:15:00-07:00", "campaign_1", "adset_1", "ad_1"),
+                ACTIVE_STATUS,
+            )
+            self.assertEqual(
+                resolver.ad_status("2026-05-23T13:15:00-07:00", "campaign_1", "adset_1", "missing_ad"),
+                NOT_ACTIVE_STATUS,
+            )
+        finally:
+            meta_status.load_config_snapshot = original_load
+
+        self.assertEqual(calls, [("2026-05-23", 12)])
 
 
 if __name__ == "__main__":

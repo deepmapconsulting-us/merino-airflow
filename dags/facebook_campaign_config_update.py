@@ -29,6 +29,7 @@ from meta_gcs import (
     variable_get,
     write_snapshot_to_gcs,
 )
+from meta_status import cache_config_snapshot
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 if MODULE_PATH.exists():
@@ -101,10 +102,11 @@ def facebook_campaign_config_update():
             run_date=run_date,
             run_datetime=run_datetime,
         )
+        redis_key = cache_config_snapshot(snapshot, run_date, run_datetime)
         print(
             f"{DAG_ID}: synced "
             f"{len(snapshot['accounts'])} Meta ad account config snapshots to {snapshot_uri}; "
-            f"latest pointer at {latest_pointer_uri}"
+            f"latest pointer at {latest_pointer_uri}; redis key {redis_key}"
         )
 
     sync_campaign_config()

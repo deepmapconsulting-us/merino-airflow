@@ -1,0 +1,127 @@
+{
+  "request": {
+    "mcp_server": "user-meta-ads-local",
+    "tool": "get_insights",
+    "arguments": {
+      "ad_id": "6982452110852",
+      "level": "ad",
+      "time_range": {
+        "since": "2026-05-23",
+        "until": "2026-05-23"
+      },
+      "breakdown": "hourly_stats_aggregated_by_advertiser_time_zone",
+      "limit": 100,
+      "compact": true
+    }
+  },
+  "response": {
+    "data": [
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6938541188052",
+        "campaign_name": "0323-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u6253\u5e95\u8863+\u889c\u5b50",
+        "adset_id": "6973015953252",
+        "adset_name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4",
+        "ad_id": "6982452110852",
+        "ad_name": "0519-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4+\u7d20\u6750",
+        "spend": "0",
+        "actions": [
+          {"action_type": "view_content", "value": "1"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "1"}
+        ],
+        "action_values": [
+          {"action_type": "view_content", "value": "42.99"}
+        ],
+        "cost_per_action_type": [
+          {"action_type": "view_content", "value": "0"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "0"}
+        ],
+        "date_start": "2026-05-23",
+        "date_stop": "2026-05-23",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "06:00:00 - 06:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6938541188052",
+        "campaign_name": "0323-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u6253\u5e95\u8863+\u889c\u5b50",
+        "adset_id": "6973015953252",
+        "adset_name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4",
+        "ad_id": "6982452110852",
+        "ad_name": "0519-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4+\u7d20\u6750",
+        "spend": "0",
+        "actions": [
+          {"action_type": "view_content", "value": "5"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "5"}
+        ],
+        "action_values": [
+          {"action_type": "view_content", "value": "217.95"}
+        ],
+        "cost_per_action_type": [
+          {"action_type": "view_content", "value": "0"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "0"}
+        ],
+        "date_start": "2026-05-23",
+        "date_stop": "2026-05-23",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "11:00:00 - 11:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6938541188052",
+        "campaign_name": "0323-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u6253\u5e95\u8863+\u889c\u5b50",
+        "adset_id": "6973015953252",
+        "adset_name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4",
+        "ad_id": "6982452110852",
+        "ad_name": "0519-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4+\u7d20\u6750",
+        "spend": "0",
+        "actions": [
+          {"action_type": "view_content", "value": "4"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "4"}
+        ],
+        "action_values": [
+          {"action_type": "view_content", "value": "173.96"}
+        ],
+        "cost_per_action_type": [
+          {"action_type": "view_content", "value": "0"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "0"}
+        ],
+        "date_start": "2026-05-23",
+        "date_stop": "2026-05-23",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "13:00:00 - 13:59:59"
+      },
+      {
+        "account_id": "4157857287789311",
+        "account_name": "Merino Protect Owned by Diyang",
+        "campaign_id": "6938541188052",
+        "campaign_name": "0323-\u65b0\u7d20\u6750\u6d4b\u8bd5-\u6253\u5e95\u8863+\u889c\u5b50",
+        "adset_id": "6973015953252",
+        "adset_name": "0507-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4",
+        "ad_id": "6982452110852",
+        "ad_name": "0519-\u5927\u9884\u7b97\u6d4b\u8bd5\u7ec4+\u7d20\u6750",
+        "spend": "0",
+        "actions": [
+          {"action_type": "view_content", "value": "1"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "1"}
+        ],
+        "action_values": [
+          {"action_type": "view_content", "value": "42.99"}
+        ],
+        "cost_per_action_type": [
+          {"action_type": "view_content", "value": "0"},
+          {"action_type": "offsite_content_view_add_meta_leads", "value": "0"}
+        ],
+        "date_start": "2026-05-23",
+        "date_stop": "2026-05-23",
+        "hourly_stats_aggregated_by_advertiser_time_zone": "14:00:00 - 14:59:59"
+      }
+    ],
+    "paging": {
+      "cursors": {
+        "before": "MAZDZD",
+        "after": "MwZDZD"
+      }
+    }
+  }
+}
