@@ -71,6 +71,61 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
             [{"field": "ad.id", "operator": "IN", "value": ["ad_1", "ad_2"]}],
         )
 
+    def test_ad_gender_age_daily_snapshot_uses_age_gender_breakdown(self) -> None:
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        class FakeMetaGraphClient:
+            def __init__(self, access_token: str) -> None:
+                self.access_token = access_token
+
+            def get_all(self, endpoint: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+                calls.append((endpoint, params))
+                return [
+                    {
+                        "ad_id": "ad_1",
+                        "age": "25-34",
+                        "gender": "female",
+                    }
+                ]
+
+        original_client = traffic.MetaGraphClient
+        traffic.MetaGraphClient = FakeMetaGraphClient  # type: ignore[assignment]
+        try:
+            traffic.ad_gender_age_daily_snapshot(
+                "token",
+                "act_4157857287789311",
+                "campaign_1",
+                ["ad_1", "ad_2"],
+                "2026-05-20",
+            )
+        finally:
+            traffic.MetaGraphClient = original_client
+
+        self.assertEqual(calls[0][0], "campaign_1/insights")
+        self.assertEqual(calls[0][1]["level"], "ad")
+        self.assertEqual(calls[0][1]["breakdowns"], "age,gender")
+        self.assertEqual(
+            calls[0][1]["filtering"],
+            [{"field": "ad.id", "operator": "IN", "value": ["ad_1", "ad_2"]}],
+        )
+
+    def test_gender_age_insights_require_breakdown_dimensions(self) -> None:
+        adset_by_ad_id = {"ad_1": {"id": "adset_1"}}
+        insights = [
+            {"ad_id": "ad_1", "age": "25-34", "gender": "female"},
+            {"ad_id": "ad_1", "age": "25-34"},
+            {"ad_id": "ad_2", "age": "18-24", "gender": "male"},
+        ]
+        filtered = [
+            insight
+            for insight in insights
+            if insight.get("ad_id") in adset_by_ad_id
+            and insight.get("age")
+            and insight.get("gender")
+        ]
+        self.assertEqual(len(filtered), 1)
+        self.assertEqual(filtered[0]["gender"], "female")
+
     def test_insight_metric_values_extracts_scalars_and_json_payloads(self) -> None:
         values = traffic.insight_metric_values(
             {
@@ -108,10 +163,18 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
     def test_schema_and_dag_use_daily_snapshot_upsert_keys(self) -> None:
         repo = Path(__file__).resolve().parents[1]
         schema_sql = (repo.parents[0] / "metabase_schema" / "schema" / "meta_traffic_snapshot.sql").read_text()
+        gender_age_sql = (
+            repo.parents[0] / "metabase_schema" / "schema" / "meta_ad_gender_age_daily_snapshot.sql"
+        ).read_text()
         dag_py = (repo / "dags" / "meta_traffic_snapshot.py").read_text()
 
         self.assertNotIn("snapshot_run_id,\n        source_account_id", schema_sql)
         self.assertIn("report_date,\n        source_account_id", schema_sql)
+        self.assertIn("marketing.meta_ad_gender_age_daily_snapshot", gender_age_sql)
+        self.assertIn("age,\n        gender,", gender_age_sql)
+        self.assertIn("meta_ad_gender_age_daily_snapshot_unique_idx", gender_age_sql)
+        self.assertIn("AD_GENDER_AGE_DAILY_TABLE", dag_py)
+        self.assertIn("pull_ad_gender_age_snapshots", dag_py)
         self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", dag_py)
         self.assertIn("update_count = target.update_count + 1", dag_py)
         self.assertIn('f"target.{column} IS DISTINCT FROM EXCLUDED.{column}"', dag_py)

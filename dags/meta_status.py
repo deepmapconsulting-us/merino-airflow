@@ -9,7 +9,6 @@ from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-REDIS_CONN_ID = "merino_redis"
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
 REPORT_PARTITION_HOURS = 4
@@ -24,7 +23,7 @@ HYBRID_STATUS = "hybrid"
 def get_redis():
     from airflow.providers.redis.hooks.redis import RedisHook  # type: ignore[import-not-found]
 
-    return RedisHook(redis_conn_id=REDIS_CONN_ID).get_conn()
+    return RedisHook(redis_conn_id="merino_redis").get_conn()
 
 
 def config_cache_key(run_date: str, hour: int) -> str:
