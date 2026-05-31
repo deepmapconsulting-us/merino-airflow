@@ -11,9 +11,9 @@ from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
 AD_ACCOUNT_TIMEZONE_FIELDS = "timezone_name"
 # Timestamps match meta-ads-mcp list endpoints (flat fields only; nested expansions reject some).
-CAMPAIGN_LIST_FIELDS = "id,status,created_time,updated_time"
-ADSET_LIST_FIELDS = "id,status,campaign_id,created_time,updated_time"
-AD_LIST_FIELDS = "id,status,adset_id,campaign_id,created_time,updated_time,creative{id}"
+CAMPAIGN_LIST_FIELDS = "id,name,status,objective,created_time,updated_time"
+ADSET_LIST_FIELDS = "id,name,status,campaign_id,created_time,updated_time"
+AD_LIST_FIELDS = "id,name,status,adset_id,campaign_id,created_time,updated_time,creative{id}"
 
 
 def account_ids_from_env() -> list[str]:
@@ -199,6 +199,10 @@ def _object_node(row: dict[str, Any], *, include_timestamps: bool = True) -> dic
         "id": row.get("id"),
         "status": _status(row),
     }
+    if row.get("name") is not None:
+        node["name"] = row.get("name")
+    if row.get("objective") is not None:
+        node["objective"] = row.get("objective")
     if include_timestamps:
         created_time = row.get("created_time")
         updated_time = row.get("updated_time")
@@ -214,6 +218,8 @@ def _merge_object_fields(node: dict[str, Any], row: dict[str, Any]) -> None:
     for key, value in _object_node(row).items():
         if value is not None or key not in node:
             node[key] = value
+    if row.get("campaign_id") is not None:
+        node["campaign_id"] = row.get("campaign_id")
 
 
 def _status(row: dict[str, Any]) -> Any:

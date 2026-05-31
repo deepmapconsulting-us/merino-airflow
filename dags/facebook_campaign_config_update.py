@@ -4,7 +4,7 @@ Meta access token is read from Airflow Variable `meta_access_token` (GSM:
 `airflow-variables-meta_access_token`), with fallback to env `META_ACCESS_TOKEN`.
 Each campaign, adset, and ad includes `created_at` and `updated_at` when Meta
 returns `created_time` / `updated_time`. Snapshots are written to GCS at
-`gs://airflow-run-us-west2/facebook_campaign_config_update/<date>/<4-hour-bucket>/snapshot.json`.
+`gs://airflow-run-us-west2/facebook_campaign_config_update/<date>/<2-hour-bucket>/snapshot.json`.
 Latest pointer: `gs://airflow-run-us-west2/facebook_campaign_config_update/latest_success.json`.
 Airflow Variables are read for credentials/config only; this DAG does not write
 campaign config data back to Airflow Variables.
@@ -58,7 +58,7 @@ def _account_timezone_cache() -> dict[str, str]:
 
 @dag(
     dag_id=DAG_ID,
-    schedule="0 0,4,8,12,16,20 * * *",
+    schedule="0 */2 * * *",
     start_date=pendulum.datetime(2026, 1, 1, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["facebook", "campaign", "config", "meta"],

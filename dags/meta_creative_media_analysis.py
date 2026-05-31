@@ -1,0 +1,381 @@
+"""Daily creative media download + analysis via media-analysis-mcp FastAPI.
+
+Reads active ads from the latest ``facebook_campaign_config_update`` GCS snapshot,
+groups work by adset, and for each eligible ad POSTs to media-analysis-mcp:
+
+1. ``/api/v1/download-ad-creative-assets`` — cache media on the MCP server (Redis + disk)
+2. ``/api/v1/creative-media-analysis`` — LLM video/audio analysis (cached in MCP Redis)
+
+Airflow does not port-forward Redis; the MCP pod connects to cluster Redis directly.
+
+## Required Airflow Variables (GSM secrets)
+
+| Variable | Env fallback | Purpose |
+|----------|--------------|---------|
+| ``meta_access_token`` | ``META_ACCESS_TOKEN`` | Meta Graph Bearer (download) |
+| ``mcp_gateway_token`` | ``MCP_GATEWAY_TOKEN`` | ``X-MCP-Gateway-Token`` header |
+| ``media_analysis_url`` | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default: ``https://media-analysis-mcp.merino-aiagent.com``) |
+
+## Optional tuning Variables
+
+| Variable | Env fallback | Default |
+|----------|--------------|---------|
+| ``facebook_active_accounts`` | ``FACEBOOK_ACTIVE_ACCOUNTS`` | all accounts in snapshot |
+| ``FACEBOOK_TRAFFIC_LOOKUP_WINDOWS`` | ``FACEBOOK_TRAFFIC_LOOKUP_WINDOWS`` | ``3`` days |
+| ``media_analysis_sample_sec`` | ``TEST_VIDEO_SAMPLE_SEC`` | ``3`` (``get_video_frame_in_sec``) |
+| ``media_analysis_frame_interval_sec`` | ``TEST_SPLIT_FRAME_BY_SEC`` | ``1`` (``split_frame_by_sec``) |
+| ``media_analysis_force_refresh`` | — | ``false`` (download cache) |
+| ``media_analysis_analysis_force_refresh`` | — | ``false`` (analysis cache) |
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import Any
+
+import pendulum  # type: ignore[import-not-found]
+from airflow.sdk import dag, task  # type: ignore[import-not-found]
+from airflow.utils.task_group import TaskGroup  # type: ignore[import-not-found]
+
+try:
+    from airflow.providers.standard.sensors.external_task import ExternalTaskSensor  # type: ignore[import-not-found]
+except ImportError:
+    from airflow.sensors.external_task import ExternalTaskSensor  # type: ignore[import-not-found,no-redef]
+
+from meta_gcs import (
+    REPORT_TIMEZONE,
+    campaign_config_logical_date,
+    gcs_console_link,
+    meta_access_token,
+    read_json_from_gcs,
+    read_latest_snapshot_pointer,
+    variable_get,
+)
+
+MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
+if MODULE_PATH.exists():
+    sys.path.insert(0, str(MODULE_PATH))
+
+from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[import-not-found]
+    analysis_targets_from_download,
+    creative_media_analysis,
+    download_ad_creative_assets,
+    mcp_gateway_token,
+    media_analysis_base_url,
+)
+from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-found]
+    DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS,
+    media_analysis_ads_from_adset,
+    traffic_accounts_from_config,
+)
+
+DAG_ID = "meta_creative_media_analysis"
+CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
+CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
+ACTIVE_ACCOUNTS_VARIABLE_NAME = "facebook_active_accounts"
+ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
+LOOKUP_WINDOW_VARIABLE_NAME = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
+LOOKUP_WINDOW_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
+SAMPLE_SEC_VARIABLE = "media_analysis_sample_sec"
+SAMPLE_SEC_ENV = "TEST_VIDEO_SAMPLE_SEC"
+FRAME_INTERVAL_VARIABLE = "media_analysis_frame_interval_sec"
+FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
+DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
+ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
+DEFAULT_MAX_FRAMES = 20
+
+
+@dag(
+    dag_id=DAG_ID,
+    schedule="0 3 * * *",
+    start_date=pendulum.datetime(2026, 1, 1, 0, 0, tz=REPORT_TIMEZONE),
+    catchup=False,
+    tags=["meta", "creative", "media-analysis"],
+    default_args={
+        "owner": "data-platform",
+        "retries": 2,
+        "retry_delay": timedelta(minutes=5),
+    },
+    doc_md=__doc__,
+)
+def meta_creative_media_analysis():
+    config_source = _campaign_config_for_display()
+    config_log = _config_log_payload(config_source)
+    dag_params = _dag_run_params()
+
+    @task
+    def log_campaign_config_source(source: dict[str, Any]) -> None:
+        print(f"{DAG_ID}: config snapshot: {source.get('snapshot_uri') or '<none>'}")
+        print(f"{DAG_ID}: config snapshot link: {source.get('snapshot_link') or '<none>'}")
+        if source.get("error"):
+            print(f"{DAG_ID}: campaign config unavailable during DAG parse: {source['error']}")
+        else:
+            print(
+                f"{DAG_ID}: {source['account_count']} accounts, "
+                f"{source.get('campaign_count', 0)} campaigns, "
+                f"{source['adset_count']} adsets, "
+                f"{source.get('ad_count', 0)} ads for media analysis"
+            )
+
+    @task
+    def no_campaigns_from_campaign_config(source: dict[str, Any]) -> None:
+        if source.get("error"):
+            raise RuntimeError(source["error"])
+        print(f"{DAG_ID}: no creative media analysis tasks were created")
+
+    @task
+    def download_ad_creative(ad: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+        ad_id = str(ad["id"])
+        payload = download_ad_creative_assets(
+            ad_id,
+            meta_token=meta_access_token(),
+            gateway_token=mcp_gateway_token(),
+            base_url=params["base_url"],
+            get_video_frame_in_sec=params["get_video_frame_in_sec"],
+            split_frame_by_sec=params["split_frame_by_sec"],
+            force_refresh=params["download_force_refresh"],
+            bucket_location=params["bucket_location"],
+        )
+        cache_hits = payload.get("cache_hits") if isinstance(payload.get("cache_hits"), list) else []
+        video_ids = payload.get("video_ids") if isinstance(payload.get("video_ids"), list) else []
+        print(
+            f"{DAG_ID}: downloaded ad_id={ad_id} videos={len(video_ids)} "
+            f"cache_hits={cache_hits}"
+        )
+        return {
+            "ad_id": ad_id,
+            "download": payload,
+            "video_ids": [str(v) for v in video_ids],
+            "cache_hits": [str(v) for v in cache_hits],
+        }
+
+    @task
+    def analyze_ad_creative(download_result: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+        ad_id = str(download_result.get("ad_id") or "")
+        download_payload = download_result.get("download")
+        if not isinstance(download_payload, dict):
+            raise RuntimeError(f"download_ad_creative missing download payload for ad_id={ad_id}")
+
+        targets = analysis_targets_from_download(download_payload)
+        if not targets:
+            raise RuntimeError(f"No analyzable videos in download response for ad_id={ad_id}")
+
+        meta_token = meta_access_token()
+        gateway = mcp_gateway_token()
+        base_url = params["base_url"]
+        results: list[dict[str, Any]] = []
+        for target in targets:
+            video_id = str(target["video_id"])
+            storage = target["storage"]
+            if not isinstance(storage, dict):
+                continue
+            analysis = creative_media_analysis(
+                storage,
+                ad_id=ad_id,
+                video_id=video_id,
+                meta_token=meta_token,
+                gateway_token=gateway,
+                base_url=base_url,
+                force_refresh=params["analysis_force_refresh"],
+                max_frames=params["max_frames"],
+                audio_analysis=params["audio_analysis"],
+            )
+            from_cache = bool(analysis.get("from_cache"))
+            print(
+                f"{DAG_ID}: analyzed ad_id={ad_id} video_id={video_id} "
+                f"from_cache={from_cache}"
+            )
+            results.append(
+                {
+                    "video_id": video_id,
+                    "from_cache": from_cache,
+                    "redis_key": analysis.get("redis_key"),
+                }
+            )
+
+        return {
+            "ad_id": ad_id,
+            "video_ids": [row["video_id"] for row in results],
+            "analysis_from_cache": [row["video_id"] for row in results if row["from_cache"]],
+            "results": results,
+            "errors": [],
+        }
+
+    wait_for_campaign_config = ExternalTaskSensor(
+        task_id="wait_for_facebook_campaign_config_update",
+        external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
+        external_task_id=None,
+        execution_date_fn=campaign_config_logical_date,
+        allowed_states=["success"],
+        failed_states=["failed"],
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3 * 60 * 60,
+    )
+    wait_for_object_property = ExternalTaskSensor(
+        task_id="wait_for_meta_object_property_sync",
+        external_dag_id="meta_object_property_sync",
+        external_task_id="sync_object_properties",
+        execution_date_fn=campaign_config_logical_date,
+        allowed_states=["success"],
+        failed_states=["failed"],
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3 * 60 * 60,
+    )
+    config_task = log_campaign_config_source(config_log)
+    wait_for_campaign_config >> wait_for_object_property >> config_task
+
+    accounts = config_source.get("accounts", [])
+    if not accounts:
+        config_task >> no_campaigns_from_campaign_config(config_log)
+        return
+
+    for account in accounts:
+        account_id = _airflow_id(account["id"])
+        with TaskGroup(group_id=f"account_{account_id}") as account_group:
+            for campaign in account.get("campaigns", []):
+                campaign_id = _airflow_id(campaign["id"])
+                with TaskGroup(group_id=f"campaign_{campaign_id}") as campaign_group:
+                    for adset in campaign.get("adsets", []):
+                        adset_id = _airflow_id(adset["id"])
+                        ads = config_source.get("ads_by_adset", {}).get(str(adset.get("id")), [])
+                        if not ads:
+                            continue
+                        with TaskGroup(group_id=f"adset_{adset_id}") as adset_group:
+                            for ad in ads:
+                                ad_task_id = _airflow_id(str(ad["id"]))
+                                downloaded = download_ad_creative.override(
+                                    task_id=f"download_ad_{ad_task_id}"
+                                )(ad, dag_params)
+                                analyzed = analyze_ad_creative.override(
+                                    task_id=f"analyze_ad_{ad_task_id}"
+                                )(downloaded, dag_params)
+                                downloaded >> analyzed
+                        config_task >> adset_group
+                config_task >> campaign_group
+        config_task >> account_group
+
+
+def _dag_run_params() -> dict[str, Any]:
+    return {
+        "base_url": media_analysis_base_url(),
+        "get_video_frame_in_sec": int(
+            variable_get(SAMPLE_SEC_VARIABLE, os.environ.get(SAMPLE_SEC_ENV, "3"))
+        ),
+        "split_frame_by_sec": float(
+            variable_get(FRAME_INTERVAL_VARIABLE, os.environ.get(FRAME_INTERVAL_ENV, "1"))
+        ),
+        "download_force_refresh": _bool_variable(DOWNLOAD_FORCE_REFRESH_VARIABLE, False),
+        "analysis_force_refresh": _bool_variable(ANALYSIS_FORCE_REFRESH_VARIABLE, False),
+        "bucket_location": "meta_analysis",
+        "max_frames": DEFAULT_MAX_FRAMES,
+        "audio_analysis": True,
+    }
+
+
+def _bool_variable(name: str, default: bool) -> bool:
+    raw = variable_get(name, "true" if default else "false").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _campaign_config_for_display() -> dict[str, Any]:
+    source: dict[str, Any] = {
+        "snapshot_uri": "",
+        "snapshot_link": "",
+        "accounts": [],
+        "ads_by_adset": {},
+        "account_count": 0,
+        "campaign_count": 0,
+        "adset_count": 0,
+        "ad_count": 0,
+        "error": "",
+    }
+    try:
+        import google.auth  # type: ignore[import-not-found]
+        from google.cloud import storage  # type: ignore[import-not-found]
+
+        credentials, _project_id = google.auth.default()
+        storage_client = storage.Client(credentials=credentials)
+        pointer_uri, pointer = read_latest_snapshot_pointer(storage_client, CONFIG_GCS_PREFIX)
+        snapshot_uri = str(pointer["final_output"])
+        snapshot = read_json_from_gcs(storage_client, snapshot_uri)
+        lookup_window_days = int(
+            variable_get(
+                LOOKUP_WINDOW_VARIABLE_NAME,
+                os.environ.get(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS)),
+            )
+        )
+        active_accounts = variable_get(
+            ACTIVE_ACCOUNTS_VARIABLE_NAME,
+            os.environ.get(ACTIVE_ACCOUNTS_ENV, ""),
+        )
+        cutoff = datetime.now(timezone.utc) - timedelta(days=lookup_window_days)
+        accounts = traffic_accounts_from_config(
+            snapshot,
+            active_accounts_value=active_accounts,
+            lookup_window_days=lookup_window_days,
+        )
+        ads_by_adset: dict[str, list[dict[str, Any]]] = {}
+        ad_count = 0
+        for account in accounts:
+            for campaign in account.get("campaigns", []):
+                for adset in campaign.get("adsets", []):
+                    adset_key = str(adset.get("id") or "")
+                    if not adset_key:
+                        continue
+                    ads = media_analysis_ads_from_adset(adset, cutoff=cutoff)
+                    if ads:
+                        ads_by_adset[adset_key] = ads
+                        ad_count += len(ads)
+
+        source.update(
+            {
+                "snapshot_uri": snapshot_uri,
+                "snapshot_link": gcs_console_link(snapshot_uri),
+                "accounts": accounts,
+                "ads_by_adset": ads_by_adset,
+                "account_count": len(accounts),
+                "campaign_count": _campaign_count(accounts),
+                "adset_count": _adset_count(accounts),
+                "ad_count": ad_count,
+            }
+        )
+    except Exception as exc:
+        source["error"] = str(exc)
+    return source
+
+
+def _config_log_payload(source: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "snapshot_uri": source.get("snapshot_uri", ""),
+        "snapshot_link": source.get("snapshot_link", ""),
+        "account_count": source.get("account_count", 0),
+        "campaign_count": source.get("campaign_count", 0),
+        "adset_count": source.get("adset_count", 0),
+        "ad_count": source.get("ad_count", 0),
+        "error": source.get("error", ""),
+    }
+
+
+def _campaign_count(accounts: list[dict[str, Any]]) -> int:
+    return sum(len(account.get("campaigns", [])) for account in accounts)
+
+
+def _adset_count(accounts: list[dict[str, Any]]) -> int:
+    return sum(
+        len(campaign.get("adsets", []))
+        for account in accounts
+        for campaign in account.get("campaigns", [])
+    )
+
+
+def _airflow_id(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_]+", "_", value).strip("_") or "unknown"
+
+
+meta_creative_media_analysis()

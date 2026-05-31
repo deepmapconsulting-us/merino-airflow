@@ -15,7 +15,7 @@ META_ACCESS_TOKEN_VARIABLE = "meta_access_token"
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 # Meta ad accounts report insights by calendar day in account TZ; default matches Merino US accounts.
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
-REPORT_PARTITION_HOURS = 4
+REPORT_PARTITION_HOURS = 2
 REPORT_SCHEDULE_DELAY_MINUTES = 10
 
 
@@ -70,7 +70,7 @@ def report_datetime(value: Any | None = None) -> pendulum.DateTime:
 
 
 def report_partition_datetime(value: Any | None = None) -> pendulum.DateTime:
-    """Return the report-time 4-hour bucket for a run timestamp."""
+    """Return the report-time 2-hour bucket for a run timestamp."""
     local = report_datetime(value)
     partition_hour = (local.hour // REPORT_PARTITION_HOURS) * REPORT_PARTITION_HOURS
     return local.set(hour=partition_hour, minute=0, second=0, microsecond=0)
@@ -82,7 +82,7 @@ def report_schedule_datetime(value: Any | None = None) -> pendulum.DateTime:
 
 
 def run_partition() -> tuple[str, str]:
-    """GCS path partition keys using the Meta 4-hour report bucket."""
+    """GCS path partition keys using the Meta 2-hour report bucket."""
     local = report_partition_datetime()
     run_date = local.format("YYYY-MM-DD")
     run_datetime = local.format("YYYYMMDDTHHmmssZZ")
@@ -98,8 +98,46 @@ def metric_date() -> str:
 
 
 def partition_hour(value: Any | None = None) -> str:
-    """Four-hour bucket for snapshot/hourly tables in REPORT_TIMEZONE."""
+    """Two-hour bucket for snapshot/hourly tables in REPORT_TIMEZONE."""
     return report_partition_datetime(value).isoformat()
+
+
+def resolve_logical_date_from_context(
+    context: dict[str, Any] | None = None,
+    run_logical_date: Any | None = None,
+) -> Any:
+    """Best-effort Airflow logical date from sensor/task context."""
+    if run_logical_date is not None:
+        return run_logical_date
+    if not context:
+        return logical_date()
+
+    if context.get("logical_date"):
+        return context["logical_date"]
+    for key in ("data_interval_start", "execution_date", "ts"):
+        if context.get(key):
+            return context[key]
+    for source in (context.get("dag_run"), context.get("task_instance"), context.get("ti")):
+        if source is None:
+            continue
+        for attr in ("logical_date", "data_interval_start", "execution_date", "run_after", "start_date"):
+            value = getattr(source, attr, None)
+            if value:
+                return value
+    run_id = str(context.get("run_id") or getattr(context.get("dag_run"), "run_id", ""))
+    if "__" in run_id:
+        try:
+            return pendulum.parse(run_id.split("__", 1)[1])
+        except Exception:
+            pass
+    raise KeyError(f"No logical date found in Airflow context keys: {sorted(context)}")
+
+
+def campaign_config_logical_date(logical_date: Any | None = None, **context: Any) -> pendulum.DateTime:
+    """Map a downstream DAG run to the matching facebook_campaign_config_update logical date."""
+    return report_partition_datetime(
+        resolve_logical_date_from_context(context, run_logical_date=logical_date)
+    )
 
 
 def snapshot_object_name(prefix: str, run_date: str, run_datetime: str) -> str:

@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
-REPORT_PARTITION_HOURS = 4
+REPORT_PARTITION_HOURS = 2  # keep in sync with meta_gcs.REPORT_PARTITION_HOURS
 CONFIG_CACHE_TTL_SECONDS = 2 * 24 * 60 * 60
 CONFIG_BUCKET_HOURS = tuple(range(0, 24, REPORT_PARTITION_HOURS))
 CONFIG_FALLBACK_DAYS = 2

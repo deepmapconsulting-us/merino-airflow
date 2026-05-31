@@ -480,6 +480,32 @@ def ad_ids_from_config(adset: dict[str, Any]) -> list[str]:
     return [str(ad["id"]) for ad in adset.get("ads", []) if ad.get("id")]
 
 
+def media_analysis_ads_from_adset(
+    adset: dict[str, Any],
+    *,
+    cutoff: datetime,
+) -> list[dict[str, Any]]:
+    """Ads with creative_id that are ACTIVE or recently updated."""
+    selected: list[dict[str, Any]] = []
+    for ad in adset.get("ads", []):
+        if not isinstance(ad, dict) or not ad.get("id"):
+            continue
+        creative_id = ad.get("creative_id")
+        if not creative_id:
+            continue
+        if not _object_should_import(ad, cutoff):
+            continue
+        selected.append(
+            {
+                "id": str(ad["id"]),
+                "creative_id": str(creative_id),
+                "status": ad.get("status"),
+                "updated_at": ad.get("updated_at"),
+            }
+        )
+    return selected
+
+
 def insight_ad_is_configured(insight: dict[str, Any], adset: dict[str, Any]) -> bool:
     return str(insight.get("ad_id") or "") in set(ad_ids_from_config(adset))
 

@@ -1,6 +1,6 @@
 """Sync Meta ad hourly metrics from campaign-config-driven ad batches.
 
-This DAG reads the matching 4-hour campaign config snapshot from GCS, pulls the
+This DAG reads the matching 2-hour campaign config snapshot from GCS, pulls the
 last 12 hours of advertiser-time-zone hourly ad insights, and upserts changed
 rows into `marketing.meta_ad_hourly_metric`.
 """
@@ -29,6 +29,7 @@ except ImportError:
 from meta_gcs import (
     REPORT_TIMEZONE,
     SNAPSHOT_BUCKET,
+    campaign_config_logical_date,
     gcs_console_link,
     gcs_uri,
     meta_access_token,
@@ -240,7 +241,18 @@ def meta_ad_hourly_metric():
         task_id="wait_for_facebook_campaign_config_update",
         external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
         external_task_id=None,
-        execution_date_fn=_campaign_config_logical_date,
+        execution_date_fn=campaign_config_logical_date,
+        allowed_states=["success"],
+        failed_states=["failed"],
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3 * 60 * 60,
+    )
+    wait_for_object_property = ExternalTaskSensor(
+        task_id="wait_for_meta_object_property_sync",
+        external_dag_id="meta_object_property_sync",
+        external_task_id="sync_object_properties",
+        execution_date_fn=campaign_config_logical_date,
         allowed_states=["success"],
         failed_states=["failed"],
         mode="reschedule",
@@ -248,7 +260,7 @@ def meta_ad_hourly_metric():
         timeout=3 * 60 * 60,
     )
     config_task = log_campaign_config_source(config_log)
-    wait_for_campaign_config >> config_task
+    wait_for_campaign_config >> wait_for_object_property >> config_task
     accounts = config_source.get("accounts", [])
     if not accounts:
         config_task >> no_campaigns_from_campaign_config(config_log)
@@ -576,8 +588,5 @@ def _airflow_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value).strip("_") or "unknown"
 
 
-def _campaign_config_logical_date(logical_date=None, **context):
-    return report_partition_datetime(logical_date or _context_logical_date(context))
-
-
 meta_ad_hourly_metric()
+

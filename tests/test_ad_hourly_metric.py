@@ -71,11 +71,18 @@ class AdHourlyMetricTest(unittest.TestCase):
         self.assertIn('schedule="0 */2 * * *"', dag_py)
         self.assertIn("AD_BATCH_SIZE = 5", dag_py)
         self.assertIn("LOOKBACK_HOURS = 12", dag_py)
-        self.assertIn("report_partition_datetime", dag_py)
+        self.assertIn("campaign_config_logical_date", dag_py)
+        config_dag_py = (repo / "dags" / "facebook_campaign_config_update.py").read_text()
+        self.assertIn('schedule="0 */2 * * *"', config_dag_py)
+        property_dag_py = (repo / "dags" / "meta_object_property_sync.py").read_text()
+        self.assertIn('schedule="0 */2 * * *"', property_dag_py)
+        meta_gcs_py = (repo / "dags" / "meta_gcs.py").read_text()
+        self.assertIn("REPORT_PARTITION_HOURS = 2", meta_gcs_py)
+        self.assertIn("def campaign_config_logical_date", meta_gcs_py)
         self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", dag_py)
         self.assertIn("update_count = target.update_count + 1", dag_py)
 
-    def test_hourly_active_status_uses_same_four_hour_bucket(self) -> None:
+    def test_hourly_active_status_uses_same_two_hour_bucket(self) -> None:
         calls: list[tuple[str, int]] = []
 
         def fake_load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, redis_client=None):

@@ -30,6 +30,7 @@ except ImportError:
 
 from meta_gcs import (
     REPORT_TIMEZONE,
+    campaign_config_logical_date,
     gcs_console_link,
     gcs_uri,
     latest_object_name,
@@ -484,7 +485,18 @@ def meta_traffic_snapshot():
         task_id="wait_for_facebook_campaign_config_update",
         external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
         external_task_id=None,
-        execution_date_fn=_campaign_config_logical_date,
+        execution_date_fn=campaign_config_logical_date,
+        allowed_states=["success"],
+        failed_states=["failed"],
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3 * 60 * 60,
+    )
+    wait_for_object_property = ExternalTaskSensor(
+        task_id="wait_for_meta_object_property_sync",
+        external_dag_id="meta_object_property_sync",
+        external_task_id="sync_object_properties",
+        execution_date_fn=campaign_config_logical_date,
         allowed_states=["success"],
         failed_states=["failed"],
         mode="reschedule",
@@ -492,7 +504,7 @@ def meta_traffic_snapshot():
         timeout=3 * 60 * 60,
     )
     config_task = log_campaign_config_source(config_log)
-    wait_for_campaign_config >> config_task
+    wait_for_campaign_config >> wait_for_object_property >> config_task
     accounts = config_source.get("accounts", [])
     if not accounts:
         config_task >> no_campaigns_from_campaign_config(config_log)
@@ -874,12 +886,6 @@ def _creative_id_by_ad_id(adset: dict[str, Any]) -> dict[str, str]:
 
 def _airflow_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value).strip("_") or "unknown"
-
-
-def _campaign_config_logical_date(logical_date=None, **context):
-    local = report_datetime(logical_date or _context_logical_date(context))
-    config_hour = 0 if local.hour < 12 else 12
-    return local.set(hour=config_hour, minute=0, second=0, microsecond=0)
 
 
 meta_traffic_snapshot()
