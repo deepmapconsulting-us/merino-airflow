@@ -53,6 +53,8 @@ from meta_gcs import (
     meta_access_token,
     read_json_from_gcs,
     read_latest_snapshot_pointer,
+    report_partition_datetime,
+    resolve_logical_date_from_context,
     variable_get,
 )
 
@@ -66,6 +68,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     download_ad_creative_assets,
     mcp_gateway_token,
     media_analysis_base_url,
+    upsert_creative_media_analysis,
 )
 from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-found]
     DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS,
@@ -87,6 +90,7 @@ FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
 DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
 ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
 DEFAULT_MAX_FRAMES = 20
+POSTGRES_CONN_ID = "merino_analytics"
 
 
 @dag(
@@ -157,11 +161,19 @@ def meta_creative_media_analysis():
     def analyze_ad_creative(
         download_result: dict[str, Any], run_config: dict[str, Any]
     ) -> dict[str, Any]:
+        from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
         ad_id = str(download_result.get("ad_id") or "")
         download_payload = download_result.get("download")
         if not isinstance(download_payload, dict):
             raise RuntimeError(f"download_ad_creative missing download payload for ad_id={ad_id}")
 
+        campaign_id = str(download_payload.get("campaign_id") or "")
+        adset_id = str(download_payload.get("adset_id") or "")
+        partition_datetime = report_partition_datetime(
+            resolve_logical_date_from_context(get_current_context())
+        ).isoformat()
         targets = analysis_targets_from_download(download_payload)
         if not targets:
             raise RuntimeError(f"No analyzable videos in download response for ad_id={ad_id}")
@@ -186,16 +198,36 @@ def meta_creative_media_analysis():
                 max_frames=run_config["max_frames"],
                 audio_analysis=run_config["audio_analysis"],
             )
+            hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+            conn = hook.get_conn()
+            try:
+                snapshot_id = upsert_creative_media_analysis(
+                    conn,
+                    campaign_id=campaign_id,
+                    adset_id=adset_id,
+                    ad_id=ad_id,
+                    video_id=video_id,
+                    partition_datetime=partition_datetime,
+                    analysis=analysis,
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
             from_cache = bool(analysis.get("from_cache"))
             print(
                 f"{DAG_ID}: analyzed ad_id={ad_id} video_id={video_id} "
-                f"from_cache={from_cache}"
+                f"from_cache={from_cache} snapshot_id={snapshot_id}"
             )
             results.append(
                 {
                     "video_id": video_id,
                     "from_cache": from_cache,
                     "redis_key": analysis.get("redis_key"),
+                    "snapshot_id": snapshot_id,
                 }
             )
 

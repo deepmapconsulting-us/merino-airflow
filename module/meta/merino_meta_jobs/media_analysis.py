@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime, timezone
 from typing import Any
 
 DOWNLOAD_PATH = "/api/v1/download-ad-creative-assets"
@@ -14,6 +16,8 @@ MCP_GATEWAY_TOKEN_VARIABLE = "mcp_gateway_token"
 MCP_GATEWAY_TOKEN_ENV = "MCP_GATEWAY_TOKEN"
 DOWNLOAD_TIMEOUT_SEC = 300
 ANALYSIS_TIMEOUT_SEC = 600
+CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE = "marketing.creative_media_analysis_snapshot"
+CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE = "marketing.creative_media_analysis_traffic"
 
 
 def _variable_get(key: str, fallback: str = "") -> str:
@@ -151,3 +155,112 @@ def analysis_targets_from_download(download_payload: dict[str, Any]) -> list[dic
             continue
         targets.append({"ad_id": ad_id, "video_id": video_id, "storage": storage})
     return targets
+
+
+def upsert_creative_media_analysis(
+    conn: Any,
+    *,
+    campaign_id: str,
+    adset_id: str,
+    ad_id: str,
+    video_id: str,
+    partition_datetime: datetime | str,
+    analysis: dict[str, Any],
+) -> int:
+    """Persist final creative media analysis and partition linkage."""
+    analysis_json = json.dumps(analysis, ensure_ascii=False, sort_keys=True)
+    freeform_video_summary = str(analysis.get("freeform_video_summary") or "")
+    video_analysis_schema_name = str(analysis.get("video_analysis_schema_name") or "")
+    partition_value = _partition_datetime(partition_datetime)
+
+    snapshot_sql = f"""
+        INSERT INTO {CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE} AS target (
+            campaign_id,
+            adset_id,
+            ad_id,
+            video_id,
+            analysis,
+            freeform_video_summary,
+            video_analysis_schema_name
+        )
+        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)
+        ON CONFLICT (campaign_id, adset_id, ad_id, video_id) DO UPDATE
+        SET
+            analysis = EXCLUDED.analysis,
+            freeform_video_summary = EXCLUDED.freeform_video_summary,
+            video_analysis_schema_name = EXCLUDED.video_analysis_schema_name,
+            updated_at = now(),
+            update_count = target.update_count + 1
+        WHERE target.analysis IS DISTINCT FROM EXCLUDED.analysis
+           OR target.freeform_video_summary IS DISTINCT FROM EXCLUDED.freeform_video_summary
+           OR target.video_analysis_schema_name IS DISTINCT FROM EXCLUDED.video_analysis_schema_name
+        RETURNING id
+    """
+    traffic_sql = f"""
+        INSERT INTO {CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE} AS target (
+            analysis_snapshot_id,
+            partition_datetime,
+            campaign_id,
+            adset_id,
+            ad_id,
+            video_id
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (partition_datetime, campaign_id, adset_id, ad_id, video_id) DO UPDATE
+        SET
+            analysis_snapshot_id = EXCLUDED.analysis_snapshot_id,
+            updated_at = now(),
+            update_count = target.update_count + 1
+        WHERE target.analysis_snapshot_id IS DISTINCT FROM EXCLUDED.analysis_snapshot_id
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            snapshot_sql,
+            (
+                campaign_id,
+                adset_id,
+                ad_id,
+                video_id,
+                analysis_json,
+                freeform_video_summary or None,
+                video_analysis_schema_name or None,
+            ),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            cursor.execute(
+                f"""
+                SELECT id
+                FROM {CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE}
+                WHERE campaign_id = %s
+                  AND adset_id = %s
+                  AND ad_id = %s
+                  AND video_id = %s
+                """,
+                (campaign_id, adset_id, ad_id, video_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError(
+                f"Could not resolve creative media analysis snapshot id for ad_id={ad_id} video_id={video_id}"
+            )
+
+        snapshot_id = int(row[0])
+        cursor.execute(
+            traffic_sql,
+            (
+                snapshot_id,
+                partition_value,
+                campaign_id,
+                adset_id,
+                ad_id,
+                video_id,
+            ),
+        )
+    return snapshot_id
+
+
+def _partition_datetime(value: datetime | str) -> datetime | str:
+    if isinstance(value, datetime) and value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value

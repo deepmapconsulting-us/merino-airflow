@@ -15,6 +15,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     creative_media_analysis,
     download_ad_creative_assets,
     media_analysis_headers,
+    upsert_creative_media_analysis,
 )
 
 
@@ -117,6 +118,47 @@ class AnalysisTargetsTest(unittest.TestCase):
         self.assertEqual(targets[1]["video_id"], "v2")
         self.assertEqual(targets[0]["ad_id"], "111")
         self.assertIn("frames", targets[0]["storage"])
+
+
+class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
+    def test_upsert_creative_media_analysis_writes_snapshot_and_traffic(self) -> None:
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = (42,)
+        partition_datetime = datetime(2026, 6, 1, 12, tzinfo=timezone.utc)
+
+        snapshot_id = upsert_creative_media_analysis(
+            conn,
+            campaign_id="camp_1",
+            adset_id="adset_1",
+            ad_id="ad_1",
+            video_id="video_1",
+            partition_datetime=partition_datetime,
+            analysis={
+                "freeform_video_summary": "summary",
+                "video_analysis_schema_name": "VideoAnalysisDynamic",
+                "video_analysis": {"theme": "demo"},
+                "audio_analysis": {"music": "upbeat"},
+            },
+        )
+
+        self.assertEqual(snapshot_id, 42)
+        self.assertEqual(cursor.execute.call_count, 2)
+        snapshot_sql, snapshot_params = cursor.execute.call_args_list[0].args
+        traffic_sql, traffic_params = cursor.execute.call_args_list[1].args
+        self.assertIn("marketing.creative_media_analysis_snapshot", snapshot_sql)
+        self.assertIn("ON CONFLICT (campaign_id, adset_id, ad_id, video_id) DO UPDATE", snapshot_sql)
+        self.assertIn("RETURNING id", snapshot_sql)
+        self.assertIn('"theme": "demo"', snapshot_params[4])
+        self.assertEqual(snapshot_params[5], "summary")
+        self.assertEqual(snapshot_params[6], "VideoAnalysisDynamic")
+        self.assertIn("marketing.creative_media_analysis_traffic", traffic_sql)
+        self.assertIn(
+            "ON CONFLICT (partition_datetime, campaign_id, adset_id, ad_id, video_id) DO UPDATE",
+            traffic_sql,
+        )
+        self.assertEqual(traffic_params[0], 42)
+        self.assertEqual(traffic_params[1], partition_datetime)
 
 
 if __name__ == "__main__":
