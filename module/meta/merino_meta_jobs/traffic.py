@@ -442,14 +442,16 @@ def traffic_accounts_from_config(
             for adset in campaign.get("adsets", []):
                 adset_id = str(adset.get("id") or "")
                 if adset_id and _object_should_import(adset, cutoff):
+                    selected_adset = {
+                        key: value
+                        for key, value in adset.items()
+                        if key != "ads"
+                    }
+                    selected_adset["id"] = adset_id
+                    selected_adset["campaign_id"] = campaign_id
+                    selected_adset["ads"] = _ad_nodes_from_config(adset.get("ads", []))
                     selected_adsets.append(
-                        {
-                            "id": adset_id,
-                            "status": adset.get("status"),
-                            "updated_at": adset.get("updated_at"),
-                            "campaign_id": campaign_id,
-                            "ads": _ad_nodes_from_config(adset.get("ads", [])),
-                        }
+                        selected_adset
                     )
 
             if selected_adsets or _object_should_import(campaign, cutoff):

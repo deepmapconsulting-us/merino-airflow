@@ -22,6 +22,43 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
 
 
 class MediaAnalysisAdsFilterTest(unittest.TestCase):
+    def test_traffic_accounts_from_config_preserves_adset_targeting(self) -> None:
+        snapshot = {
+            "accounts": {
+                "act_1": {
+                    "id": "act_1",
+                    "campaigns": [
+                        {
+                            "id": "camp_1",
+                            "status": "ACTIVE",
+                            "adsets": [
+                                {
+                                    "id": "adset_1",
+                                    "status": "ACTIVE",
+                                    "campaign_id": "camp_1",
+                                    "targeting": {"age_min": 30, "age_max": 65, "genders": [1, 2]},
+                                    "targeting_summary": {
+                                        "age_min": 30,
+                                        "age_max": 65,
+                                        "genders": [1, 2],
+                                        "advantage_audience": None,
+                                        "geo_countries": ["US"],
+                                    },
+                                    "ads": [{"id": "ad_1", "status": "ACTIVE", "creative": {"id": "cr_1"}}],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        }
+
+        accounts = traffic.traffic_accounts_from_config(snapshot, now=datetime.now(timezone.utc))
+        adset = accounts[0]["campaigns"][0]["adsets"][0]
+
+        self.assertEqual(adset["targeting"]["age_min"], 30)
+        self.assertEqual(adset["targeting_summary"]["genders"], [1, 2])
+
     def test_media_analysis_ads_from_adset_filters_active_with_creative(self) -> None:
         cutoff = datetime.now(timezone.utc) - timedelta(days=3)
         adset = {
