@@ -14,7 +14,7 @@ Airflow does not port-forward Redis; the MCP pod connects to cluster Redis direc
 |----------|--------------|---------|
 | ``meta_access_token`` | ``META_ACCESS_TOKEN`` | Meta Graph Bearer (download) |
 | ``mcp_gateway_token`` | ``MCP_GATEWAY_TOKEN`` | ``X-MCP-Gateway-Token`` header |
-| ``media_analysis_url`` | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default: ``https://media-analysis-mcp.merino-aiagent.com``) |
+| ``media_analysis_url`` | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default in-cluster: ``http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080``; override with public URL for local runs) |
 
 ## Optional tuning Variables
 
@@ -26,6 +26,7 @@ Airflow does not port-forward Redis; the MCP pod connects to cluster Redis direc
 | ``media_analysis_frame_interval_sec`` | ``TEST_SPLIT_FRAME_BY_SEC`` | ``1`` (``split_frame_by_sec``) |
 | ``media_analysis_force_refresh`` | — | ``false`` (download cache) |
 | ``media_analysis_analysis_force_refresh`` | — | ``false`` (analysis cache) |
+| ``media_analysis_save_to_gcs`` | — | ``true`` (upload downloads to GCS) |
 """
 
 from __future__ import annotations
@@ -89,6 +90,7 @@ FRAME_INTERVAL_VARIABLE = "media_analysis_frame_interval_sec"
 FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
 DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
 ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
+SAVE_TO_GCS_VARIABLE = "media_analysis_save_to_gcs"
 DEFAULT_MAX_FRAMES = 20
 POSTGRES_CONN_ID = "merino_analytics"
 
@@ -134,15 +136,17 @@ def meta_creative_media_analysis():
     @task
     def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
         ad_id = str(ad["id"])
+        base_url = media_analysis_base_url()
         payload = download_ad_creative_assets(
             ad_id,
             meta_token=meta_access_token(),
             gateway_token=mcp_gateway_token(),
-            base_url=run_config["base_url"],
+            base_url=base_url,
             get_video_frame_in_sec=run_config["get_video_frame_in_sec"],
             split_frame_by_sec=run_config["split_frame_by_sec"],
             force_refresh=run_config["download_force_refresh"],
             bucket_location=run_config["bucket_location"],
+            save_to_gcs=run_config["save_to_gcs"],
         )
         cache_hits = payload.get("cache_hits") if isinstance(payload.get("cache_hits"), list) else []
         video_ids = payload.get("video_ids") if isinstance(payload.get("video_ids"), list) else []
@@ -180,7 +184,7 @@ def meta_creative_media_analysis():
 
         meta_token = meta_access_token()
         gateway = mcp_gateway_token()
-        base_url = run_config["base_url"]
+        base_url = media_analysis_base_url()
         results: list[dict[str, Any]] = []
         for target in targets:
             video_id = str(target["video_id"])
@@ -297,7 +301,6 @@ def meta_creative_media_analysis():
 
 def _dag_run_params() -> dict[str, Any]:
     return {
-        "base_url": media_analysis_base_url(),
         "get_video_frame_in_sec": int(
             variable_get(SAMPLE_SEC_VARIABLE, os.environ.get(SAMPLE_SEC_ENV, "3"))
         ),
@@ -306,6 +309,7 @@ def _dag_run_params() -> dict[str, Any]:
         ),
         "download_force_refresh": _bool_variable(DOWNLOAD_FORCE_REFRESH_VARIABLE, False),
         "analysis_force_refresh": _bool_variable(ANALYSIS_FORCE_REFRESH_VARIABLE, False),
+        "save_to_gcs": _bool_variable(SAVE_TO_GCS_VARIABLE, True),
         "bucket_location": "meta_analysis",
         "max_frames": DEFAULT_MAX_FRAMES,
         "audio_analysis": True,

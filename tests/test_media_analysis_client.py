@@ -11,9 +11,11 @@ sys.path.insert(0, str(MODULE_PATH))
 
 from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-found]
 from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[import-not-found]
+    DEFAULT_BASE_URL,
     analysis_targets_from_download,
     creative_media_analysis,
     download_ad_creative_assets,
+    media_analysis_base_url,
     media_analysis_headers,
     upsert_creative_media_analysis,
 )
@@ -43,6 +45,15 @@ class MediaAnalysisAdsFilterTest(unittest.TestCase):
 
 
 class MediaAnalysisClientTest(unittest.TestCase):
+    def test_media_analysis_base_url_defaults_to_in_cluster_service(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            with patch("merino_meta_jobs.media_analysis._variable_get", return_value=""):
+                self.assertEqual(
+                    media_analysis_base_url(),
+                    "http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080",
+                )
+        self.assertEqual(DEFAULT_BASE_URL, "http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080")
+
     def test_media_analysis_headers(self) -> None:
         headers = media_analysis_headers("meta-token", "gateway-token")
         self.assertEqual(headers["Authorization"], "Bearer meta-token")

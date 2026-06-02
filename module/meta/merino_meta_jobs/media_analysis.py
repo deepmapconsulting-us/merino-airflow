@@ -9,7 +9,9 @@ from typing import Any
 
 DOWNLOAD_PATH = "/api/v1/download-ad-creative-assets"
 ANALYSIS_PATH = "/api/v1/creative-media-analysis"
-DEFAULT_BASE_URL = "https://media-analysis-mcp.merino-aiagent.com"
+# In-cluster service (Airflow workers run in GKE; same namespace routing as ingress bridge).
+DEFAULT_BASE_URL = "http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080"
+PUBLIC_BASE_URL = "https://media-analysis-mcp.merino-aiagent.com"
 MEDIA_ANALYSIS_URL_VARIABLE = "media_analysis_url"
 MEDIA_ANALYSIS_URL_ENV = "MEDIA_ANALYSIS_URL"
 MCP_GATEWAY_TOKEN_VARIABLE = "mcp_gateway_token"
