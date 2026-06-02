@@ -6,13 +6,17 @@ import os
 from datetime import datetime, timezone
 from typing import Any
 
+from merino_meta_jobs.adset_config import extract_targeting_columns
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix
 
 AD_ACCOUNT_FIELDS = "id,account_id,account_status"
 AD_ACCOUNT_TIMEZONE_FIELDS = "timezone_name"
 # Timestamps match meta-ads-mcp list endpoints (flat fields only; nested expansions reject some).
 CAMPAIGN_LIST_FIELDS = "id,name,status,objective,created_time,updated_time"
-ADSET_LIST_FIELDS = "id,name,status,campaign_id,created_time,updated_time"
+ADSET_LIST_FIELDS = (
+    "id,name,status,campaign_id,daily_budget,lifetime_budget,budget_remaining,"
+    "optimization_goal,billing_event,bid_strategy,created_time,updated_time,targeting"
+)
 AD_LIST_FIELDS = "id,name,status,adset_id,campaign_id,created_time,updated_time,creative{id}"
 
 
@@ -203,6 +207,20 @@ def _object_node(row: dict[str, Any], *, include_timestamps: bool = True) -> dic
         node["name"] = row.get("name")
     if row.get("objective") is not None:
         node["objective"] = row.get("objective")
+    for key in (
+        "daily_budget",
+        "lifetime_budget",
+        "budget_remaining",
+        "optimization_goal",
+        "billing_event",
+        "bid_strategy",
+    ):
+        if row.get(key) is not None:
+            node[key] = row.get(key)
+    targeting = row.get("targeting")
+    if isinstance(targeting, dict):
+        node["targeting"] = targeting
+        node["targeting_summary"] = extract_targeting_columns(targeting)
     if include_timestamps:
         created_time = row.get("created_time")
         updated_time = row.get("updated_time")

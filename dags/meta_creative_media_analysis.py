@@ -128,17 +128,17 @@ def meta_creative_media_analysis():
         print(f"{DAG_ID}: no creative media analysis tasks were created")
 
     @task
-    def download_ad_creative(ad: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
         ad_id = str(ad["id"])
         payload = download_ad_creative_assets(
             ad_id,
             meta_token=meta_access_token(),
             gateway_token=mcp_gateway_token(),
-            base_url=params["base_url"],
-            get_video_frame_in_sec=params["get_video_frame_in_sec"],
-            split_frame_by_sec=params["split_frame_by_sec"],
-            force_refresh=params["download_force_refresh"],
-            bucket_location=params["bucket_location"],
+            base_url=run_config["base_url"],
+            get_video_frame_in_sec=run_config["get_video_frame_in_sec"],
+            split_frame_by_sec=run_config["split_frame_by_sec"],
+            force_refresh=run_config["download_force_refresh"],
+            bucket_location=run_config["bucket_location"],
         )
         cache_hits = payload.get("cache_hits") if isinstance(payload.get("cache_hits"), list) else []
         video_ids = payload.get("video_ids") if isinstance(payload.get("video_ids"), list) else []
@@ -154,7 +154,9 @@ def meta_creative_media_analysis():
         }
 
     @task
-    def analyze_ad_creative(download_result: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
+    def analyze_ad_creative(
+        download_result: dict[str, Any], run_config: dict[str, Any]
+    ) -> dict[str, Any]:
         ad_id = str(download_result.get("ad_id") or "")
         download_payload = download_result.get("download")
         if not isinstance(download_payload, dict):
@@ -166,7 +168,7 @@ def meta_creative_media_analysis():
 
         meta_token = meta_access_token()
         gateway = mcp_gateway_token()
-        base_url = params["base_url"]
+        base_url = run_config["base_url"]
         results: list[dict[str, Any]] = []
         for target in targets:
             video_id = str(target["video_id"])
@@ -180,9 +182,9 @@ def meta_creative_media_analysis():
                 meta_token=meta_token,
                 gateway_token=gateway,
                 base_url=base_url,
-                force_refresh=params["analysis_force_refresh"],
-                max_frames=params["max_frames"],
-                audio_analysis=params["audio_analysis"],
+                force_refresh=run_config["analysis_force_refresh"],
+                max_frames=run_config["max_frames"],
+                audio_analysis=run_config["audio_analysis"],
             )
             from_cache = bool(analysis.get("from_cache"))
             print(

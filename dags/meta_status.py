@@ -13,6 +13,7 @@ SNAPSHOT_BUCKET = "airflow-run-us-west2"
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
 REPORT_PARTITION_HOURS = 2  # keep in sync with meta_gcs.REPORT_PARTITION_HOURS
 CONFIG_CACHE_TTL_SECONDS = 2 * 24 * 60 * 60
+CONFIG_LATEST_CACHE_KEY = "meta:campaign_config_latest"
 CONFIG_BUCKET_HOURS = tuple(range(0, 24, REPORT_PARTITION_HOURS))
 CONFIG_FALLBACK_DAYS = 2
 ACTIVE_STATUS = "active"
@@ -39,7 +40,31 @@ def cache_config_snapshot(snapshot: dict[str, Any], run_date: str, run_datetime:
         json.dumps(snapshot, separators=(",", ":"), sort_keys=True),
         ex=CONFIG_CACHE_TTL_SECONDS,
     )
+    redis_client.set(CONFIG_LATEST_CACHE_KEY, key, ex=CONFIG_CACHE_TTL_SECONDS)
     return key
+
+
+def latest_config_cache_key(redis_client=None) -> str | None:
+    redis_client = redis_client or get_redis()
+    cached = redis_client.get(CONFIG_LATEST_CACHE_KEY) if redis_client is not None else None
+    if not cached:
+        return None
+    if isinstance(cached, bytes):
+        cached = cached.decode("utf-8")
+    return str(cached)
+
+
+def load_latest_config_snapshot(redis_client=None) -> dict[str, Any] | None:
+    redis_client = redis_client or get_redis()
+    key = latest_config_cache_key(redis_client)
+    if not key:
+        return None
+    cached = redis_client.get(key)
+    if not cached:
+        return None
+    if isinstance(cached, bytes):
+        cached = cached.decode("utf-8")
+    return json.loads(cached)
 
 
 def config_snapshot_uri(prefix: str, run_date: str, hour: int) -> str:

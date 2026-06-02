@@ -2,6 +2,8 @@
 
 Reads the latest ``facebook_campaign_config_update`` GCS snapshot and upserts
 ``marketing.meta_campaign``, ``marketing.meta_adset``, and ``marketing.meta_ad``.
+Also captures ad set ``targeting`` into ``marketing.meta_adset_config`` when it
+changes (SCD Type 2).
 
 Variables:
 
@@ -42,6 +44,11 @@ MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 if MODULE_PATH.exists():
     sys.path.insert(0, str(MODULE_PATH))
 
+from merino_meta_jobs.adset_config import (  # noqa: E402  # type: ignore[import-not-found]
+    active_adsets_from_flat,
+    fetch_active_adset_configs,
+    sync_adset_config_versions,
+)
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix  # noqa: E402  # type: ignore[import-not-found]
 from merino_meta_jobs.object_property import (  # noqa: E402  # type: ignore[import-not-found]
     detail_rows_for_new_ids,
@@ -178,6 +185,53 @@ def meta_object_property_sync():
         print(f"{DAG_ID}: sync complete {result}")
         return result
 
+    @task
+    def sync_adset_configs(source: dict[str, Any]) -> dict[str, Any]:
+        if source.get("error"):
+            raise RuntimeError(source["error"])
+
+        snapshot = source.get("snapshot")
+        if not isinstance(snapshot, dict):
+            raise RuntimeError("campaign config snapshot is missing")
+
+        snapshot_uri = str(source.get("snapshot_uri") or "")
+        access_token = meta_access_token()
+        account_ids = set(_property_account_ids(snapshot))
+
+        from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
+
+        flat = flatten_config_snapshot(snapshot)
+        active_adsets = [
+            row
+            for row in active_adsets_from_flat(flat)
+            if not account_ids or ensure_act_prefix(str(row.get("source_account_id") or "")) in account_ids
+        ]
+
+        client = MetaGraphClient(access_token)
+        config_rows = fetch_active_adset_configs(
+            client,
+            active_adsets,
+            config_snapshot_uri=snapshot_uri,
+        )
+
+        hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+        conn = hook.get_conn()
+        try:
+            counts = sync_adset_config_versions(conn, config_rows)
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        result = {
+            "active_adsets": len(active_adsets),
+            **counts,
+        }
+        print(f"{DAG_ID}: adset config sync complete {result}")
+        return result
+
     wait_for_campaign_config = ExternalTaskSensor(
         task_id="wait_for_facebook_campaign_config_update",
         external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
@@ -191,7 +245,8 @@ def meta_object_property_sync():
     )
     config_task = log_config_source(config_source)
     sync_task = sync_object_properties(config_source)
-    wait_for_campaign_config >> config_task >> sync_task
+    adset_config_task = sync_adset_configs(config_source)
+    wait_for_campaign_config >> config_task >> sync_task >> adset_config_task
 
 
 def _config_source_for_display() -> dict[str, Any]:

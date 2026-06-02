@@ -11,7 +11,16 @@ DAGS_PATH = Path(__file__).resolve().parents[1] / "dags"
 sys.path.insert(0, str(DAGS_PATH))
 
 import meta_status  # noqa: E402
-from meta_status import ACTIVE_STATUS, NOT_ACTIVE_STATUS, HourlyStatusResolver, load_config_snapshot  # noqa: E402
+from meta_status import (  # noqa: E402
+    ACTIVE_STATUS,
+    CONFIG_LATEST_CACHE_KEY,
+    NOT_ACTIVE_STATUS,
+    HourlyStatusResolver,
+    cache_config_snapshot,
+    latest_config_cache_key,
+    load_config_snapshot,
+    load_latest_config_snapshot,
+)
 from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-found]
 
 
@@ -161,6 +170,27 @@ class AdHourlyMetricTest(unittest.TestCase):
         )
 
         self.assertEqual(snapshot, {"accounts": {"act_1": {"campaigns": []}}})
+
+    def test_cache_config_snapshot_writes_latest_pointer(self) -> None:
+        class FakeRedis:
+            def __init__(self) -> None:
+                self.values: dict[str, str] = {}
+
+            def get(self, key: str):
+                return self.values.get(key)
+
+            def set(self, key: str, value: str, ex: int) -> None:
+                self.values[key] = value
+
+        redis_client = FakeRedis()
+        snapshot = {"accounts": {"act_1": {"campaigns": []}}}
+
+        key = cache_config_snapshot(snapshot, "2026-06-01", "20260601T120000-0700", redis_client)
+
+        self.assertEqual(key, "meta:campaign_config:2026-06-01:12")
+        self.assertEqual(redis_client.values[CONFIG_LATEST_CACHE_KEY], key)
+        self.assertEqual(latest_config_cache_key(redis_client), key)
+        self.assertEqual(load_latest_config_snapshot(redis_client), snapshot)
 
 
 if __name__ == "__main__":
