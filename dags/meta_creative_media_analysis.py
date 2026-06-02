@@ -13,7 +13,7 @@ Airflow does not port-forward Redis; the MCP pod connects to cluster Redis direc
 | Variable | Env fallback | Purpose |
 |----------|--------------|---------|
 | ``meta_access_token`` | ``META_ACCESS_TOKEN`` | Meta Graph Bearer (download) |
-| ``mcp_gateway_token`` | ``MCP_GATEWAY_TOKEN`` | ``X-MCP-Gateway-Token`` header |
+| ``meta_mcp_gateway_token`` | ``META_MCP_GATEWAY_TOKEN`` | ``X-MCP-Gateway-Token`` header |
 | ``media_analysis_url`` | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default in-cluster: ``http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080``; override with public URL for local runs) |
 
 ## Optional tuning Variables
