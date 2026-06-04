@@ -16,6 +16,8 @@ MEDIA_ANALYSIS_URL_VARIABLE = "media_analysis_url"
 MEDIA_ANALYSIS_URL_ENV = "MEDIA_ANALYSIS_URL"
 MCP_GATEWAY_TOKEN_VARIABLE = "meta_mcp_gateway_token"
 MCP_GATEWAY_TOKEN_ENV = "META_MCP_GATEWAY_TOKEN"
+MEDIA_ANALYSIS_CONFIG_VARIABLE = "MEDIA_ANALYSIS_CONFIG"
+MEDIA_ANALYSIS_CONFIG_ENV = "MEDIA_ANALYSIS_CONFIG"
 DOWNLOAD_TIMEOUT_SEC = 300
 ANALYSIS_TIMEOUT_SEC = 600
 CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE = "marketing.creative_media_analysis_snapshot"
@@ -55,6 +57,56 @@ def media_analysis_headers(meta_token: str, gateway_token: str) -> dict[str, str
     }
 
 
+def parse_media_analysis_config(raw: str) -> dict[str, dict[str, Any]]:
+    """Parse ad-specific media analysis config from an Airflow Variable value."""
+    if not raw.strip():
+        return {}
+
+    payload = json.loads(raw)
+    entries: list[Any]
+    if isinstance(payload, list):
+        entries = payload
+    elif isinstance(payload, dict) and "ad_id" in payload:
+        entries = [payload]
+    elif isinstance(payload, dict):
+        return {
+            str(ad_id): dict(config)
+            for ad_id, config in payload.items()
+            if isinstance(config, dict)
+        }
+    else:
+        raise ValueError("MEDIA_ANALYSIS_CONFIG must be a JSON object or list")
+
+    configs: dict[str, dict[str, Any]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        ad_id = str(entry.get("ad_id") or "").strip()
+        config = entry.get("config")
+        if ad_id and isinstance(config, dict):
+            configs[ad_id] = dict(config)
+    return configs
+
+
+def media_analysis_config_by_ad() -> dict[str, dict[str, Any]]:
+    raw = _variable_get(
+        MEDIA_ANALYSIS_CONFIG_VARIABLE,
+        os.environ.get(MEDIA_ANALYSIS_CONFIG_ENV, ""),
+    )
+    return parse_media_analysis_config(raw)
+
+
+def media_analysis_config_for_ad(ad_id: str, configs: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    return dict(configs.get(str(ad_id), {}))
+
+
+def _sanitize_analysis_body(body: dict[str, Any]) -> dict[str, Any]:
+    sanitized = dict(body)
+    sanitized.pop("api_key", None)
+    sanitized.pop("openai_api_key", None)
+    return sanitized
+
+
 def _post_json(
     base_url: str,
     path: str,
@@ -66,7 +118,7 @@ def _post_json(
     import requests
 
     url = f"{base_url.rstrip('/')}{path}"
-    response = requests.post(url, json=body, headers=headers, timeout=timeout_sec)
+    response = requests.post(url, json=_sanitize_analysis_body(body), headers=headers, timeout=timeout_sec)
     if response.status_code >= 400:
         raise RuntimeError(f"HTTP {response.status_code} POST {path}: {response.text[:2000]}")
     payload = response.json()
@@ -118,6 +170,7 @@ def creative_media_analysis(
     max_frames: int = 20,
     audio_analysis: bool = True,
     extras: dict[str, Any] | str | None = None,
+    config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "storage": storage,
@@ -129,6 +182,8 @@ def creative_media_analysis(
     }
     if extras is not None:
         body["extras"] = extras
+    if config:
+        body["config"] = config
     return _post_json(
         base_url or media_analysis_base_url(),
         ANALYSIS_PATH,

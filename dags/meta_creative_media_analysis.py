@@ -16,6 +16,8 @@ Airflow does not port-forward Redis; the MCP pod connects to cluster Redis direc
 | ``meta_mcp_gateway_token`` | ``META_MCP_GATEWAY_TOKEN`` | ``X-MCP-Gateway-Token`` header |
 | ``media_analysis_url`` | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default in-cluster: ``http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080``; override with public URL for local runs) |
 
+OpenAI credentials are configured server-side on media-analysis-mcp (``OPENAI_API_KEY`` env from Kubernetes secret). Do not pass API keys from Airflow.
+
 ## Optional tuning Variables
 
 | Variable | Env fallback | Default |
@@ -27,6 +29,8 @@ Airflow does not port-forward Redis; the MCP pod connects to cluster Redis direc
 | ``media_analysis_force_refresh`` | — | ``false`` (download cache) |
 | ``media_analysis_analysis_force_refresh`` | — | ``false`` (analysis cache) |
 | ``media_analysis_save_to_gcs`` | — | ``true`` (upload downloads to GCS) |
+| ``MEDIA_ANALYSIS_CONFIG`` | ``MEDIA_ANALYSIS_CONFIG`` | optional per-ad analysis config overrides |
+| ``media_analysis_max_active_tasks`` | — | ``8`` (max concurrent tasks per DAG run) |
 """
 
 from __future__ import annotations
@@ -68,6 +72,8 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     creative_media_analysis,
     download_ad_creative_assets,
     mcp_gateway_token,
+    media_analysis_config_by_ad,
+    media_analysis_config_for_ad,
     media_analysis_base_url,
     upsert_creative_media_analysis,
 )
@@ -91,8 +97,19 @@ FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
 DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
 ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
 SAVE_TO_GCS_VARIABLE = "media_analysis_save_to_gcs"
+MAX_ACTIVE_TASKS_VARIABLE = "media_analysis_max_active_tasks"
+DEFAULT_MAX_ACTIVE_TASKS = 8
 DEFAULT_MAX_FRAMES = 20
 POSTGRES_CONN_ID = "merino_analytics"
+
+
+def _max_active_tasks() -> int:
+    raw = variable_get(MAX_ACTIVE_TASKS_VARIABLE, str(DEFAULT_MAX_ACTIVE_TASKS)).strip()
+    try:
+        value = int(raw)
+    except ValueError:
+        return DEFAULT_MAX_ACTIVE_TASKS
+    return max(1, value)
 
 
 @dag(
@@ -100,6 +117,8 @@ POSTGRES_CONN_ID = "merino_analytics"
     schedule="0 3 * * *",
     start_date=pendulum.datetime(2026, 1, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
+    max_active_tasks=_max_active_tasks(),
     tags=["meta", "creative", "media-analysis"],
     default_args={
         "owner": "data-platform",
@@ -137,13 +156,28 @@ def meta_creative_media_analysis():
     def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
         ad_id = str(ad["id"])
         base_url = media_analysis_base_url()
+        ad_config = media_analysis_config_for_ad(
+            ad_id,
+            run_config.get("media_analysis_config_by_ad", {}),
+        )
+        is_frame_config = str(ad_config.get("image_type") or "frames") == "frames"
+        frame_sample_end_sec = ad_config.get("frame_sample_end_sec") if is_frame_config else None
+        frame_sample_interval_sec = ad_config.get("frame_sample_interval_sec") if is_frame_config else None
         payload = download_ad_creative_assets(
             ad_id,
             meta_token=meta_access_token(),
             gateway_token=mcp_gateway_token(),
             base_url=base_url,
-            get_video_frame_in_sec=run_config["get_video_frame_in_sec"],
-            split_frame_by_sec=run_config["split_frame_by_sec"],
+            get_video_frame_in_sec=(
+                int(float(frame_sample_end_sec))
+                if frame_sample_end_sec is not None
+                else run_config["get_video_frame_in_sec"]
+            ),
+            split_frame_by_sec=(
+                float(frame_sample_interval_sec)
+                if frame_sample_interval_sec is not None
+                else run_config["split_frame_by_sec"]
+            ),
             force_refresh=run_config["download_force_refresh"],
             bucket_location=run_config["bucket_location"],
             save_to_gcs=run_config["save_to_gcs"],
@@ -152,7 +186,7 @@ def meta_creative_media_analysis():
         video_ids = payload.get("video_ids") if isinstance(payload.get("video_ids"), list) else []
         print(
             f"{DAG_ID}: downloaded ad_id={ad_id} videos={len(video_ids)} "
-            f"cache_hits={cache_hits}"
+            f"cache_hits={cache_hits} config={ad_config or '{}'}"
         )
         return {
             "ad_id": ad_id,
@@ -169,6 +203,10 @@ def meta_creative_media_analysis():
         from airflow.sdk import get_current_context  # type: ignore[import-not-found]
 
         ad_id = str(download_result.get("ad_id") or "")
+        ad_config = media_analysis_config_for_ad(
+            ad_id,
+            run_config.get("media_analysis_config_by_ad", {}),
+        )
         download_payload = download_result.get("download")
         if not isinstance(download_payload, dict):
             raise RuntimeError(f"download_ad_creative missing download payload for ad_id={ad_id}")
@@ -180,7 +218,21 @@ def meta_creative_media_analysis():
         ).isoformat()
         targets = analysis_targets_from_download(download_payload)
         if not targets:
-            raise RuntimeError(f"No analyzable videos in download response for ad_id={ad_id}")
+            video_ids = download_payload.get("video_ids") if isinstance(download_payload.get("video_ids"), list) else []
+            warnings = download_payload.get("warnings") if isinstance(download_payload.get("warnings"), list) else []
+            print(
+                f"{DAG_ID}: skipping analysis for ad_id={ad_id}: "
+                f"no analyzable videos (video_ids={video_ids}, warnings={warnings})"
+            )
+            return {
+                "ad_id": ad_id,
+                "skipped": True,
+                "reason": "no_analyzable_videos",
+                "video_ids": [],
+                "analysis_from_cache": [],
+                "results": [],
+                "errors": [],
+            }
 
         meta_token = meta_access_token()
         gateway = mcp_gateway_token()
@@ -201,6 +253,7 @@ def meta_creative_media_analysis():
                 force_refresh=run_config["analysis_force_refresh"],
                 max_frames=run_config["max_frames"],
                 audio_analysis=run_config["audio_analysis"],
+                config=ad_config,
             )
             hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
@@ -224,7 +277,7 @@ def meta_creative_media_analysis():
             from_cache = bool(analysis.get("from_cache"))
             print(
                 f"{DAG_ID}: analyzed ad_id={ad_id} video_id={video_id} "
-                f"from_cache={from_cache} snapshot_id={snapshot_id}"
+                f"from_cache={from_cache} snapshot_id={snapshot_id} config={ad_config or '{}'}"
             )
             results.append(
                 {
@@ -313,6 +366,7 @@ def _dag_run_params() -> dict[str, Any]:
         "bucket_location": "meta_analysis",
         "max_frames": DEFAULT_MAX_FRAMES,
         "audio_analysis": True,
+        "media_analysis_config_by_ad": media_analysis_config_by_ad(),
     }
 
 

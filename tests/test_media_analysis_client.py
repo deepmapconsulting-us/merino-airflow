@@ -16,7 +16,9 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     creative_media_analysis,
     download_ad_creative_assets,
     media_analysis_base_url,
+    media_analysis_config_for_ad,
     media_analysis_headers,
+    parse_media_analysis_config,
     upsert_creative_media_analysis,
 )
 
@@ -142,6 +144,41 @@ class MediaAnalysisClientTest(unittest.TestCase):
         self.assertEqual(body["ad_id"], "123")
         self.assertEqual(body["video_id"], "456")
         self.assertEqual(body["max_frames"], 10)
+        self.assertNotIn("api_key", body)
+        self.assertNotIn("openai_api_key", body)
+
+    @patch("requests.post")
+    def test_creative_media_analysis_posts_optional_config(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"video_analysis": {}, "from_cache": False},
+        )
+        config = {"image_type": "contents", "contents_end": 3}
+
+        creative_media_analysis(
+            {"local_dir": "/data", "contents": ["a.jpg"]},
+            ad_id="123",
+            video_id="456",
+            meta_token="meta",
+            gateway_token="gw",
+            base_url="http://mcp.test",
+            config=config,
+        )
+
+        body = mock_post.call_args.kwargs["json"]
+        self.assertEqual(body["config"], config)
+
+    def test_parse_media_analysis_config_single_and_list_payloads(self) -> None:
+        single = parse_media_analysis_config(
+            '{"ad_id":"ad_1","config":{"image_type":"frames","frame_sample_end_sec":3}}'
+        )
+        multiple = parse_media_analysis_config(
+            '[{"ad_id":"ad_2","config":{"image_type":"contents","contents_end":2}}]'
+        )
+
+        self.assertEqual(media_analysis_config_for_ad("ad_1", single)["frame_sample_end_sec"], 3)
+        self.assertEqual(media_analysis_config_for_ad("ad_2", multiple)["image_type"], "contents")
+        self.assertEqual(media_analysis_config_for_ad("missing", multiple), {})
 
 
 class AnalysisTargetsTest(unittest.TestCase):
