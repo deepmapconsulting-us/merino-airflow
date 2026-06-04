@@ -13,13 +13,16 @@ from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-fo
 from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[import-not-found]
     DEFAULT_BASE_URL,
     analysis_targets_from_download,
+    build_video_preview_url,
     creative_media_analysis,
     download_ad_creative_assets,
     media_analysis_base_url,
     media_analysis_config_for_ad,
     media_analysis_headers,
     parse_media_analysis_config,
+    image_gcs_uri_from_download,
     upsert_creative_media_analysis,
+    video_gcs_uri_from_download,
 )
 
 
@@ -144,6 +147,7 @@ class MediaAnalysisClientTest(unittest.TestCase):
         self.assertEqual(body["ad_id"], "123")
         self.assertEqual(body["video_id"], "456")
         self.assertEqual(body["max_frames"], 10)
+        self.assertFalse(body["log_generation_input"])
         self.assertNotIn("api_key", body)
         self.assertNotIn("openai_api_key", body)
 
@@ -163,10 +167,12 @@ class MediaAnalysisClientTest(unittest.TestCase):
             gateway_token="gw",
             base_url="http://mcp.test",
             config=config,
+            log_generation_input=True,
         )
 
         body = mock_post.call_args.kwargs["json"]
         self.assertEqual(body["config"], config)
+        self.assertTrue(body["log_generation_input"])
 
     def test_parse_media_analysis_config_single_and_list_payloads(self) -> None:
         single = parse_media_analysis_config(
@@ -208,6 +214,21 @@ class AnalysisTargetsTest(unittest.TestCase):
         self.assertEqual(targets[0]["ad_id"], "111")
         self.assertIn("frames", targets[0]["storage"])
 
+    def test_analysis_targets_include_creative_id(self) -> None:
+        download_payload = {
+            "ad_id": "111",
+            "creative_id": "cr_top",
+            "videos": [
+                {
+                    "video_id": "v1",
+                    "creative_id": "cr_video",
+                    "storage": {"frames": ["f1.jpg"]},
+                }
+            ],
+        }
+        targets = analysis_targets_from_download(download_payload)
+        self.assertEqual(targets[0]["creative_id"], "cr_video")
+
     def test_analysis_targets_from_download_contents_mode(self) -> None:
         download_payload = {
             "ad_id": "111",
@@ -227,6 +248,73 @@ class AnalysisTargetsTest(unittest.TestCase):
             config={"image_type": "contents"},
         )
         self.assertEqual([target["video_id"] for target in targets], ["v1"])
+
+    def test_analysis_targets_from_download_image_bundle(self) -> None:
+        download_payload = {
+            "ad_id": "120239306002680157",
+            "creative_id": "2360925424372934",
+            "videos": [],
+            "images": [
+                {
+                    "creative_id": "2360925424372934",
+                    "image_asset_id": "2360925424372934",
+                    "storage": {
+                        "media_type": "image",
+                        "images": ["images/image_000.jpg"],
+                    },
+                }
+            ],
+        }
+        targets = analysis_targets_from_download(download_payload)
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0]["media_type"], "image")
+        self.assertEqual(targets[0]["image_asset_id"], "2360925424372934")
+        self.assertEqual(targets[0]["video_id"], "")
+
+    def test_analysis_targets_from_download_image_bundle_without_videos_key(self) -> None:
+        download_payload = {
+            "ad_id": "120239306002680157",
+            "creative_id": "2360925424372934",
+            "images": [
+                {
+                    "image_asset_id": "2360925424372934",
+                    "storage": {
+                        "media_type": "image",
+                        "images": ["images/image_000.jpg"],
+                    },
+                }
+            ],
+        }
+        targets = analysis_targets_from_download(download_payload)
+        self.assertEqual(len(targets), 1)
+        self.assertEqual(targets[0]["media_type"], "image")
+
+    @patch("requests.post")
+    def test_creative_media_analysis_posts_image_asset_id(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"video_analysis": {}, "from_cache": False},
+        )
+        storage = {
+            "local_dir": "/data",
+            "media_type": "image",
+            "images": ["images/image_000.jpg"],
+        }
+        creative_media_analysis(
+            storage,
+            ad_id="120239306002680157",
+            image_asset_id="2360925424372934",
+            meta_token="meta",
+            gateway_token="gw",
+            base_url="http://mcp.test",
+            audio_analysis=False,
+            log_generation_input=True,
+        )
+        body = mock_post.call_args.kwargs["json"]
+        self.assertEqual(body["image_asset_id"], "2360925424372934")
+        self.assertFalse(body["audio_analysis"])
+        self.assertTrue(body["log_generation_input"])
+        self.assertNotIn("video_id", body)
 
     @patch("requests.post")
     def test_creative_media_analysis_returns_skipped_payload(self, mock_post: MagicMock) -> None:
@@ -251,6 +339,68 @@ class AnalysisTargetsTest(unittest.TestCase):
         self.assertIn("frame images", payload.get("warning", ""))
 
 
+class ImageGcsUriFromDownloadTest(unittest.TestCase):
+    def test_image_gcs_uri_picks_first_image(self) -> None:
+        payload = {
+            "storage_prefix": "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1",
+            "gcs_files": [
+                "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/images/image_000.jpg",
+            ],
+            "images": [
+                {
+                    "image_asset_id": "2360925424372934",
+                    "storage": {
+                        "images": ["images/image_000.jpg"],
+                        "gcs_files": [
+                            "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/images/image_000.jpg",
+                        ],
+                    },
+                }
+            ],
+        }
+        uri = image_gcs_uri_from_download(
+            payload,
+            ad_id="120239306002680157",
+            image_asset_id="2360925424372934",
+        )
+        self.assertEqual(
+            uri,
+            "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/images/image_000.jpg",
+        )
+
+
+class VideoGcsUriFromDownloadTest(unittest.TestCase):
+    def test_video_gcs_uri_picks_mp4_for_video_id(self) -> None:
+        payload = {
+            "storage_prefix": "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1",
+            "gcs_files": [
+                "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/video_99/frame.jpg",
+                "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/video_42/ad_1_video_42_title.mp4",
+            ],
+            "videos": [
+                {
+                    "video_id": "42",
+                    "storage": {
+                        "gcs_files": [
+                            "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/video_42/ad_1_video_42_title.mp4",
+                        ]
+                    },
+                }
+            ],
+        }
+        uri = video_gcs_uri_from_download(payload, ad_id="1", video_id="42")
+        self.assertEqual(
+            uri,
+            "gs://meta_analysis/campaign_1/adset_1/ad_1/creative_1/video_42/ad_1_video_42_title.mp4",
+        )
+
+    def test_build_video_preview_url_encodes_uri(self) -> None:
+        gcs_uri = "gs://meta_analysis/foo/bar.mp4"
+        url = build_video_preview_url(gcs_uri)
+        self.assertIn("/api/v1/media/preview?uri=", url)
+        self.assertIn("gs%3A%2F%2Fmeta_analysis%2Ffoo%2Fbar.mp4", url)
+
+
 class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
     def test_upsert_creative_media_analysis_writes_snapshot_and_traffic(self) -> None:
         conn = MagicMock()
@@ -263,14 +413,20 @@ class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
             campaign_id="camp_1",
             adset_id="adset_1",
             ad_id="ad_1",
+            creative_id="cr_1",
             video_id="video_1",
             partition_datetime=partition_datetime,
             analysis={
                 "freeform_video_summary": "summary",
                 "video_analysis_schema_name": "VideoAnalysisDynamic",
+                "primary_text": "Primary copy",
+                "headline": "Headline copy",
+                "description": "Description copy",
                 "video_analysis": {"theme": "demo"},
                 "audio_analysis": {"music": "upbeat"},
             },
+            video_gcs_uri="gs://meta_analysis/campaign/ad.mp4",
+            video_preview_url="https://media-analysis-mcp.merino-aiagent.com/api/v1/media/preview?uri=gs%3A%2F%2F",
         )
 
         self.assertEqual(snapshot_id, 42)
@@ -278,17 +434,35 @@ class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
         snapshot_sql, snapshot_params = cursor.execute.call_args_list[0].args
         traffic_sql, traffic_params = cursor.execute.call_args_list[1].args
         self.assertIn("marketing.creative_media_analysis_snapshot", snapshot_sql)
-        self.assertIn("ON CONFLICT (campaign_id, adset_id, ad_id, video_id) DO UPDATE", snapshot_sql)
+        self.assertIn("creative_id", snapshot_sql)
+        self.assertIn("ON CONFLICT (campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id) DO UPDATE", snapshot_sql)
         self.assertIn("RETURNING id", snapshot_sql)
-        self.assertIn('"theme": "demo"', snapshot_params[4])
-        self.assertEqual(snapshot_params[5], "summary")
-        self.assertEqual(snapshot_params[6], "VideoAnalysisDynamic")
+        self.assertEqual(snapshot_params[3], "cr_1")
+        self.assertEqual(snapshot_params[4], "video")
+        self.assertEqual(snapshot_params[5], "video_1")
+        self.assertEqual(snapshot_params[6], "")
+        self.assertIn('"theme": "demo"', snapshot_params[7])
+        self.assertIn('"primary_text": "Primary copy"', snapshot_params[7])
+        self.assertIn('"headline": "Headline copy"', snapshot_params[7])
+        self.assertIn('"description": "Description copy"', snapshot_params[7])
+        self.assertEqual(snapshot_params[8], "summary")
+        self.assertEqual(snapshot_params[9], "VideoAnalysisDynamic")
+        self.assertEqual(snapshot_params[10], "gs://meta_analysis/campaign/ad.mp4")
+        self.assertIn("media/preview", snapshot_params[11])
+        self.assertIn("video_gcs_uri", snapshot_sql)
+        self.assertIn("video_preview_url", snapshot_sql)
+        self.assertIn("image_gcs_uri", snapshot_sql)
+        self.assertIn("image_preview_url", snapshot_sql)
         self.assertIn("marketing.creative_media_analysis_traffic", traffic_sql)
+        self.assertIn("creative_id", traffic_sql)
         self.assertIn(
-            "ON CONFLICT (partition_datetime, campaign_id, adset_id, ad_id, video_id) DO UPDATE",
+            "ON CONFLICT (partition_datetime, campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id) DO UPDATE",
             traffic_sql,
         )
         self.assertEqual(traffic_params[0], 42)
+        self.assertEqual(traffic_params[5], "cr_1")
+        self.assertEqual(traffic_params[6], "video")
+        self.assertEqual(traffic_params[7], "video_1")
         self.assertEqual(traffic_params[1], partition_datetime)
 
 

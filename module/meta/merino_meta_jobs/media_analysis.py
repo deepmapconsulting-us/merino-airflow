@@ -6,12 +6,14 @@ import json
 import os
 from datetime import datetime, timezone
 from typing import Any
+from urllib.parse import quote
 
 DOWNLOAD_PATH = "/api/v1/download-ad-creative-assets"
 ANALYSIS_PATH = "/api/v1/creative-media-analysis"
 # In-cluster service (Airflow workers run in GKE; same namespace routing as ingress bridge).
 DEFAULT_BASE_URL = "http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080"
 PUBLIC_BASE_URL = "https://media-analysis-mcp.merino-aiagent.com"
+MEDIA_PREVIEW_BASE_URL_ENV = "MEDIA_PREVIEW_BASE_URL"
 MEDIA_ANALYSIS_URL_VARIABLE = "media_analysis_url"
 MEDIA_ANALYSIS_URL_ENV = "MEDIA_ANALYSIS_URL"
 MCP_GATEWAY_TOKEN_VARIABLE = "meta_mcp_gateway_token"
@@ -36,6 +38,64 @@ def _variable_get(key: str, fallback: str = "") -> str:
 def media_analysis_base_url() -> str:
     url = _variable_get(MEDIA_ANALYSIS_URL_VARIABLE, os.environ.get(MEDIA_ANALYSIS_URL_ENV, "")).strip()
     return url or DEFAULT_BASE_URL
+
+
+def media_preview_base_url() -> str:
+    return os.environ.get(MEDIA_PREVIEW_BASE_URL_ENV, PUBLIC_BASE_URL).strip().rstrip("/") or PUBLIC_BASE_URL
+
+
+def build_video_preview_url(gcs_uri: str) -> str:
+    base = media_preview_base_url()
+    return f"{base}/api/v1/media/preview?uri={quote(gcs_uri, safe='')}"
+
+
+def _gcs_files_for_video(download_payload: dict[str, Any], video_id: str) -> list[str]:
+    seen: set[str] = set()
+    uris: list[str] = []
+
+    def add(items: Any) -> None:
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if isinstance(item, str) and item.startswith("gs://") and item not in seen:
+                seen.add(item)
+                uris.append(item)
+
+    add(download_payload.get("gcs_files"))
+    videos = download_payload.get("videos")
+    if not isinstance(videos, list):
+        return uris
+
+    video_marker = f"/video_{video_id}/"
+    for video in videos:
+        if not isinstance(video, dict):
+            continue
+        vid = str(video.get("video_id") or video.get("creative_video_id") or "")
+        if vid != video_id:
+            continue
+        storage = video.get("storage")
+        if isinstance(storage, dict):
+            add(storage.get("gcs_files"))
+        saved_file = str(video.get("saved_file") or "")
+        if saved_file:
+            prefix = str(download_payload.get("storage_prefix") or "").rstrip("/")
+            if prefix.startswith("gs://"):
+                add([f"{prefix}/{saved_file.lstrip('/')}"])
+    return [uri for uri in uris if video_marker in uri or f"video_{video_id}_" in uri]
+
+
+def video_gcs_uri_from_download(
+    download_payload: dict[str, Any],
+    *,
+    ad_id: str,
+    video_id: str,
+) -> str | None:
+    """Return the gs:// URI for this video's .mp4 from a download API response."""
+    del ad_id  # reserved for future path conventions
+    for uri in _gcs_files_for_video(download_payload, video_id):
+        if uri.lower().endswith(".mp4"):
+            return uri
+    return None
 
 
 def mcp_gateway_token() -> str:
@@ -136,7 +196,13 @@ def storage_has_analyzable_visuals(
     *,
     config: dict[str, Any] | None = None,
 ) -> bool:
-    """True when download storage metadata includes frames or contents for analysis."""
+    """True when download storage metadata includes frames, contents, or images for analysis."""
+    if str(storage.get("media_type") or "") == "image":
+        images = storage.get("images")
+        if isinstance(images, list) and images:
+            return True
+        return bool(str(storage.get("images_dir") or "").strip())
+
     image_type = str((config or {}).get("image_type") or "frames")
     if image_type == "contents":
         contents = storage.get("contents")
@@ -182,24 +248,30 @@ def creative_media_analysis(
     storage: dict[str, Any],
     *,
     ad_id: str,
-    video_id: str,
+    video_id: str = "",
+    image_asset_id: str = "",
     meta_token: str,
     gateway_token: str,
     base_url: str | None = None,
     force_refresh: bool = False,
     max_frames: int = 20,
     audio_analysis: bool = True,
+    log_generation_input: bool = False,
     extras: dict[str, Any] | str | None = None,
     config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
         "storage": storage,
         "ad_id": ad_id,
-        "video_id": video_id,
         "force_refresh": force_refresh,
         "max_frames": max_frames,
         "audio_analysis": audio_analysis,
+        "log_generation_input": log_generation_input,
     }
+    if video_id:
+        body["video_id"] = video_id
+    if image_asset_id:
+        body["image_asset_id"] = image_asset_id
     if extras is not None:
         body["extras"] = extras
     if config:
@@ -218,26 +290,112 @@ def analysis_targets_from_download(
     *,
     config: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
-    """Build per-video analysis targets from a download API response."""
+    """Build per-media analysis targets from a download API response."""
     ad_id = str(download_payload.get("ad_id") or "")
     videos = download_payload.get("videos")
-    if not isinstance(videos, list):
-        return []
-
     targets: list[dict[str, Any]] = []
-    for video in videos:
-        if not isinstance(video, dict):
-            continue
-        storage = video.get("storage")
-        if not isinstance(storage, dict):
-            continue
-        if not storage_has_analyzable_visuals(storage, config=config):
-            continue
-        video_id = str(video.get("video_id") or video.get("creative_video_id") or "")
-        if not video_id:
-            continue
-        targets.append({"ad_id": ad_id, "video_id": video_id, "storage": storage})
+    if isinstance(videos, list):
+        for video in videos:
+            if not isinstance(video, dict):
+                continue
+            storage = video.get("storage")
+            if not isinstance(storage, dict):
+                continue
+            if not storage_has_analyzable_visuals(storage, config=config):
+                continue
+            video_id = str(video.get("video_id") or video.get("creative_video_id") or "")
+            if not video_id:
+                continue
+            creative_id = str(video.get("creative_id") or download_payload.get("creative_id") or "")
+            targets.append(
+                {
+                    "ad_id": ad_id,
+                    "video_id": video_id,
+                    "creative_id": creative_id,
+                    "storage": storage,
+                    "media_type": "video",
+                }
+            )
+
+    image_rows = download_payload.get("images")
+    if isinstance(image_rows, list):
+        for image in image_rows:
+            if not isinstance(image, dict):
+                continue
+            storage = image.get("storage")
+            if not isinstance(storage, dict):
+                continue
+            if not storage_has_analyzable_visuals(storage, config=config):
+                continue
+            image_asset_id = str(
+                image.get("image_asset_id")
+                or storage.get("image_asset_id")
+                or image.get("creative_id")
+                or download_payload.get("creative_id")
+                or ""
+            )
+            if not image_asset_id:
+                continue
+            creative_id = str(image.get("creative_id") or download_payload.get("creative_id") or "")
+            targets.append(
+                {
+                    "ad_id": ad_id,
+                    "video_id": "",
+                    "image_asset_id": image_asset_id,
+                    "creative_id": creative_id,
+                    "storage": storage,
+                    "media_type": "image",
+                }
+            )
     return targets
+
+
+def image_gcs_uri_from_download(
+    download_payload: dict[str, Any],
+    *,
+    ad_id: str,
+    image_asset_id: str,
+) -> str | None:
+    """Return the gs:// URI for the first downloaded image from a download API response."""
+    del ad_id
+    seen: set[str] = set()
+    uris: list[str] = []
+
+    def add(items: Any) -> None:
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if isinstance(item, str) and item.startswith("gs://") and item not in seen:
+                seen.add(item)
+                uris.append(item)
+
+    add(download_payload.get("gcs_files"))
+    images = download_payload.get("images")
+    if not isinstance(images, list):
+        return None
+
+    for image in images:
+        if not isinstance(image, dict):
+            continue
+        asset_id = str(image.get("image_asset_id") or "")
+        if asset_id != image_asset_id:
+            continue
+        storage = image.get("storage")
+        if isinstance(storage, dict):
+            add(storage.get("gcs_files"))
+        image_rels = []
+        if isinstance(storage, dict):
+            image_rels = storage.get("images") if isinstance(storage.get("images"), list) else []
+        prefix = str(download_payload.get("storage_prefix") or "").rstrip("/")
+        if prefix.startswith("gs://") and image_rels:
+            add([f"{prefix}/{str(image_rels[0]).lstrip('/')}"])
+        for uri in uris:
+            if "/images/" in uri:
+                return uri
+    for uri in uris:
+        if "/images/" in uri:
+            return uri
+    return uris[0] if uris else None
 
 
 def upsert_creative_media_analysis(
@@ -246,12 +404,26 @@ def upsert_creative_media_analysis(
     campaign_id: str,
     adset_id: str,
     ad_id: str,
+    creative_id: str,
     video_id: str,
     partition_datetime: datetime | str,
     analysis: dict[str, Any],
+    media_type: str = "video",
+    image_asset_id: str = "",
+    video_gcs_uri: str | None = None,
+    video_preview_url: str | None = None,
+    image_gcs_uri: str | None = None,
+    image_preview_url: str | None = None,
 ) -> int:
     """Persist final creative media analysis and partition linkage."""
-    analysis_json = json.dumps(analysis, ensure_ascii=False, sort_keys=True)
+    analysis_payload = dict(analysis)
+    if media_type == "image" and "media_type" not in analysis_payload:
+        analysis_payload["media_type"] = "image"
+    for key in ("primary_text", "headline", "description"):
+        value = str(analysis_payload.get(key) or "")
+        if value:
+            analysis_payload[key] = value
+    analysis_json = json.dumps(analysis_payload, ensure_ascii=False, sort_keys=True)
     freeform_video_summary = str(analysis.get("freeform_video_summary") or "")
     video_analysis_schema_name = str(analysis.get("video_analysis_schema_name") or "")
     partition_value = _partition_datetime(partition_datetime)
@@ -261,22 +433,39 @@ def upsert_creative_media_analysis(
             campaign_id,
             adset_id,
             ad_id,
+            creative_id,
+            media_type,
             video_id,
+            image_asset_id,
             analysis,
             freeform_video_summary,
-            video_analysis_schema_name
+            video_analysis_schema_name,
+            video_gcs_uri,
+            video_preview_url,
+            image_gcs_uri,
+            image_preview_url
         )
-        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s)
-        ON CONFLICT (campaign_id, adset_id, ad_id, video_id) DO UPDATE
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id) DO UPDATE
         SET
+            creative_id = EXCLUDED.creative_id,
             analysis = EXCLUDED.analysis,
             freeform_video_summary = EXCLUDED.freeform_video_summary,
             video_analysis_schema_name = EXCLUDED.video_analysis_schema_name,
+            video_gcs_uri = COALESCE(EXCLUDED.video_gcs_uri, target.video_gcs_uri),
+            video_preview_url = COALESCE(EXCLUDED.video_preview_url, target.video_preview_url),
+            image_gcs_uri = COALESCE(EXCLUDED.image_gcs_uri, target.image_gcs_uri),
+            image_preview_url = COALESCE(EXCLUDED.image_preview_url, target.image_preview_url),
             updated_at = now(),
             update_count = target.update_count + 1
-        WHERE target.analysis IS DISTINCT FROM EXCLUDED.analysis
+        WHERE target.creative_id IS DISTINCT FROM EXCLUDED.creative_id
+           OR target.analysis IS DISTINCT FROM EXCLUDED.analysis
            OR target.freeform_video_summary IS DISTINCT FROM EXCLUDED.freeform_video_summary
            OR target.video_analysis_schema_name IS DISTINCT FROM EXCLUDED.video_analysis_schema_name
+           OR target.video_gcs_uri IS DISTINCT FROM COALESCE(EXCLUDED.video_gcs_uri, target.video_gcs_uri)
+           OR target.video_preview_url IS DISTINCT FROM COALESCE(EXCLUDED.video_preview_url, target.video_preview_url)
+           OR target.image_gcs_uri IS DISTINCT FROM COALESCE(EXCLUDED.image_gcs_uri, target.image_gcs_uri)
+           OR target.image_preview_url IS DISTINCT FROM COALESCE(EXCLUDED.image_preview_url, target.image_preview_url)
         RETURNING id
     """
     traffic_sql = f"""
@@ -286,15 +475,20 @@ def upsert_creative_media_analysis(
             campaign_id,
             adset_id,
             ad_id,
-            video_id
+            creative_id,
+            media_type,
+            video_id,
+            image_asset_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s)
-        ON CONFLICT (partition_datetime, campaign_id, adset_id, ad_id, video_id) DO UPDATE
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (partition_datetime, campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id) DO UPDATE
         SET
             analysis_snapshot_id = EXCLUDED.analysis_snapshot_id,
+            creative_id = EXCLUDED.creative_id,
             updated_at = now(),
             update_count = target.update_count + 1
         WHERE target.analysis_snapshot_id IS DISTINCT FROM EXCLUDED.analysis_snapshot_id
+           OR target.creative_id IS DISTINCT FROM EXCLUDED.creative_id
     """
     with conn.cursor() as cursor:
         cursor.execute(
@@ -303,10 +497,17 @@ def upsert_creative_media_analysis(
                 campaign_id,
                 adset_id,
                 ad_id,
+                creative_id,
+                media_type,
                 video_id,
+                image_asset_id,
                 analysis_json,
                 freeform_video_summary or None,
                 video_analysis_schema_name or None,
+                video_gcs_uri or None,
+                video_preview_url or None,
+                image_gcs_uri or None,
+                image_preview_url or None,
             ),
         )
         row = cursor.fetchone()
@@ -318,14 +519,18 @@ def upsert_creative_media_analysis(
                 WHERE campaign_id = %s
                   AND adset_id = %s
                   AND ad_id = %s
+                  AND media_type = %s
                   AND video_id = %s
+                  AND image_asset_id = %s
                 """,
-                (campaign_id, adset_id, ad_id, video_id),
+                (campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id),
             )
             row = cursor.fetchone()
         if row is None:
             raise RuntimeError(
-                f"Could not resolve creative media analysis snapshot id for ad_id={ad_id} video_id={video_id}"
+                "Could not resolve creative media analysis snapshot id for "
+                f"ad_id={ad_id} media_type={media_type} video_id={video_id} "
+                f"image_asset_id={image_asset_id}"
             )
 
         snapshot_id = int(row[0])
@@ -337,7 +542,10 @@ def upsert_creative_media_analysis(
                 campaign_id,
                 adset_id,
                 ad_id,
+                creative_id,
+                media_type,
                 video_id,
+                image_asset_id,
             ),
         )
     return snapshot_id

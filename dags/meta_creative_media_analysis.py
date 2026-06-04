@@ -30,6 +30,7 @@ OpenAI credentials are configured server-side on media-analysis-mcp (``OPENAI_AP
 | ``media_analysis_analysis_force_refresh`` | — | ``false`` (analysis cache) |
 | ``media_analysis_save_to_gcs`` | — | ``true`` (upload downloads to GCS) |
 | ``MEDIA_ANALYSIS_CONFIG`` | ``MEDIA_ANALYSIS_CONFIG`` | optional per-ad analysis config overrides |
+| ``meta_creative_media_analysis_log_generation_input`` | — | ``false`` (Langfuse generation input tracing) |
 | ``media_analysis_max_active_tasks`` | — | ``8`` (max concurrent tasks per DAG run) |
 """
 
@@ -76,7 +77,10 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     media_analysis_config_by_ad,
     media_analysis_config_for_ad,
     media_analysis_base_url,
+    build_video_preview_url,
+    image_gcs_uri_from_download,
     upsert_creative_media_analysis,
+    video_gcs_uri_from_download,
 )
 from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-found]
     DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS,
@@ -98,6 +102,7 @@ FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
 DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
 ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
 SAVE_TO_GCS_VARIABLE = "media_analysis_save_to_gcs"
+LOG_GENERATION_INPUT_VARIABLE = "meta_creative_media_analysis_log_generation_input"
 MAX_ACTIVE_TASKS_VARIABLE = "media_analysis_max_active_tasks"
 DEFAULT_MAX_ACTIVE_TASKS = 8
 DEFAULT_MAX_FRAMES = 20
@@ -220,17 +225,29 @@ def meta_creative_media_analysis():
             resolve_logical_date_from_context(get_current_context())
         ).isoformat()
         targets = analysis_targets_from_download(download_payload, config=ad_config)
+        creative_id = str(download_payload.get("creative_id") or "")
         if not targets:
             video_ids = download_payload.get("video_ids") if isinstance(download_payload.get("video_ids"), list) else []
+            image_asset_ids = (
+                download_payload.get("image_asset_ids")
+                if isinstance(download_payload.get("image_asset_ids"), list)
+                else []
+            )
             warnings = download_payload.get("warnings") if isinstance(download_payload.get("warnings"), list) else []
+            if not video_ids and not image_asset_ids and creative_id:
+                reason = "image_only"
+            else:
+                reason = "no_analyzable_videos"
             print(
                 f"{DAG_ID}: skipping analysis for ad_id={ad_id}: "
-                f"no analyzable videos (video_ids={video_ids}, warnings={warnings})"
+                f"reason={reason} creative_id={creative_id or '<none>'} "
+                f"(video_ids={video_ids}, image_asset_ids={image_asset_ids}, warnings={warnings})"
             )
             return {
                 "ad_id": ad_id,
+                "creative_id": creative_id,
                 "skipped": True,
-                "reason": "no_analyzable_videos",
+                "reason": reason,
                 "video_ids": [],
                 "analysis_from_cache": [],
                 "results": [],
@@ -242,33 +259,59 @@ def meta_creative_media_analysis():
         base_url = media_analysis_base_url()
         results: list[dict[str, Any]] = []
         for target in targets:
-            video_id = str(target["video_id"])
+            media_type = str(target.get("media_type") or "video")
+            video_id = str(target.get("video_id") or "")
+            image_asset_id = str(target.get("image_asset_id") or "")
+            target_creative_id = str(target.get("creative_id") or creative_id or "")
             storage = target["storage"]
             if not isinstance(storage, dict):
                 continue
+            target_audio_analysis = False if media_type == "image" else run_config["audio_analysis"]
             analysis = creative_media_analysis(
                 storage,
                 ad_id=ad_id,
                 video_id=video_id,
+                image_asset_id=image_asset_id,
                 meta_token=meta_token,
                 gateway_token=gateway,
                 base_url=base_url,
                 force_refresh=run_config["analysis_force_refresh"],
                 max_frames=run_config["max_frames"],
-                audio_analysis=run_config["audio_analysis"],
+                audio_analysis=target_audio_analysis,
+                log_generation_input=run_config["log_generation_input"],
                 config=ad_config,
             )
+            target_key = image_asset_id if media_type == "image" else video_id
             if analysis.get("skipped"):
                 warning = str(analysis.get("warning") or "analysis skipped")
-                print(f"{DAG_ID}: skipping analysis for ad_id={ad_id} video_id={video_id}: {warning}")
+                print(
+                    f"{DAG_ID}: skipping analysis for ad_id={ad_id} "
+                    f"media_type={media_type} key={target_key}: {warning}"
+                )
                 results.append(
                     {
+                        "media_type": media_type,
                         "video_id": video_id,
+                        "image_asset_id": image_asset_id,
                         "skipped": True,
                         "warning": warning,
                     }
                 )
                 continue
+            if media_type == "image":
+                gcs_uri = image_gcs_uri_from_download(
+                    download_payload,
+                    ad_id=ad_id,
+                    image_asset_id=image_asset_id,
+                )
+            else:
+                gcs_uri = video_gcs_uri_from_download(
+                    download_payload,
+                    ad_id=ad_id,
+                    video_id=video_id,
+                )
+            preview_url = build_video_preview_url(gcs_uri) if gcs_uri else None
+
             hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
             try:
@@ -277,9 +320,16 @@ def meta_creative_media_analysis():
                     campaign_id=campaign_id,
                     adset_id=adset_id,
                     ad_id=ad_id,
+                    creative_id=target_creative_id,
                     video_id=video_id,
+                    media_type=media_type,
+                    image_asset_id=image_asset_id,
                     partition_datetime=partition_datetime,
                     analysis=analysis,
+                    video_gcs_uri=gcs_uri if media_type == "video" else None,
+                    video_preview_url=preview_url if media_type == "video" else None,
+                    image_gcs_uri=gcs_uri if media_type == "image" else None,
+                    image_preview_url=preview_url if media_type == "image" else None,
                 )
                 conn.commit()
             except Exception:
@@ -290,12 +340,14 @@ def meta_creative_media_analysis():
 
             from_cache = bool(analysis.get("from_cache"))
             print(
-                f"{DAG_ID}: analyzed ad_id={ad_id} video_id={video_id} "
+                f"{DAG_ID}: analyzed ad_id={ad_id} media_type={media_type} key={target_key} "
                 f"from_cache={from_cache} snapshot_id={snapshot_id} config={ad_config or '{}'}"
             )
             results.append(
                 {
+                    "media_type": media_type,
                     "video_id": video_id,
+                    "image_asset_id": image_asset_id,
                     "from_cache": from_cache,
                     "redis_key": analysis.get("redis_key"),
                     "snapshot_id": snapshot_id,
@@ -304,9 +356,16 @@ def meta_creative_media_analysis():
 
         return {
             "ad_id": ad_id,
-            "video_ids": [row["video_id"] for row in results if not row.get("skipped")],
+            "video_ids": [row["video_id"] for row in results if not row.get("skipped") and row.get("video_id")],
+            "image_asset_ids": [
+                row["image_asset_id"]
+                for row in results
+                if not row.get("skipped") and row.get("image_asset_id")
+            ],
             "analysis_from_cache": [
-                row["video_id"] for row in results if row.get("from_cache") and not row.get("skipped")
+                row.get("video_id") or row.get("image_asset_id")
+                for row in results
+                if row.get("from_cache") and not row.get("skipped")
             ],
             "results": results,
             "errors": [],
@@ -334,8 +393,19 @@ def meta_creative_media_analysis():
         poke_interval=60,
         timeout=3 * 60 * 60,
     )
+    wait_for_ad_creative_registry = ExternalTaskSensor(
+        task_id="wait_for_meta_ad_creative_registry",
+        external_dag_id="meta_object_property_sync",
+        external_task_id="sync_ad_creative_media",
+        execution_date_fn=campaign_config_logical_date,
+        allowed_states=["success"],
+        failed_states=["failed"],
+        mode="reschedule",
+        poke_interval=60,
+        timeout=3 * 60 * 60,
+    )
     config_task = log_campaign_config_source(config_log)
-    wait_for_campaign_config >> wait_for_object_property >> config_task
+    wait_for_campaign_config >> wait_for_object_property >> wait_for_ad_creative_registry >> config_task
 
     accounts = config_source.get("accounts", [])
     if not accounts:
@@ -383,6 +453,7 @@ def _dag_run_params() -> dict[str, Any]:
         "bucket_location": "meta_analysis",
         "max_frames": DEFAULT_MAX_FRAMES,
         "audio_analysis": True,
+        "log_generation_input": _bool_variable(LOG_GENERATION_INPUT_VARIABLE, False),
         "media_analysis_config_by_ad": media_analysis_config_by_ad(),
     }
 

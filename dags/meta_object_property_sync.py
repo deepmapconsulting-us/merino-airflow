@@ -49,6 +49,10 @@ from merino_meta_jobs.adset_config import (  # noqa: E402  # type: ignore[import
     fetch_active_adset_configs,
     sync_adset_config_versions,
 )
+from merino_meta_jobs.ad_creative import (  # noqa: E402  # type: ignore[import-not-found]
+    ads_for_creative_registry_from_snapshot,
+    fetch_and_sync_ad_creatives,
+)
 from merino_meta_jobs.facebook_graph import MetaGraphClient, ensure_act_prefix  # noqa: E402  # type: ignore[import-not-found]
 from merino_meta_jobs.object_property import (  # noqa: E402  # type: ignore[import-not-found]
     detail_rows_for_new_ids,
@@ -59,13 +63,15 @@ from merino_meta_jobs.object_property import (  # noqa: E402  # type: ignore[imp
     stub_rows_from_metrics,
     sync_all_rows,
 )
-from merino_meta_jobs.traffic import account_ids_from_text  # noqa: E402  # type: ignore[import-not-found]
+from merino_meta_jobs.traffic import account_ids_from_text, DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS  # noqa: E402  # type: ignore[import-not-found]
 
 DAG_ID = "meta_object_property_sync"
 CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
 ACTIVE_ACCOUNTS_VARIABLE_NAME = "facebook_active_accounts"
 ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
+LOOKUP_WINDOW_VARIABLE_NAME = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
+LOOKUP_WINDOW_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 FULL_INIT_VARIABLE_NAME = "meta_object_property_full_init"
 POSTGRES_CONN_ID = "merino_analytics"
 DEFAULT_META_PAGE_LIMIT = 500
@@ -232,6 +238,55 @@ def meta_object_property_sync():
         print(f"{DAG_ID}: adset config sync complete {result}")
         return result
 
+    @task
+    def sync_ad_creative_media(source: dict[str, Any]) -> dict[str, Any]:
+        if source.get("error"):
+            raise RuntimeError(source["error"])
+
+        snapshot = source.get("snapshot")
+        if not isinstance(snapshot, dict):
+            raise RuntimeError("campaign config snapshot is missing")
+
+        snapshot_uri = str(source.get("snapshot_uri") or "")
+        access_token = meta_access_token()
+        lookup_window_days = int(
+            variable_get(
+                LOOKUP_WINDOW_VARIABLE_NAME,
+                os.environ.get(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS)),
+            )
+        )
+        active_accounts = variable_get(
+            ACTIVE_ACCOUNTS_VARIABLE_NAME,
+            os.environ.get(ACTIVE_ACCOUNTS_ENV, ""),
+        )
+        ads = ads_for_creative_registry_from_snapshot(
+            snapshot,
+            active_accounts_value=active_accounts,
+            lookup_window_days=lookup_window_days,
+        )
+
+        from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
+
+        client = MetaGraphClient(access_token)
+        hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+        conn = hook.get_conn()
+        try:
+            result = fetch_and_sync_ad_creatives(
+                client,
+                conn,
+                ads,
+                config_snapshot_uri=snapshot_uri,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+        print(f"{DAG_ID}: ad creative registry sync complete {result}")
+        return result
+
     wait_for_campaign_config = ExternalTaskSensor(
         task_id="wait_for_facebook_campaign_config_update",
         external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
@@ -246,7 +301,8 @@ def meta_object_property_sync():
     config_task = log_config_source(config_source)
     sync_task = sync_object_properties(config_source)
     adset_config_task = sync_adset_configs(config_source)
-    wait_for_campaign_config >> config_task >> sync_task >> adset_config_task
+    ad_creative_task = sync_ad_creative_media(config_source)
+    wait_for_campaign_config >> config_task >> sync_task >> adset_config_task >> ad_creative_task
 
 
 def _config_source_for_display() -> dict[str, Any]:
