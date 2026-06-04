@@ -14,11 +14,9 @@ ANALYSIS_PATH = "/api/v1/creative-media-analysis"
 DEFAULT_BASE_URL = "http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080"
 PUBLIC_BASE_URL = "https://media-analysis-mcp.merino-aiagent.com"
 MEDIA_PREVIEW_BASE_URL_ENV = "MEDIA_PREVIEW_BASE_URL"
-MEDIA_ANALYSIS_URL_VARIABLE = "media_analysis_url"
 MEDIA_ANALYSIS_URL_ENV = "MEDIA_ANALYSIS_URL"
 MCP_GATEWAY_TOKEN_VARIABLE = "meta_mcp_gateway_token"
 MCP_GATEWAY_TOKEN_ENV = "META_MCP_GATEWAY_TOKEN"
-MEDIA_ANALYSIS_CONFIG_VARIABLE = "MEDIA_ANALYSIS_CONFIG"
 MEDIA_ANALYSIS_CONFIG_ENV = "MEDIA_ANALYSIS_CONFIG"
 DOWNLOAD_TIMEOUT_SEC = 300
 ANALYSIS_TIMEOUT_SEC = 600
@@ -36,7 +34,7 @@ def _variable_get(key: str, fallback: str = "") -> str:
 
 
 def media_analysis_base_url() -> str:
-    url = _variable_get(MEDIA_ANALYSIS_URL_VARIABLE, os.environ.get(MEDIA_ANALYSIS_URL_ENV, "")).strip()
+    url = os.environ.get(MEDIA_ANALYSIS_URL_ENV, "").strip()
     return url or DEFAULT_BASE_URL
 
 
@@ -99,7 +97,9 @@ def video_gcs_uri_from_download(
 
 
 def mcp_gateway_token() -> str:
-    token = _variable_get(MCP_GATEWAY_TOKEN_VARIABLE, os.environ.get(MCP_GATEWAY_TOKEN_ENV, "")).strip()
+    token = os.environ.get(MCP_GATEWAY_TOKEN_ENV, "").strip()
+    if not token:
+        token = _variable_get(MCP_GATEWAY_TOKEN_VARIABLE).strip()
     if not token:
         raise RuntimeError(
             f"MCP gateway token missing. Set Airflow Variable {MCP_GATEWAY_TOKEN_VARIABLE!r} "
@@ -118,7 +118,7 @@ def media_analysis_headers(meta_token: str, gateway_token: str) -> dict[str, str
 
 
 def parse_media_analysis_config(raw: str) -> dict[str, dict[str, Any]]:
-    """Parse ad-specific media analysis config from an Airflow Variable value."""
+    """Parse ad-specific media analysis config from an environment value."""
     if not raw.strip():
         return {}
 
@@ -149,10 +149,7 @@ def parse_media_analysis_config(raw: str) -> dict[str, dict[str, Any]]:
 
 
 def media_analysis_config_by_ad() -> dict[str, dict[str, Any]]:
-    raw = _variable_get(
-        MEDIA_ANALYSIS_CONFIG_VARIABLE,
-        os.environ.get(MEDIA_ANALYSIS_CONFIG_ENV, ""),
-    )
+    raw = os.environ.get(MEDIA_ANALYSIS_CONFIG_ENV, "")
     return parse_media_analysis_config(raw)
 
 

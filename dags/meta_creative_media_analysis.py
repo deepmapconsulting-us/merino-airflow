@@ -14,24 +14,24 @@ Airflow does not port-forward Redis; the MCP pod connects to cluster Redis direc
 |----------|--------------|---------|
 | ``meta_access_token`` | ``META_ACCESS_TOKEN`` | Meta Graph Bearer (download) |
 | ``meta_mcp_gateway_token`` | ``META_MCP_GATEWAY_TOKEN`` | ``X-MCP-Gateway-Token`` header |
-| ``media_analysis_url`` | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default in-cluster: ``http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080``; override with public URL for local runs) |
+| — | ``MEDIA_ANALYSIS_URL`` | MCP base URL (default in-cluster: ``http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080``; override with public URL for local runs) |
 
 OpenAI credentials are configured server-side on media-analysis-mcp (``OPENAI_API_KEY`` env from Kubernetes secret). Do not pass API keys from Airflow.
 
-## Optional tuning Variables
+## Optional tuning environment variables
 
-| Variable | Env fallback | Default |
-|----------|--------------|---------|
-| ``facebook_active_accounts`` | ``FACEBOOK_ACTIVE_ACCOUNTS`` | all accounts in snapshot |
-| ``FACEBOOK_TRAFFIC_LOOKUP_WINDOWS`` | ``FACEBOOK_TRAFFIC_LOOKUP_WINDOWS`` | ``3`` days |
-| ``media_analysis_sample_sec`` | ``TEST_VIDEO_SAMPLE_SEC`` | ``3`` (``get_video_frame_in_sec``) |
-| ``media_analysis_frame_interval_sec`` | ``TEST_SPLIT_FRAME_BY_SEC`` | ``1`` (``split_frame_by_sec``) |
-| ``media_analysis_force_refresh`` | — | ``false`` (download cache) |
-| ``media_analysis_analysis_force_refresh`` | — | ``false`` (analysis cache) |
-| ``media_analysis_save_to_gcs`` | — | ``true`` (upload downloads to GCS) |
-| ``MEDIA_ANALYSIS_CONFIG`` | ``MEDIA_ANALYSIS_CONFIG`` | optional per-ad analysis config overrides |
-| ``meta_creative_media_analysis_log_generation_input`` | — | ``false`` (Langfuse generation input tracing) |
-| ``media_analysis_max_active_tasks`` | — | ``8`` (max concurrent tasks per DAG run) |
+| Env | Default |
+|-----|---------|
+| ``FACEBOOK_ACTIVE_ACCOUNTS`` | all accounts in snapshot |
+| ``FACEBOOK_TRAFFIC_LOOKUP_WINDOWS`` | ``3`` days |
+| ``TEST_VIDEO_SAMPLE_SEC`` | ``3`` (``get_video_frame_in_sec``) |
+| ``TEST_SPLIT_FRAME_BY_SEC`` | ``1`` (``split_frame_by_sec``) |
+| ``MEDIA_ANALYSIS_FORCE_REFRESH`` | ``false`` (download cache) |
+| ``MEDIA_ANALYSIS_ANALYSIS_FORCE_REFRESH`` | ``false`` (analysis cache) |
+| ``MEDIA_ANALYSIS_SAVE_TO_GCS`` | ``true`` (upload downloads to GCS) |
+| ``MEDIA_ANALYSIS_CONFIG`` | optional per-ad analysis config overrides |
+| ``META_CREATIVE_MEDIA_ANALYSIS_LOG_GENERATION_INPUT`` | ``false`` (Langfuse generation input tracing) |
+| ``MEDIA_ANALYSIS_MAX_ACTIVE_TASKS`` | ``8`` (max concurrent tasks per DAG run) |
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ from meta_gcs import (
     read_latest_snapshot_pointer,
     report_partition_datetime,
     resolve_logical_date_from_context,
-    variable_get,
+    env_config_value,
 )
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
@@ -91,26 +91,22 @@ from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-
 DAG_ID = "meta_creative_media_analysis"
 CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
-ACTIVE_ACCOUNTS_VARIABLE_NAME = "facebook_active_accounts"
 ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
-LOOKUP_WINDOW_VARIABLE_NAME = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 LOOKUP_WINDOW_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
-SAMPLE_SEC_VARIABLE = "media_analysis_sample_sec"
 SAMPLE_SEC_ENV = "TEST_VIDEO_SAMPLE_SEC"
-FRAME_INTERVAL_VARIABLE = "media_analysis_frame_interval_sec"
 FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
-DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
-ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
-SAVE_TO_GCS_VARIABLE = "media_analysis_save_to_gcs"
-LOG_GENERATION_INPUT_VARIABLE = "meta_creative_media_analysis_log_generation_input"
-MAX_ACTIVE_TASKS_VARIABLE = "media_analysis_max_active_tasks"
+DOWNLOAD_FORCE_REFRESH_ENV = "MEDIA_ANALYSIS_FORCE_REFRESH"
+ANALYSIS_FORCE_REFRESH_ENV = "MEDIA_ANALYSIS_ANALYSIS_FORCE_REFRESH"
+SAVE_TO_GCS_ENV = "MEDIA_ANALYSIS_SAVE_TO_GCS"
+LOG_GENERATION_INPUT_ENV = "META_CREATIVE_MEDIA_ANALYSIS_LOG_GENERATION_INPUT"
+MAX_ACTIVE_TASKS_ENV = "MEDIA_ANALYSIS_MAX_ACTIVE_TASKS"
 DEFAULT_MAX_ACTIVE_TASKS = 8
 DEFAULT_MAX_FRAMES = 20
 POSTGRES_CONN_ID = "merino_analytics"
 
 
 def _max_active_tasks() -> int:
-    raw = variable_get(MAX_ACTIVE_TASKS_VARIABLE, str(DEFAULT_MAX_ACTIVE_TASKS)).strip()
+    raw = env_config_value(MAX_ACTIVE_TASKS_ENV, str(DEFAULT_MAX_ACTIVE_TASKS)).strip()
     try:
         value = int(raw)
     except ValueError:
@@ -442,24 +438,24 @@ def meta_creative_media_analysis():
 def _dag_run_params() -> dict[str, Any]:
     return {
         "get_video_frame_in_sec": int(
-            variable_get(SAMPLE_SEC_VARIABLE, os.environ.get(SAMPLE_SEC_ENV, "3"))
+            env_config_value(SAMPLE_SEC_ENV, "3")
         ),
         "split_frame_by_sec": float(
-            variable_get(FRAME_INTERVAL_VARIABLE, os.environ.get(FRAME_INTERVAL_ENV, "1"))
+            env_config_value(FRAME_INTERVAL_ENV, "1")
         ),
-        "download_force_refresh": _bool_variable(DOWNLOAD_FORCE_REFRESH_VARIABLE, False),
-        "analysis_force_refresh": _bool_variable(ANALYSIS_FORCE_REFRESH_VARIABLE, False),
-        "save_to_gcs": _bool_variable(SAVE_TO_GCS_VARIABLE, True),
+        "download_force_refresh": _bool_env(DOWNLOAD_FORCE_REFRESH_ENV, False),
+        "analysis_force_refresh": _bool_env(ANALYSIS_FORCE_REFRESH_ENV, False),
+        "save_to_gcs": _bool_env(SAVE_TO_GCS_ENV, True),
         "bucket_location": "meta_analysis",
         "max_frames": DEFAULT_MAX_FRAMES,
         "audio_analysis": True,
-        "log_generation_input": _bool_variable(LOG_GENERATION_INPUT_VARIABLE, False),
+        "log_generation_input": _bool_env(LOG_GENERATION_INPUT_ENV, False),
         "media_analysis_config_by_ad": media_analysis_config_by_ad(),
     }
 
 
-def _bool_variable(name: str, default: bool) -> bool:
-    raw = variable_get(name, "true" if default else "false").strip().lower()
+def _bool_env(name: str, default: bool) -> bool:
+    raw = env_config_value(name, "true" if default else "false").strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
 
@@ -485,15 +481,9 @@ def _campaign_config_for_display() -> dict[str, Any]:
         snapshot_uri = str(pointer["final_output"])
         snapshot = read_json_from_gcs(storage_client, snapshot_uri)
         lookup_window_days = int(
-            variable_get(
-                LOOKUP_WINDOW_VARIABLE_NAME,
-                os.environ.get(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS)),
-            )
+            env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
         )
-        active_accounts = variable_get(
-            ACTIVE_ACCOUNTS_VARIABLE_NAME,
-            os.environ.get(ACTIVE_ACCOUNTS_ENV, ""),
-        )
+        active_accounts = env_config_value(ACTIVE_ACCOUNTS_ENV)
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookup_window_days)
         accounts = traffic_accounts_from_config(
             snapshot,

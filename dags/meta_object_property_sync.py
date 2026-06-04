@@ -10,7 +10,7 @@ Variables:
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | ``meta_object_property_full_init`` | ``false`` | One-time full Graph detail bootstrap |
-| ``facebook_active_accounts`` | all accounts in snapshot | Account filter |
+| ``FACEBOOK_ACTIVE_ACCOUNTS`` | all accounts in snapshot | Account filter |
 | ``meta_access_token`` | env ``META_ACCESS_TOKEN`` | Graph API token |
 """
 
@@ -33,6 +33,7 @@ except ImportError:
 from meta_gcs import (
     REPORT_TIMEZONE,
     campaign_config_logical_date,
+    env_config_value,
     gcs_console_link,
     meta_access_token,
     read_json_from_gcs,
@@ -68,9 +69,7 @@ from merino_meta_jobs.traffic import account_ids_from_text, DEFAULT_TRAFFIC_LOOK
 DAG_ID = "meta_object_property_sync"
 CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
-ACTIVE_ACCOUNTS_VARIABLE_NAME = "facebook_active_accounts"
 ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
-LOOKUP_WINDOW_VARIABLE_NAME = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 LOOKUP_WINDOW_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 FULL_INIT_VARIABLE_NAME = "meta_object_property_full_init"
 POSTGRES_CONN_ID = "merino_analytics"
@@ -250,15 +249,9 @@ def meta_object_property_sync():
         snapshot_uri = str(source.get("snapshot_uri") or "")
         access_token = meta_access_token()
         lookup_window_days = int(
-            variable_get(
-                LOOKUP_WINDOW_VARIABLE_NAME,
-                os.environ.get(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS)),
-            )
+            env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
         )
-        active_accounts = variable_get(
-            ACTIVE_ACCOUNTS_VARIABLE_NAME,
-            os.environ.get(ACTIVE_ACCOUNTS_ENV, ""),
-        )
+        active_accounts = env_config_value(ACTIVE_ACCOUNTS_ENV)
         ads = ads_for_creative_registry_from_snapshot(
             snapshot,
             active_accounts_value=active_accounts,
@@ -341,7 +334,7 @@ def _property_account_ids(snapshot: dict[str, Any]) -> list[str]:
     active_accounts = {
         ensure_act_prefix(account_id)
         for account_id in account_ids_from_text(
-            variable_get(ACTIVE_ACCOUNTS_VARIABLE_NAME, os.environ.get(ACTIVE_ACCOUNTS_ENV, ""))
+            env_config_value(ACTIVE_ACCOUNTS_ENV)
         )
     }
     account_ids: list[str] = []

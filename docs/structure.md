@@ -1,5 +1,8 @@
 # Merino Airflow Structure
 
+For **DAG ordering, cross-DAG sensors, task descriptions, and mermaid graphs**, see
+[`docs/dags.md`](dags.md).
+
 This repo is the Airflow orchestration repo for Merino jobs. Airflow owns the
 schedules and task wiring. Platform-specific data pull code lives in module
 images that Airflow launches as Kubernetes pods.

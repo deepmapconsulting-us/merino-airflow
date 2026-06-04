@@ -26,12 +26,14 @@ def variable_get(key: str, fallback: str = "") -> str:
         return fallback
 
 
-def meta_access_token() -> str:
-    import os
+def env_config_value(name: str, default: str = "") -> str:
+    return os.environ.get(name, default)
 
-    token = variable_get(META_ACCESS_TOKEN_VARIABLE).strip()
+
+def meta_access_token() -> str:
+    token = env_config_value("META_ACCESS_TOKEN").strip()
     if not token:
-        token = os.environ.get("META_ACCESS_TOKEN", "").strip()
+        token = variable_get(META_ACCESS_TOKEN_VARIABLE).strip()
     if not token:
         raise RuntimeError(
             f"Meta access token missing. Set Airflow Variable {META_ACCESS_TOKEN_VARIABLE!r} "

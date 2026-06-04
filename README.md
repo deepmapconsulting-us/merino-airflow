@@ -9,6 +9,7 @@ The Helm values point at this repo with `subPath: dags`, so the
 
 ```
 dags/        # Airflow DAGs (one .py file per DAG)
+docs/        # DAG pipeline docs (see docs/dags.md)
 jobs/        # Slim Docker images + Python libs for PodOperator / batch (not git-synced as DAGs)
 ```
 

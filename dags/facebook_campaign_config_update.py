@@ -23,10 +23,10 @@ from airflow.sdk import dag, task  # type: ignore[import-not-found]
 
 from meta_gcs import (
     REPORT_TIMEZONE,
+    env_config_value,
     meta_access_token,
     publish_latest_pointer,
     run_partition,
-    variable_get,
     write_snapshot_to_gcs,
 )
 from meta_status import cache_config_snapshot
@@ -42,7 +42,7 @@ DEFAULT_META_PAGE_LIMIT = 500
 
 
 def _account_timezone_cache() -> dict[str, str]:
-    value = variable_get(TIMEZONE_VARIABLE_NAME).strip()
+    value = env_config_value(TIMEZONE_VARIABLE_NAME).strip()
     if not value:
         return {}
     try:

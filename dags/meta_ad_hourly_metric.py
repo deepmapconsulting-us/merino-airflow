@@ -37,7 +37,7 @@ from meta_gcs import (
     report_datetime,
     report_partition_datetime,
     snapshot_object_name,
-    variable_get,
+    env_config_value,
 )
 from meta_status import HourlyStatusResolver
 
@@ -56,9 +56,7 @@ from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-
 DAG_ID = "meta_ad_hourly_metric"
 CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
-ACTIVE_ACCOUNTS_VARIABLE_NAME = "facebook_active_accounts"
 ACTIVE_ACCOUNTS_ENV = "FACEBOOK_ACTIVE_ACCOUNTS"
-LOOKUP_WINDOW_VARIABLE_NAME = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 LOOKUP_WINDOW_ENV = "FACEBOOK_TRAFFIC_LOOKUP_WINDOWS"
 POSTGRES_CONN_ID = "merino_analytics"
 DEFAULT_META_PAGE_LIMIT = 500
@@ -305,15 +303,9 @@ def _campaign_config_for_display() -> dict[str, Any]:
         snapshot_uri = _config_snapshot_uri()
         snapshot = read_json_from_gcs(storage_client, snapshot_uri)
         lookup_window_days = int(
-            variable_get(
-                LOOKUP_WINDOW_VARIABLE_NAME,
-                os.environ.get(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS)),
-            )
+            env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
         )
-        active_accounts = variable_get(
-            ACTIVE_ACCOUNTS_VARIABLE_NAME,
-            os.environ.get(ACTIVE_ACCOUNTS_ENV, ""),
-        )
+        active_accounts = env_config_value(ACTIVE_ACCOUNTS_ENV)
         accounts = traffic_accounts_from_config(
             snapshot,
             active_accounts_value=active_accounts,
