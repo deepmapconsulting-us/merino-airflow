@@ -124,9 +124,29 @@ def _post_json(
     payload = response.json()
     if not isinstance(payload, dict):
         raise RuntimeError(f"Expected JSON object from POST {path}")
+    if payload.get("skipped"):
+        return payload
     if payload.get("error") and set(payload.keys()) <= {"error"}:
         raise RuntimeError(str(payload["error"]))
     return payload
+
+
+def storage_has_analyzable_visuals(
+    storage: dict[str, Any],
+    *,
+    config: dict[str, Any] | None = None,
+) -> bool:
+    """True when download storage metadata includes frames or contents for analysis."""
+    image_type = str((config or {}).get("image_type") or "frames")
+    if image_type == "contents":
+        contents = storage.get("contents")
+        if isinstance(contents, list) and contents:
+            return True
+        return bool(str(storage.get("contents_dir") or "").strip())
+    frames = storage.get("frames")
+    if isinstance(frames, list) and frames:
+        return True
+    return bool(str(storage.get("frames_dir") or "").strip())
 
 
 def download_ad_creative_assets(
@@ -193,7 +213,11 @@ def creative_media_analysis(
     )
 
 
-def analysis_targets_from_download(download_payload: dict[str, Any]) -> list[dict[str, Any]]:
+def analysis_targets_from_download(
+    download_payload: dict[str, Any],
+    *,
+    config: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
     """Build per-video analysis targets from a download API response."""
     ad_id = str(download_payload.get("ad_id") or "")
     videos = download_payload.get("videos")
@@ -206,6 +230,8 @@ def analysis_targets_from_download(download_payload: dict[str, Any]) -> list[dic
             continue
         storage = video.get("storage")
         if not isinstance(storage, dict):
+            continue
+        if not storage_has_analyzable_visuals(storage, config=config):
             continue
         video_id = str(video.get("video_id") or video.get("creative_video_id") or "")
         if not video_id:

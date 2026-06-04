@@ -35,6 +35,7 @@ OpenAI credentials are configured server-side on media-analysis-mcp (``OPENAI_AP
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -188,12 +189,14 @@ def meta_creative_media_analysis():
             f"{DAG_ID}: downloaded ad_id={ad_id} videos={len(video_ids)} "
             f"cache_hits={cache_hits} config={ad_config or '{}'}"
         )
-        return {
+        result = {
             "ad_id": ad_id,
             "download": payload,
             "video_ids": [str(v) for v in video_ids],
             "cache_hits": [str(v) for v in cache_hits],
         }
+        _print_download_gcs_links(ad_id, payload)
+        return result
 
     @task
     def analyze_ad_creative(
@@ -216,7 +219,7 @@ def meta_creative_media_analysis():
         partition_datetime = report_partition_datetime(
             resolve_logical_date_from_context(get_current_context())
         ).isoformat()
-        targets = analysis_targets_from_download(download_payload)
+        targets = analysis_targets_from_download(download_payload, config=ad_config)
         if not targets:
             video_ids = download_payload.get("video_ids") if isinstance(download_payload.get("video_ids"), list) else []
             warnings = download_payload.get("warnings") if isinstance(download_payload.get("warnings"), list) else []
@@ -255,6 +258,17 @@ def meta_creative_media_analysis():
                 audio_analysis=run_config["audio_analysis"],
                 config=ad_config,
             )
+            if analysis.get("skipped"):
+                warning = str(analysis.get("warning") or "analysis skipped")
+                print(f"{DAG_ID}: skipping analysis for ad_id={ad_id} video_id={video_id}: {warning}")
+                results.append(
+                    {
+                        "video_id": video_id,
+                        "skipped": True,
+                        "warning": warning,
+                    }
+                )
+                continue
             hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
             try:
@@ -290,8 +304,10 @@ def meta_creative_media_analysis():
 
         return {
             "ad_id": ad_id,
-            "video_ids": [row["video_id"] for row in results],
-            "analysis_from_cache": [row["video_id"] for row in results if row["from_cache"]],
+            "video_ids": [row["video_id"] for row in results if not row.get("skipped")],
+            "analysis_from_cache": [
+                row["video_id"] for row in results if row.get("from_cache") and not row.get("skipped")
+            ],
             "results": results,
             "errors": [],
         }
@@ -341,7 +357,8 @@ def meta_creative_media_analysis():
                             for ad in ads:
                                 ad_task_id = _airflow_id(str(ad["id"]))
                                 downloaded = download_ad_creative.override(
-                                    task_id=f"download_ad_{ad_task_id}"
+                                    task_id=f"download_ad_{ad_task_id}",
+                                    show_return_value_in_logs=False,
                                 )(ad, dag_params)
                                 analyzed = analyze_ad_creative.override(
                                     task_id=f"analyze_ad_{ad_task_id}"
@@ -468,6 +485,56 @@ def _adset_count(accounts: list[dict[str, Any]]) -> int:
 
 def _airflow_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value).strip("_") or "unknown"
+
+
+def _gcs_uris_from_download_payload(payload: dict[str, Any]) -> list[str]:
+    seen: set[str] = set()
+    uris: list[str] = []
+
+    def add(items: Any) -> None:
+        if not isinstance(items, list):
+            return
+        for item in items:
+            if isinstance(item, str) and item.startswith("gs://") and item not in seen:
+                seen.add(item)
+                uris.append(item)
+
+    add(payload.get("gcs_files"))
+    videos = payload.get("videos")
+    if isinstance(videos, list):
+        for video in videos:
+            if not isinstance(video, dict):
+                continue
+            storage = video.get("storage")
+            if isinstance(storage, dict):
+                add(storage.get("gcs_files"))
+
+    return uris
+
+
+def _print_download_gcs_links(ad_id: str, payload: dict[str, Any]) -> None:
+    gcs_uris = _gcs_uris_from_download_payload(payload)
+    summary = {
+        "ad_id": ad_id,
+        "campaign_id": payload.get("campaign_id"),
+        "adset_id": payload.get("adset_id"),
+        "creative_id": payload.get("creative_id"),
+        "video_ids": payload.get("video_ids"),
+        "storage_prefix": payload.get("storage_prefix"),
+        "gcs_object_prefix": payload.get("gcs_object_prefix"),
+        "gcs_files_count": len(gcs_uris),
+        "cache_hits": payload.get("cache_hits"),
+        "warnings": payload.get("warnings"),
+    }
+    print(f"{DAG_ID}: download summary ad_id={ad_id}:")
+    print(json.dumps(summary, indent=2, default=str))
+    if not gcs_uris:
+        print(f"{DAG_ID}: no gcs files uploaded for ad_id={ad_id}")
+        return
+    print(f"{DAG_ID}: gcs files ({len(gcs_uris)}):")
+    for uri in gcs_uris:
+        print(f"  {uri}")
+        print(f"  {gcs_console_link(uri)}")
 
 
 meta_creative_media_analysis()

@@ -195,6 +195,10 @@ class AnalysisTargetsTest(unittest.TestCase):
                     "storage": {"local_dir": "/a", "frames": ["f2.jpg"]},
                 },
                 {"video_id": "v3"},
+                {
+                    "video_id": "v4",
+                    "storage": {"local_dir": "/a", "frames": [], "frames_dir": ""},
+                },
             ],
         }
         targets = analysis_targets_from_download(download_payload)
@@ -203,6 +207,48 @@ class AnalysisTargetsTest(unittest.TestCase):
         self.assertEqual(targets[1]["video_id"], "v2")
         self.assertEqual(targets[0]["ad_id"], "111")
         self.assertIn("frames", targets[0]["storage"])
+
+    def test_analysis_targets_from_download_contents_mode(self) -> None:
+        download_payload = {
+            "ad_id": "111",
+            "videos": [
+                {
+                    "video_id": "v1",
+                    "storage": {"contents": ["content_000.jpg"]},
+                },
+                {
+                    "video_id": "v2",
+                    "storage": {"frames": ["f1.jpg"]},
+                },
+            ],
+        }
+        targets = analysis_targets_from_download(
+            download_payload,
+            config={"image_type": "contents"},
+        )
+        self.assertEqual([target["video_id"] for target in targets], ["v1"])
+
+    @patch("requests.post")
+    def test_creative_media_analysis_returns_skipped_payload(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "skipped": True,
+                "warning": "No frame images in storage.frames or storage.frames_dir",
+                "ad_id": "123",
+                "video_id": "456",
+            },
+        )
+        payload = creative_media_analysis(
+            {"local_dir": "/data", "frames": []},
+            ad_id="123",
+            video_id="456",
+            meta_token="meta",
+            gateway_token="gw",
+            base_url="http://mcp.test",
+        )
+        self.assertTrue(payload.get("skipped"))
+        self.assertIn("frame images", payload.get("warning", ""))
 
 
 class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
