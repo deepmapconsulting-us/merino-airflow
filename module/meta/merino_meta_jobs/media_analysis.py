@@ -361,7 +361,7 @@ def translate_creative_media_analysis_to_chinese(
     gateway_token: str,
     base_url: str | None = None,
     schema_prompt_name: str = "media_analysis_mcp/创意媒体分析快照结构",
-    translation_prompt_name: str = "media_analysis_mcp/translate_schema_to_chineese",
+    translation_prompt_name: str = "media_analysis_mcp/translate_analysis_to_chinese",
     model: str = "",
     langfuse_trace_id: str = "",
     langfuse_parent_observation_id: str = "",

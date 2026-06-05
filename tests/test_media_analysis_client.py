@@ -271,7 +271,10 @@ class MediaAnalysisClientTest(unittest.TestCase):
         self.assertEqual(kwargs["json"]["analysis"]["video_analysis"]["theme"], "product display")
         self.assertEqual(kwargs["json"]["freeform_video_summary"], "A product is shown.")
         self.assertEqual(kwargs["json"]["schema_prompt_name"], "media_analysis_mcp/创意媒体分析快照结构")
-        self.assertEqual(kwargs["json"]["translation_prompt_name"], "media_analysis_mcp/translate_schema_to_chineese")
+        self.assertEqual(
+            kwargs["json"]["translation_prompt_name"],
+            "media_analysis_mcp/translate_analysis_to_chinese",
+        )
         self.assertEqual(kwargs["json"]["model"], "gpt-5.5")
 
     @patch("requests.post")
