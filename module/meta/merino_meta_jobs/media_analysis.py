@@ -10,6 +10,8 @@ from urllib.parse import quote
 
 DOWNLOAD_PATH = "/api/v1/download-ad-creative-assets"
 ANALYSIS_PATH = "/api/v1/creative-media-analysis"
+TRANSLATE_CHINESE_SCHEMA_PATH = "/api/v1/translate/chinese-schema-prompt"
+TRANSLATE_CHINESE_ANALYSIS_PATH = "/api/v1/translate/chinese-analysis"
 # In-cluster service (Airflow workers run in GKE; same namespace routing as ingress bridge).
 DEFAULT_BASE_URL = "http://media-analysis-mcp.merino-mcp.svc.cluster.local:8080"
 PUBLIC_BASE_URL = "https://media-analysis-mcp.merino-aiagent.com"
@@ -22,6 +24,7 @@ DOWNLOAD_TIMEOUT_SEC = 300
 ANALYSIS_TIMEOUT_SEC = 600
 CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE = "marketing.creative_media_analysis_snapshot"
 CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE = "marketing.creative_media_analysis_traffic"
+CHINESE_CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE = 'marketing."创意媒体分析快照"'
 AD_CREATIVE_REGISTRY_TABLE = "marketing.meta_ad_creative"
 MEDIA_ANALYSIS_REDIS_CONN_ID = "merino_redis"
 MEDIA_ANALYSIS_REDIS_META_PREFIX_ENV = "MEDIA_ANALYSIS_REDIS_META_PREFIX"
@@ -143,6 +146,13 @@ def mcp_gateway_token() -> str:
 def media_analysis_headers(meta_token: str, gateway_token: str) -> dict[str, str]:
     return {
         "Authorization": f"Bearer {meta_token}",
+        "X-MCP-Gateway-Token": gateway_token,
+        "Content-Type": "application/json",
+    }
+
+
+def mcp_gateway_headers(gateway_token: str) -> dict[str, str]:
+    return {
         "X-MCP-Gateway-Token": gateway_token,
         "Content-Type": "application/json",
     }
@@ -311,6 +321,78 @@ def creative_media_analysis(
         body,
         timeout_sec=ANALYSIS_TIMEOUT_SEC,
     )
+
+
+def translate_chinese_schema_prompt(
+    *,
+    gateway_token: str,
+    base_url: str | None = None,
+    source_prompt_name: str = "media_analysis_mcp/video_analysis_schema",
+    target_prompt_name: str = "media_analysis_mcp/创意媒体分析快照结构",
+    translation_prompt_name: str = "media_analysis_mcp/translate_schema_to_chineese",
+    model: str = "",
+    force: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    body = {
+        "source_prompt_name": source_prompt_name,
+        "target_prompt_name": target_prompt_name,
+        "translation_prompt_name": translation_prompt_name,
+        "model": model,
+        "force": force,
+        "dry_run": dry_run,
+    }
+    return _post_json(
+        base_url or media_analysis_base_url(),
+        TRANSLATE_CHINESE_SCHEMA_PATH,
+        mcp_gateway_headers(gateway_token),
+        body,
+        timeout_sec=ANALYSIS_TIMEOUT_SEC,
+    )
+
+
+def translate_creative_media_analysis_to_chinese(
+    *,
+    analysis: dict[str, Any],
+    freeform_video_summary: str,
+    gateway_token: str,
+    base_url: str | None = None,
+    schema_prompt_name: str = "media_analysis_mcp/创意媒体分析快照结构",
+    translation_prompt_name: str = "media_analysis_mcp/translate_schema_to_chineese",
+    model: str = "",
+) -> dict[str, Any]:
+    body = {
+        "analysis": analysis,
+        "freeform_video_summary": freeform_video_summary,
+        "schema_prompt_name": schema_prompt_name,
+        "translation_prompt_name": translation_prompt_name,
+        "model": model,
+    }
+    return _post_json(
+        base_url or media_analysis_base_url(),
+        TRANSLATE_CHINESE_ANALYSIS_PATH,
+        mcp_gateway_headers(gateway_token),
+        body,
+        timeout_sec=ANALYSIS_TIMEOUT_SEC,
+    )
+
+
+def update_chinese_creative_media_analysis_snapshot(
+    conn: Any,
+    *,
+    snapshot_id: int,
+    translated_analysis: dict[str, Any],
+) -> None:
+    analysis_json = json.dumps(translated_analysis, ensure_ascii=False, sort_keys=True)
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f"""
+            UPDATE {CHINESE_CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE}
+            SET "分析结果" = %s::jsonb
+            WHERE id = %s
+            """,
+            (analysis_json, snapshot_id),
+        )
 
 
 def redis_json_payload(redis_client: Any, key: str) -> dict[str, Any] | None:

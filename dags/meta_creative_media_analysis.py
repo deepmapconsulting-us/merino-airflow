@@ -80,6 +80,8 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     media_analysis_base_url,
     build_video_preview_url,
     image_gcs_uri_from_download,
+    translate_creative_media_analysis_to_chinese,
+    update_chinese_creative_media_analysis_snapshot,
     upsert_creative_media_analysis,
     video_gcs_uri_from_download,
 )
@@ -156,53 +158,42 @@ def meta_creative_media_analysis():
         print(f"{DAG_ID}: no creative media analysis tasks were created")
 
     @task
-    def skip_ad_if_already_analyzed(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
+    def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
         from airflow.exceptions import AirflowSkipException  # type: ignore[import-not-found]
         from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
         from airflow.sdk import get_current_context  # type: ignore[import-not-found]
 
         ad_id = str(ad["id"])
+        ad_config = media_analysis_config_for_ad(
+            ad_id,
+            run_config.get("media_analysis_config_by_ad", {}),
+        )
         if run_config["download_force_refresh"] or run_config["analysis_force_refresh"]:
-            reason = "force_refresh_enabled"
-            print(f"{DAG_ID}: cache gate will run ad_id={ad_id}: {reason}")
-            return {"ad_id": ad_id, "skip": False, "reason": reason}
+            print(f"{DAG_ID}: cache gate will run ad_id={ad_id}: force_refresh_enabled")
+        else:
+            partition_datetime = report_partition_datetime(
+                resolve_logical_date_from_context(get_current_context())
+            ).isoformat()
+            hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+            conn = hook.get_conn()
+            try:
+                status = creative_media_analysis_skip_status(
+                    conn,
+                    ad_id=ad_id,
+                    partition_datetime=partition_datetime,
+                    audio_analysis=run_config["audio_analysis"],
+                    media_config=ad_config,
+                )
+            finally:
+                conn.close()
 
-        ad_config = media_analysis_config_for_ad(
-            ad_id,
-            run_config.get("media_analysis_config_by_ad", {}),
-        )
-        partition_datetime = report_partition_datetime(
-            resolve_logical_date_from_context(get_current_context())
-        ).isoformat()
+            print(f"{DAG_ID}: cache gate ad_id={ad_id}: {json.dumps(status, default=str)}")
+            if status.get("skip"):
+                raise AirflowSkipException(
+                    f"{DAG_ID}: Redis analysis cache and traffic rows already exist for ad_id={ad_id}"
+                )
 
-        hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
-        conn = hook.get_conn()
-        try:
-            status = creative_media_analysis_skip_status(
-                conn,
-                ad_id=ad_id,
-                partition_datetime=partition_datetime,
-                audio_analysis=run_config["audio_analysis"],
-                media_config=ad_config,
-            )
-        finally:
-            conn.close()
-
-        print(f"{DAG_ID}: cache gate ad_id={ad_id}: {json.dumps(status, default=str)}")
-        if status.get("skip"):
-            raise AirflowSkipException(
-                f"{DAG_ID}: Redis analysis cache and traffic rows already exist for ad_id={ad_id}"
-            )
-        return {"ad_id": ad_id, **status}
-
-    @task
-    def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
-        ad_id = str(ad["id"])
         base_url = media_analysis_base_url()
-        ad_config = media_analysis_config_for_ad(
-            ad_id,
-            run_config.get("media_analysis_config_by_ad", {}),
-        )
         is_frame_config = str(ad_config.get("image_type") or "frames") == "frames"
         frame_sample_end_sec = ad_config.get("frame_sample_end_sec") if is_frame_config else None
         frame_sample_interval_sec = ad_config.get("frame_sample_interval_sec") if is_frame_config else None
@@ -375,10 +366,38 @@ def meta_creative_media_analysis():
             finally:
                 conn.close()
 
+            translated = translate_creative_media_analysis_to_chinese(
+                analysis=analysis,
+                freeform_video_summary=str(analysis.get("freeform_video_summary") or ""),
+                gateway_token=gateway,
+                base_url=base_url,
+            )
+            translated_analysis = translated.get("translated_analysis")
+            if not isinstance(translated_analysis, dict):
+                raise RuntimeError(
+                    f"{DAG_ID}: MCP Chinese translation returned no translated_analysis "
+                    f"for ad_id={ad_id} media_type={media_type} key={target_key}"
+                )
+            hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+            conn = hook.get_conn()
+            try:
+                update_chinese_creative_media_analysis_snapshot(
+                    conn,
+                    snapshot_id=snapshot_id,
+                    translated_analysis=translated_analysis,
+                )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.close()
+
             from_cache = bool(analysis.get("from_cache"))
             print(
                 f"{DAG_ID}: analyzed ad_id={ad_id} media_type={media_type} key={target_key} "
-                f"from_cache={from_cache} snapshot_id={snapshot_id} config={ad_config or '{}'}"
+                f"from_cache={from_cache} snapshot_id={snapshot_id} "
+                f"zh_fields={len(translated_analysis)} config={ad_config or '{}'}"
             )
             results.append(
                 {
@@ -463,10 +482,6 @@ def meta_creative_media_analysis():
                         with TaskGroup(group_id=f"adset_{adset_id}") as adset_group:
                             for ad in ads:
                                 ad_task_id = _airflow_id(str(ad["id"]))
-                                cache_gate = skip_ad_if_already_analyzed.override(
-                                    task_id=f"skip_ad_{ad_task_id}",
-                                    show_return_value_in_logs=False,
-                                )(ad, dag_params)
                                 downloaded = download_ad_creative.override(
                                     task_id=f"download_ad_{ad_task_id}",
                                     show_return_value_in_logs=False,
@@ -474,7 +489,7 @@ def meta_creative_media_analysis():
                                 analyzed = analyze_ad_creative.override(
                                     task_id=f"analyze_ad_{ad_task_id}"
                                 )(downloaded, dag_params)
-                                cache_gate >> downloaded >> analyzed
+                                downloaded >> analyzed
                         config_task >> adset_group
                 config_task >> campaign_group
         config_task >> account_group

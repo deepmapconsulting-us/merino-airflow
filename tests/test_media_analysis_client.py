@@ -26,6 +26,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     media_analysis_headers,
     parse_media_analysis_config,
     image_gcs_uri_from_download,
+    translate_chinese_schema_prompt,
     upsert_creative_media_analysis,
     video_gcs_uri_from_download,
 )
@@ -190,6 +191,38 @@ class MediaAnalysisClientTest(unittest.TestCase):
         self.assertEqual(media_analysis_config_for_ad("ad_1", single)["frame_sample_end_sec"], 3)
         self.assertEqual(media_analysis_config_for_ad("ad_2", multiple)["image_type"], "contents")
         self.assertEqual(media_analysis_config_for_ad("missing", multiple), {})
+
+    @patch("requests.post")
+    def test_translate_chinese_schema_prompt_posts_expected_body(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "created": False,
+                "existing": True,
+                "target_prompt_name": "media_analysis_mcp/创意媒体分析快照结构",
+            },
+        )
+
+        payload = translate_chinese_schema_prompt(
+            gateway_token="gw",
+            base_url="http://mcp.test",
+            model="gpt-5.5",
+            force=True,
+            dry_run=False,
+        )
+
+        self.assertTrue(payload["existing"])
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        self.assertEqual(args[0], "http://mcp.test/api/v1/translate/chinese-schema-prompt")
+        self.assertEqual(kwargs["headers"]["X-MCP-Gateway-Token"], "gw")
+        self.assertNotIn("Authorization", kwargs["headers"])
+        self.assertEqual(kwargs["json"]["source_prompt_name"], "media_analysis_mcp/video_analysis_schema")
+        self.assertEqual(kwargs["json"]["target_prompt_name"], "media_analysis_mcp/创意媒体分析快照结构")
+        self.assertEqual(kwargs["json"]["translation_prompt_name"], "media_analysis_mcp/translate_schema_to_chineese")
+        self.assertEqual(kwargs["json"]["model"], "gpt-5.5")
+        self.assertTrue(kwargs["json"]["force"])
+        self.assertFalse(kwargs["json"]["dry_run"])
 
 
 class AnalysisTargetsTest(unittest.TestCase):
