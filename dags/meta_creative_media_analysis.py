@@ -371,6 +371,11 @@ def meta_creative_media_analysis():
                 freeform_video_summary=str(analysis.get("freeform_video_summary") or ""),
                 gateway_token=gateway,
                 base_url=base_url,
+                langfuse_trace_id=str(analysis.get("langfuse_trace_id") or ""),
+                langfuse_parent_observation_id=str(
+                    analysis.get("langfuse_parent_observation_id") or ""
+                ),
+                langfuse_trace_name=str(analysis.get("langfuse_trace_name") or ""),
             )
             translated_analysis = translated.get("translated_analysis")
             if not isinstance(translated_analysis, dict):

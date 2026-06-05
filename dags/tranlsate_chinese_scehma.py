@@ -11,6 +11,7 @@ Manual DAG run config can override:
   "source_prompt_name": "media_analysis_mcp/video_analysis_schema",
   "target_prompt_name": "media_analysis_mcp/创意媒体分析快照结构",
   "translation_prompt_name": "media_analysis_mcp/translate_schema_to_chineese",
+  "input_content": "Representative creative analysis examples...",
   "model": "gpt-5.5",
   "force": false,
   "dry_run": false
@@ -102,6 +103,7 @@ def tranlsate_chinese_scehma():
                 "translation_prompt_name",
                 DEFAULT_TRANSLATION_PROMPT_NAME,
             ),
+            input_content=_conf_value(conf, "input_content"),
             model=_conf_value(conf, "model"),
             force=_bool_value(conf.get("force"), default=False),
             dry_run=_bool_value(conf.get("dry_run"), default=False),

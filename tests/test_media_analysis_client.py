@@ -27,6 +27,8 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     parse_media_analysis_config,
     image_gcs_uri_from_download,
     translate_chinese_schema_prompt,
+    translate_creative_media_analysis_to_chinese,
+    update_chinese_creative_media_analysis_snapshot,
     upsert_creative_media_analysis,
     video_gcs_uri_from_download,
 )
@@ -207,6 +209,7 @@ class MediaAnalysisClientTest(unittest.TestCase):
             gateway_token="gw",
             base_url="http://mcp.test",
             model="gpt-5.5",
+            input_content="Representative creative analysis rows.",
             force=True,
             dry_run=False,
         )
@@ -220,12 +223,80 @@ class MediaAnalysisClientTest(unittest.TestCase):
         self.assertEqual(kwargs["json"]["source_prompt_name"], "media_analysis_mcp/video_analysis_schema")
         self.assertEqual(kwargs["json"]["target_prompt_name"], "media_analysis_mcp/创意媒体分析快照结构")
         self.assertEqual(kwargs["json"]["translation_prompt_name"], "media_analysis_mcp/translate_schema_to_chineese")
+        self.assertEqual(kwargs["json"]["input_content"], "Representative creative analysis rows.")
         self.assertEqual(kwargs["json"]["model"], "gpt-5.5")
         self.assertTrue(kwargs["json"]["force"])
         self.assertFalse(kwargs["json"]["dry_run"])
 
+    @patch("requests.post")
+    def test_translate_chinese_schema_prompt_omits_empty_input_content(
+        self,
+        mock_post: MagicMock,
+    ) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"created": False, "existing": True},
+        )
 
-class AnalysisTargetsTest(unittest.TestCase):
+        translate_chinese_schema_prompt(
+            gateway_token="gw",
+            base_url="http://mcp.test",
+        )
+
+        _, kwargs = mock_post.call_args
+        self.assertNotIn("input_content", kwargs["json"])
+
+    @patch("requests.post")
+    def test_translate_creative_media_analysis_to_chinese_posts_expected_body(self, mock_post: MagicMock) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {
+                "translated_analysis": {"主题": "产品展示", "视频自由摘要": "中文摘要"},
+                "field_count": 2,
+            },
+        )
+
+        payload = translate_creative_media_analysis_to_chinese(
+            analysis={"video_analysis": {"theme": "product display"}},
+            freeform_video_summary="A product is shown.",
+            gateway_token="gw",
+            base_url="http://mcp.test",
+            model="gpt-5.5",
+        )
+
+        self.assertEqual(payload["translated_analysis"]["主题"], "产品展示")
+        args, kwargs = mock_post.call_args
+        self.assertEqual(args[0], "http://mcp.test/api/v1/translate/chinese-analysis")
+        self.assertEqual(kwargs["headers"]["X-MCP-Gateway-Token"], "gw")
+        self.assertEqual(kwargs["json"]["analysis"]["video_analysis"]["theme"], "product display")
+        self.assertEqual(kwargs["json"]["freeform_video_summary"], "A product is shown.")
+        self.assertEqual(kwargs["json"]["schema_prompt_name"], "media_analysis_mcp/创意媒体分析快照结构")
+        self.assertEqual(kwargs["json"]["translation_prompt_name"], "media_analysis_mcp/translate_schema_to_chineese")
+        self.assertEqual(kwargs["json"]["model"], "gpt-5.5")
+
+    @patch("requests.post")
+    def test_translate_creative_media_analysis_to_chinese_forwards_langfuse_trace(
+        self, mock_post: MagicMock
+    ) -> None:
+        mock_post.return_value = MagicMock(
+            status_code=200,
+            json=lambda: {"translated_analysis": {"主题": "产品展示", "视频自由摘要": "中文摘要"}},
+        )
+
+        translate_creative_media_analysis_to_chinese(
+            analysis={"video_analysis": {"theme": "product display"}},
+            freeform_video_summary="A product is shown.",
+            gateway_token="gw",
+            base_url="http://mcp.test",
+            langfuse_trace_id="trace-123",
+            langfuse_parent_observation_id="span-456",
+            langfuse_trace_name="media-analysis.ad-1-analysis",
+        )
+
+        body = mock_post.call_args.kwargs["json"]
+        self.assertEqual(body["langfuse_trace_id"], "trace-123")
+        self.assertEqual(body["langfuse_parent_observation_id"], "span-456")
+        self.assertEqual(body["langfuse_trace_name"], "media-analysis.ad-1-analysis")
     def test_analysis_targets_from_download_two_videos(self) -> None:
         download_payload = {
             "ad_id": "111",
@@ -628,6 +699,23 @@ class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
         self.assertEqual(traffic_params[6], "video")
         self.assertEqual(traffic_params[7], "video_1")
         self.assertEqual(traffic_params[1], partition_datetime)
+
+    def test_update_chinese_creative_media_analysis_snapshot_updates_analysis_by_id(self) -> None:
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+
+        update_chinese_creative_media_analysis_snapshot(
+            conn,
+            snapshot_id=42,
+            translated_analysis={"主题": "产品展示", "视频自由摘要": "中文摘要"},
+        )
+
+        sql, params = cursor.execute.call_args.args
+        self.assertIn('marketing."创意媒体分析快照"', sql)
+        self.assertIn('SET "分析结果" = %s::jsonb', sql)
+        self.assertIn("WHERE id = %s", sql)
+        self.assertIn('"主题": "产品展示"', params[0])
+        self.assertEqual(params[1], 42)
 
 
 if __name__ == "__main__":

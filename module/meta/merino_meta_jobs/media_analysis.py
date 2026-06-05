@@ -330,6 +330,7 @@ def translate_chinese_schema_prompt(
     source_prompt_name: str = "media_analysis_mcp/video_analysis_schema",
     target_prompt_name: str = "media_analysis_mcp/创意媒体分析快照结构",
     translation_prompt_name: str = "media_analysis_mcp/translate_schema_to_chineese",
+    input_content: str = "",
     model: str = "",
     force: bool = False,
     dry_run: bool = False,
@@ -342,6 +343,8 @@ def translate_chinese_schema_prompt(
         "force": force,
         "dry_run": dry_run,
     }
+    if input_content:
+        body["input_content"] = input_content
     return _post_json(
         base_url or media_analysis_base_url(),
         TRANSLATE_CHINESE_SCHEMA_PATH,
@@ -360,6 +363,9 @@ def translate_creative_media_analysis_to_chinese(
     schema_prompt_name: str = "media_analysis_mcp/创意媒体分析快照结构",
     translation_prompt_name: str = "media_analysis_mcp/translate_schema_to_chineese",
     model: str = "",
+    langfuse_trace_id: str = "",
+    langfuse_parent_observation_id: str = "",
+    langfuse_trace_name: str = "",
 ) -> dict[str, Any]:
     body = {
         "analysis": analysis,
@@ -368,6 +374,12 @@ def translate_creative_media_analysis_to_chinese(
         "translation_prompt_name": translation_prompt_name,
         "model": model,
     }
+    if langfuse_trace_id:
+        body["langfuse_trace_id"] = langfuse_trace_id
+    if langfuse_parent_observation_id:
+        body["langfuse_parent_observation_id"] = langfuse_parent_observation_id
+    if langfuse_trace_name:
+        body["langfuse_trace_name"] = langfuse_trace_name
     return _post_json(
         base_url or media_analysis_base_url(),
         TRANSLATE_CHINESE_ANALYSIS_PATH,
