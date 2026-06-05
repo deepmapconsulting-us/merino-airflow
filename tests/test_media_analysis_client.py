@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 import unittest
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -15,8 +16,12 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     analysis_targets_from_download,
     build_video_preview_url,
     creative_media_analysis,
+    creative_media_analysis_skip_status,
     download_ad_creative_assets,
+    media_analysis_analysis_cache_key,
     media_analysis_base_url,
+    media_analysis_cache_matches,
+    media_analysis_files_cache_key,
     media_analysis_config_for_ad,
     media_analysis_headers,
     parse_media_analysis_config,
@@ -337,6 +342,132 @@ class AnalysisTargetsTest(unittest.TestCase):
         )
         self.assertTrue(payload.get("skipped"))
         self.assertIn("frame images", payload.get("warning", ""))
+
+
+class MediaAnalysisRedisSkipTest(unittest.TestCase):
+    def test_cache_keys_match_mcp_prefix(self) -> None:
+        with patch.dict("os.environ", {}, clear=True):
+            self.assertEqual(
+                media_analysis_files_cache_key("ad_1", "video_1"),
+                "meta:meta_media_analysis:files:ad_1:video_1",
+            )
+            self.assertEqual(
+                media_analysis_analysis_cache_key("ad_1", "video_1"),
+                "meta:meta_media_analysis:analysis:ad_1:video_1",
+            )
+
+    def test_media_analysis_cache_matches_config_and_audio_requirement(self) -> None:
+        payload = {
+            "ad_id": "ad_1",
+            "video_id": "video_1",
+            "freeform_video_summary": "summary",
+            "video_analysis": {"hook": "demo"},
+            "audio_analysis": {"music": "upbeat"},
+            "media_config": {"image_type": "contents"},
+        }
+
+        self.assertTrue(
+            media_analysis_cache_matches(
+                payload,
+                ad_id="ad_1",
+                media_id="video_1",
+                audio_analysis=True,
+                media_config={"image_type": "contents"},
+            )
+        )
+        self.assertFalse(
+            media_analysis_cache_matches(
+                payload,
+                ad_id="ad_1",
+                media_id="video_1",
+                audio_analysis=True,
+                media_config={"image_type": "frames"},
+            )
+        )
+        self.assertFalse(
+            media_analysis_cache_matches(
+                {**payload, "audio_analysis": None},
+                ad_id="ad_1",
+                media_id="video_1",
+                audio_analysis=True,
+            )
+        )
+
+    def test_skip_status_requires_redis_cache_and_current_traffic_row(self) -> None:
+        redis_client = MagicMock()
+        redis_client.get.side_effect = lambda key: json.dumps(
+            {
+                "meta:meta_media_analysis:files:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                },
+                "meta:meta_media_analysis:analysis:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                    "freeform_video_summary": "summary",
+                    "video_analysis": {"hook": "demo"},
+                    "audio_analysis": {"music": "upbeat"},
+                    "media_config": {},
+                },
+            }.get(key)
+        )
+
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.side_effect = [
+            [(["video_1"],)],
+            [("video_1",)],
+        ]
+
+        status = creative_media_analysis_skip_status(
+            conn,
+            ad_id="ad_1",
+            partition_datetime=datetime(2026, 6, 1, 12, tzinfo=timezone.utc),
+            audio_analysis=True,
+            redis_client=redis_client,
+        )
+
+        self.assertTrue(status["skip"])
+        self.assertEqual(status["reason"], "redis_cache_and_traffic_ready")
+        self.assertEqual(status["video_ids"], ["video_1"])
+
+    def test_skip_status_runs_when_current_traffic_row_is_missing(self) -> None:
+        redis_client = MagicMock()
+        redis_client.get.side_effect = lambda key: json.dumps(
+            {
+                "meta:meta_media_analysis:files:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                },
+                "meta:meta_media_analysis:analysis:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                    "freeform_video_summary": "summary",
+                    "video_analysis": {"hook": "demo"},
+                    "audio_analysis": {"music": "upbeat"},
+                    "media_config": {},
+                },
+            }.get(key)
+        )
+
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.side_effect = [
+            [(["video_1"],)],
+            [],
+        ]
+
+        status = creative_media_analysis_skip_status(
+            conn,
+            ad_id="ad_1",
+            partition_datetime=datetime(2026, 6, 1, 12, tzinfo=timezone.utc),
+            audio_analysis=True,
+            redis_client=redis_client,
+        )
+
+        self.assertFalse(status["skip"])
+        self.assertEqual(status["reason"], "traffic_snapshot_missing")
+        self.assertEqual(status["missing_traffic"], ["video_1"])
 
 
 class ImageGcsUriFromDownloadTest(unittest.TestCase):

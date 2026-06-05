@@ -72,6 +72,7 @@ if MODULE_PATH.exists():
 from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[import-not-found]
     analysis_targets_from_download,
     creative_media_analysis,
+    creative_media_analysis_skip_status,
     download_ad_creative_assets,
     mcp_gateway_token,
     media_analysis_config_by_ad,
@@ -153,6 +154,46 @@ def meta_creative_media_analysis():
         if source.get("error"):
             raise RuntimeError(source["error"])
         print(f"{DAG_ID}: no creative media analysis tasks were created")
+
+    @task
+    def skip_ad_if_already_analyzed(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
+        from airflow.exceptions import AirflowSkipException  # type: ignore[import-not-found]
+        from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        ad_id = str(ad["id"])
+        if run_config["download_force_refresh"] or run_config["analysis_force_refresh"]:
+            reason = "force_refresh_enabled"
+            print(f"{DAG_ID}: cache gate will run ad_id={ad_id}: {reason}")
+            return {"ad_id": ad_id, "skip": False, "reason": reason}
+
+        ad_config = media_analysis_config_for_ad(
+            ad_id,
+            run_config.get("media_analysis_config_by_ad", {}),
+        )
+        partition_datetime = report_partition_datetime(
+            resolve_logical_date_from_context(get_current_context())
+        ).isoformat()
+
+        hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+        conn = hook.get_conn()
+        try:
+            status = creative_media_analysis_skip_status(
+                conn,
+                ad_id=ad_id,
+                partition_datetime=partition_datetime,
+                audio_analysis=run_config["audio_analysis"],
+                media_config=ad_config,
+            )
+        finally:
+            conn.close()
+
+        print(f"{DAG_ID}: cache gate ad_id={ad_id}: {json.dumps(status, default=str)}")
+        if status.get("skip"):
+            raise AirflowSkipException(
+                f"{DAG_ID}: Redis analysis cache and traffic rows already exist for ad_id={ad_id}"
+            )
+        return {"ad_id": ad_id, **status}
 
     @task
     def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
@@ -422,6 +463,10 @@ def meta_creative_media_analysis():
                         with TaskGroup(group_id=f"adset_{adset_id}") as adset_group:
                             for ad in ads:
                                 ad_task_id = _airflow_id(str(ad["id"]))
+                                cache_gate = skip_ad_if_already_analyzed.override(
+                                    task_id=f"skip_ad_{ad_task_id}",
+                                    show_return_value_in_logs=False,
+                                )(ad, dag_params)
                                 downloaded = download_ad_creative.override(
                                     task_id=f"download_ad_{ad_task_id}",
                                     show_return_value_in_logs=False,
@@ -429,7 +474,7 @@ def meta_creative_media_analysis():
                                 analyzed = analyze_ad_creative.override(
                                     task_id=f"analyze_ad_{ad_task_id}"
                                 )(downloaded, dag_params)
-                                downloaded >> analyzed
+                                cache_gate >> downloaded >> analyzed
                         config_task >> adset_group
                 config_task >> campaign_group
         config_task >> account_group

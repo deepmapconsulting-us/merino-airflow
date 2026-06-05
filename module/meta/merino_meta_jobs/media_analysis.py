@@ -22,6 +22,10 @@ DOWNLOAD_TIMEOUT_SEC = 300
 ANALYSIS_TIMEOUT_SEC = 600
 CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE = "marketing.creative_media_analysis_snapshot"
 CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE = "marketing.creative_media_analysis_traffic"
+AD_CREATIVE_REGISTRY_TABLE = "marketing.meta_ad_creative"
+MEDIA_ANALYSIS_REDIS_CONN_ID = "merino_redis"
+MEDIA_ANALYSIS_REDIS_META_PREFIX_ENV = "MEDIA_ANALYSIS_REDIS_META_PREFIX"
+MEDIA_ANALYSIS_REDIS_META_PREFIX_DEFAULT = "meta:meta_media_analysis"
 
 
 def _variable_get(key: str, fallback: str = "") -> str:
@@ -36,6 +40,33 @@ def _variable_get(key: str, fallback: str = "") -> str:
 def media_analysis_base_url() -> str:
     url = os.environ.get(MEDIA_ANALYSIS_URL_ENV, "").strip()
     return url or DEFAULT_BASE_URL
+
+
+def media_analysis_redis_meta_prefix() -> str:
+    return (
+        os.environ.get(MEDIA_ANALYSIS_REDIS_META_PREFIX_ENV, "").strip()
+        or MEDIA_ANALYSIS_REDIS_META_PREFIX_DEFAULT
+    )
+
+
+def media_analysis_files_cache_key(ad_id: str, media_id: str) -> str:
+    return f"{media_analysis_redis_meta_prefix()}:files:{ad_id}:{media_id}"
+
+
+def media_analysis_analysis_cache_key(ad_id: str, media_id: str) -> str:
+    return f"{media_analysis_redis_meta_prefix()}:analysis:{ad_id}:{media_id}"
+
+
+def media_analysis_redis_client() -> Any | None:
+    try:
+        from airflow.providers.redis.hooks.redis import RedisHook  # type: ignore[import-not-found]
+    except Exception:
+        return None
+
+    try:
+        return RedisHook(redis_conn_id=MEDIA_ANALYSIS_REDIS_CONN_ID).get_conn()
+    except Exception:
+        return None
 
 
 def media_preview_base_url() -> str:
@@ -280,6 +311,177 @@ def creative_media_analysis(
         body,
         timeout_sec=ANALYSIS_TIMEOUT_SEC,
     )
+
+
+def redis_json_payload(redis_client: Any, key: str) -> dict[str, Any] | None:
+    raw = redis_client.get(key)
+    if raw is None:
+        return None
+    if isinstance(raw, bytes):
+        raw = raw.decode("utf-8")
+    try:
+        payload = json.loads(str(raw))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def media_analysis_files_cache_matches(payload: dict[str, Any] | None, *, ad_id: str, media_id: str) -> bool:
+    if not payload:
+        return False
+    return str(payload.get("ad_id") or "") == ad_id and str(payload.get("video_id") or "") == media_id
+
+
+def media_analysis_cache_matches(
+    payload: dict[str, Any] | None,
+    *,
+    ad_id: str,
+    media_id: str,
+    audio_analysis: bool,
+    media_config: dict[str, Any] | None = None,
+) -> bool:
+    if not payload:
+        return False
+    if str(payload.get("ad_id") or "") != ad_id or str(payload.get("video_id") or "") != media_id:
+        return False
+    if not isinstance(payload.get("freeform_video_summary"), str):
+        return False
+    if not isinstance(payload.get("video_analysis"), dict):
+        return False
+    if audio_analysis and not isinstance(payload.get("audio_analysis"), dict):
+        return False
+    cached_config = payload.get("media_config")
+    if not isinstance(cached_config, dict):
+        cached_config = {}
+    return cached_config == (media_config or {})
+
+
+def media_analysis_registry_video_ids(conn: Any, ad_id: str) -> list[str]:
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT video_ids
+            FROM {AD_CREATIVE_REGISTRY_TABLE}
+            WHERE ad_id = %s
+              AND has_video = true
+            """,
+            (ad_id,),
+        )
+        rows = cursor.fetchall()
+
+    video_ids: list[str] = []
+    for row in rows:
+        raw_video_ids = row[0] if row else None
+        if isinstance(raw_video_ids, str):
+            try:
+                raw_video_ids = json.loads(raw_video_ids)
+            except json.JSONDecodeError:
+                raw_video_ids = []
+        if not isinstance(raw_video_ids, list):
+            continue
+        for video_id in raw_video_ids:
+            value = str(video_id or "").strip()
+            if value:
+                video_ids.append(value)
+    return sorted(set(video_ids))
+
+
+def recorded_media_analysis_video_ids(
+    conn: Any,
+    *,
+    ad_id: str,
+    partition_datetime: datetime | str,
+    video_ids: list[str],
+) -> set[str]:
+    if not video_ids:
+        return set()
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT video_id
+            FROM {CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE}
+            WHERE ad_id = %s
+              AND media_type = 'video'
+              AND partition_datetime = %s
+              AND video_id = ANY(%s)
+            """,
+            (ad_id, _partition_datetime(partition_datetime), video_ids),
+        )
+        rows = cursor.fetchall()
+    return {str(row[0]) for row in rows if row and row[0]}
+
+
+def creative_media_analysis_skip_status(
+    conn: Any,
+    *,
+    ad_id: str,
+    partition_datetime: datetime | str,
+    audio_analysis: bool,
+    media_config: dict[str, Any] | None = None,
+    redis_client: Any | None = None,
+) -> dict[str, Any]:
+    video_ids = media_analysis_registry_video_ids(conn, ad_id)
+    if not video_ids:
+        return {"skip": False, "reason": "no_registry_video_ids", "video_ids": []}
+
+    client = redis_client if redis_client is not None else media_analysis_redis_client()
+    if client is None:
+        return {"skip": False, "reason": "redis_unavailable", "video_ids": video_ids}
+
+    missing_files: list[str] = []
+    missing_analysis: list[str] = []
+    redis_keys: list[str] = []
+    for video_id in video_ids:
+        files_key = media_analysis_files_cache_key(ad_id, video_id)
+        analysis_key = media_analysis_analysis_cache_key(ad_id, video_id)
+        redis_keys.extend([files_key, analysis_key])
+        if not media_analysis_files_cache_matches(
+            redis_json_payload(client, files_key),
+            ad_id=ad_id,
+            media_id=video_id,
+        ):
+            missing_files.append(video_id)
+        if not media_analysis_cache_matches(
+            redis_json_payload(client, analysis_key),
+            ad_id=ad_id,
+            media_id=video_id,
+            audio_analysis=audio_analysis,
+            media_config=media_config,
+        ):
+            missing_analysis.append(video_id)
+
+    if missing_files or missing_analysis:
+        return {
+            "skip": False,
+            "reason": "redis_cache_missing",
+            "video_ids": video_ids,
+            "missing_files": missing_files,
+            "missing_analysis": missing_analysis,
+            "redis_keys": redis_keys,
+        }
+
+    recorded_video_ids = recorded_media_analysis_video_ids(
+        conn,
+        ad_id=ad_id,
+        partition_datetime=partition_datetime,
+        video_ids=video_ids,
+    )
+    missing_traffic = [video_id for video_id in video_ids if video_id not in recorded_video_ids]
+    if missing_traffic:
+        return {
+            "skip": False,
+            "reason": "traffic_snapshot_missing",
+            "video_ids": video_ids,
+            "missing_traffic": missing_traffic,
+            "redis_keys": redis_keys,
+        }
+
+    return {
+        "skip": True,
+        "reason": "redis_cache_and_traffic_ready",
+        "video_ids": video_ids,
+        "redis_keys": redis_keys,
+    }
 
 
 def analysis_targets_from_download(
