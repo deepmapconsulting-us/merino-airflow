@@ -394,16 +394,19 @@ def update_chinese_creative_media_analysis_snapshot(
     *,
     snapshot_id: int,
     translated_analysis: dict[str, Any],
+    translated_freeform_video_summary: str,
 ) -> None:
     analysis_json = json.dumps(translated_analysis, ensure_ascii=False, sort_keys=True)
     with conn.cursor() as cursor:
         cursor.execute(
             f"""
             UPDATE {CHINESE_CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE}
-            SET "分析结果" = %s::jsonb
+            SET
+                "分析结果" = %s::jsonb,
+                "视频自由摘要" = %s
             WHERE id = %s
             """,
-            (analysis_json, snapshot_id),
+            (analysis_json, translated_freeform_video_summary or None, snapshot_id),
         )
 
 

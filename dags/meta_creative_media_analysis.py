@@ -383,6 +383,9 @@ def meta_creative_media_analysis():
                     f"{DAG_ID}: MCP Chinese translation returned no translated_analysis "
                     f"for ad_id={ad_id} media_type={media_type} key={target_key}"
                 )
+            translated_freeform_video_summary = str(
+                translated.get("translated_freeform_video_summary") or ""
+            )
             hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
             try:
@@ -390,6 +393,7 @@ def meta_creative_media_analysis():
                     conn,
                     snapshot_id=snapshot_id,
                     translated_analysis=translated_analysis,
+                    translated_freeform_video_summary=translated_freeform_video_summary,
                 )
                 conn.commit()
             except Exception:

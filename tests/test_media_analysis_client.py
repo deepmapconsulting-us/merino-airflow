@@ -251,7 +251,8 @@ class MediaAnalysisClientTest(unittest.TestCase):
         mock_post.return_value = MagicMock(
             status_code=200,
             json=lambda: {
-                "translated_analysis": {"主题": "产品展示", "视频自由摘要": "中文摘要"},
+                "translated_analysis": {"主题": "产品展示"},
+                "translated_freeform_video_summary": "中文摘要",
                 "field_count": 2,
             },
         )
@@ -265,6 +266,7 @@ class MediaAnalysisClientTest(unittest.TestCase):
         )
 
         self.assertEqual(payload["translated_analysis"]["主题"], "产品展示")
+        self.assertEqual(payload["translated_freeform_video_summary"], "中文摘要")
         args, kwargs = mock_post.call_args
         self.assertEqual(args[0], "http://mcp.test/api/v1/translate/chinese-analysis")
         self.assertEqual(kwargs["headers"]["X-MCP-Gateway-Token"], "gw")
@@ -283,7 +285,10 @@ class MediaAnalysisClientTest(unittest.TestCase):
     ) -> None:
         mock_post.return_value = MagicMock(
             status_code=200,
-            json=lambda: {"translated_analysis": {"主题": "产品展示", "视频自由摘要": "中文摘要"}},
+            json=lambda: {
+                "translated_analysis": {"主题": "产品展示"},
+                "translated_freeform_video_summary": "中文摘要",
+            },
         )
 
         translate_creative_media_analysis_to_chinese(
@@ -710,15 +715,18 @@ class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
         update_chinese_creative_media_analysis_snapshot(
             conn,
             snapshot_id=42,
-            translated_analysis={"主题": "产品展示", "视频自由摘要": "中文摘要"},
+            translated_analysis={"主题": "产品展示"},
+            translated_freeform_video_summary="中文摘要",
         )
 
         sql, params = cursor.execute.call_args.args
         self.assertIn('marketing."创意媒体分析快照"', sql)
-        self.assertIn('SET "分析结果" = %s::jsonb', sql)
+        self.assertIn('"分析结果" = %s::jsonb', sql)
+        self.assertIn('"视频自由摘要" = %s', sql)
         self.assertIn("WHERE id = %s", sql)
         self.assertIn('"主题": "产品展示"', params[0])
-        self.assertEqual(params[1], 42)
+        self.assertEqual(params[1], "中文摘要")
+        self.assertEqual(params[2], 42)
 
 
 if __name__ == "__main__":
