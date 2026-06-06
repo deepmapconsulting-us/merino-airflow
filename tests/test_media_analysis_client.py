@@ -18,10 +18,10 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     creative_media_analysis,
     creative_media_analysis_skip_status,
     download_ad_creative_assets,
-    media_analysis_analysis_cache_key,
+    media_analysis_analyzed_creative_cache_key,
     media_analysis_base_url,
     media_analysis_cache_matches,
-    media_analysis_files_cache_key,
+    media_analysis_processed_files_cache_key,
     media_analysis_config_for_ad,
     media_analysis_headers,
     parse_media_analysis_config,
@@ -460,12 +460,12 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
     def test_cache_keys_match_mcp_prefix(self) -> None:
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(
-                media_analysis_files_cache_key("ad_1", "video_1"),
-                "meta:meta_media_analysis:files:ad_1:video_1",
+                media_analysis_processed_files_cache_key("ad_1", "video_1"),
+                "meta:meta_media_analysis:processed_files:ad_1:video_1",
             )
             self.assertEqual(
-                media_analysis_analysis_cache_key("ad_1", "video_1"),
-                "meta:meta_media_analysis:analysis:ad_1:video_1",
+                media_analysis_analyzed_creative_cache_key("ad_1", "video_1"),
+                "meta:meta_media_analysis:analyzed_creative:ad_1:video_1",
             )
 
     def test_media_analysis_cache_matches_config_and_audio_requirement(self) -> None:
@@ -509,11 +509,11 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         redis_client = MagicMock()
         redis_client.get.side_effect = lambda key: json.dumps(
             {
-                "meta:meta_media_analysis:files:ad_1:video_1": {
+                "meta:meta_media_analysis:processed_files:ad_1:video_1": {
                     "ad_id": "ad_1",
                     "video_id": "video_1",
                 },
-                "meta:meta_media_analysis:analysis:ad_1:video_1": {
+                "meta:meta_media_analysis:analyzed_creative:ad_1:video_1": {
                     "ad_id": "ad_1",
                     "video_id": "video_1",
                     "freeform_video_summary": "summary",
@@ -547,11 +547,11 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         redis_client = MagicMock()
         redis_client.get.side_effect = lambda key: json.dumps(
             {
-                "meta:meta_media_analysis:files:ad_1:video_1": {
+                "meta:meta_media_analysis:processed_files:ad_1:video_1": {
                     "ad_id": "ad_1",
                     "video_id": "video_1",
                 },
-                "meta:meta_media_analysis:analysis:ad_1:video_1": {
+                "meta:meta_media_analysis:analyzed_creative:ad_1:video_1": {
                     "ad_id": "ad_1",
                     "video_id": "video_1",
                     "freeform_video_summary": "summary",

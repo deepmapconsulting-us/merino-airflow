@@ -52,12 +52,25 @@ def media_analysis_redis_meta_prefix() -> str:
     )
 
 
-def media_analysis_files_cache_key(ad_id: str, media_id: str) -> str:
+def media_analysis_processed_files_cache_key(ad_id: str, media_id: str) -> str:
+    return f"{media_analysis_redis_meta_prefix()}:processed_files:{ad_id}:{media_id}"
+
+
+def media_analysis_analyzed_creative_cache_key(ad_id: str, media_id: str) -> str:
+    return f"{media_analysis_redis_meta_prefix()}:analyzed_creative:{ad_id}:{media_id}"
+
+
+def media_analysis_legacy_processed_files_cache_key(ad_id: str, media_id: str) -> str:
     return f"{media_analysis_redis_meta_prefix()}:files:{ad_id}:{media_id}"
 
 
-def media_analysis_analysis_cache_key(ad_id: str, media_id: str) -> str:
+def media_analysis_legacy_analyzed_creative_cache_key(ad_id: str, media_id: str) -> str:
     return f"{media_analysis_redis_meta_prefix()}:analysis:{ad_id}:{media_id}"
+
+
+# Backward-compatible aliases.
+media_analysis_files_cache_key = media_analysis_processed_files_cache_key
+media_analysis_analysis_cache_key = media_analysis_analyzed_creative_cache_key
 
 
 def media_analysis_redis_client() -> Any | None:
@@ -423,6 +436,14 @@ def redis_json_payload(redis_client: Any, key: str) -> dict[str, Any] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def redis_json_payload_for_keys(redis_client: Any, *keys: str) -> dict[str, Any] | None:
+    for key in keys:
+        payload = redis_json_payload(redis_client, key)
+        if payload is not None:
+            return payload
+    return None
+
+
 def media_analysis_files_cache_matches(payload: dict[str, Any] | None, *, ad_id: str, media_id: str) -> bool:
     if not payload:
         return False
@@ -529,17 +550,19 @@ def creative_media_analysis_skip_status(
     missing_analysis: list[str] = []
     redis_keys: list[str] = []
     for video_id in video_ids:
-        files_key = media_analysis_files_cache_key(ad_id, video_id)
-        analysis_key = media_analysis_analysis_cache_key(ad_id, video_id)
-        redis_keys.extend([files_key, analysis_key])
+        files_key = media_analysis_processed_files_cache_key(ad_id, video_id)
+        analysis_key = media_analysis_analyzed_creative_cache_key(ad_id, video_id)
+        legacy_files_key = media_analysis_legacy_processed_files_cache_key(ad_id, video_id)
+        legacy_analysis_key = media_analysis_legacy_analyzed_creative_cache_key(ad_id, video_id)
+        redis_keys.extend([files_key, analysis_key, legacy_files_key, legacy_analysis_key])
         if not media_analysis_files_cache_matches(
-            redis_json_payload(client, files_key),
+            redis_json_payload_for_keys(client, files_key, legacy_files_key),
             ad_id=ad_id,
             media_id=video_id,
         ):
             missing_files.append(video_id)
         if not media_analysis_cache_matches(
-            redis_json_payload(client, analysis_key),
+            redis_json_payload_for_keys(client, analysis_key, legacy_analysis_key),
             ad_id=ad_id,
             media_id=video_id,
             audio_analysis=audio_analysis,
