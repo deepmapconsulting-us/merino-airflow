@@ -17,6 +17,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     build_video_preview_url,
     creative_media_analysis,
     creative_media_analysis_skip_status,
+    creative_media_analysis_target_already_processed,
     download_ad_creative_assets,
     media_analysis_analyzed_creative_cache_key,
     media_analysis_base_url,
@@ -580,6 +581,72 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         self.assertFalse(status["skip"])
         self.assertEqual(status["reason"], "traffic_snapshot_missing")
         self.assertEqual(status["missing_traffic"], ["video_1"])
+
+
+class CreativeMediaAnalysisTargetAlreadyProcessedTest(unittest.TestCase):
+    def test_target_already_processed_when_redis_cache_and_traffic_exist(self) -> None:
+        redis_client = MagicMock()
+        redis_client.get.side_effect = lambda key: json.dumps(
+            {
+                "meta:meta_media_analysis:analyzed_creative:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                    "freeform_video_summary": "summary",
+                    "video_analysis": {"hook": "demo"},
+                    "audio_analysis": {"music": "upbeat"},
+                    "media_config": {},
+                },
+            }.get(key)
+        )
+
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = (1,)
+
+        ready = creative_media_analysis_target_already_processed(
+            conn,
+            ad_id="ad_1",
+            partition_datetime=datetime(2026, 6, 1, 12, tzinfo=timezone.utc),
+            media_type="video",
+            video_id="video_1",
+            image_asset_id="",
+            audio_analysis=True,
+            redis_client=redis_client,
+        )
+
+        self.assertTrue(ready)
+
+    def test_target_not_processed_when_traffic_row_missing(self) -> None:
+        redis_client = MagicMock()
+        redis_client.get.side_effect = lambda key: json.dumps(
+            {
+                "meta:meta_media_analysis:analyzed_creative:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                    "freeform_video_summary": "summary",
+                    "video_analysis": {"hook": "demo"},
+                    "audio_analysis": {"music": "upbeat"},
+                    "media_config": {},
+                },
+            }.get(key)
+        )
+
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = None
+
+        ready = creative_media_analysis_target_already_processed(
+            conn,
+            ad_id="ad_1",
+            partition_datetime=datetime(2026, 6, 1, 12, tzinfo=timezone.utc),
+            media_type="video",
+            video_id="video_1",
+            image_asset_id="",
+            audio_analysis=True,
+            redis_client=redis_client,
+        )
+
+        self.assertFalse(ready)
 
 
 class ImageGcsUriFromDownloadTest(unittest.TestCase):

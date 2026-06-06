@@ -73,6 +73,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     analysis_targets_from_download,
     creative_media_analysis,
     creative_media_analysis_skip_status,
+    creative_media_analysis_target_already_processed,
     download_ad_creative_assets,
     mcp_gateway_token,
     media_analysis_config_by_ad,
@@ -295,6 +296,39 @@ def meta_creative_media_analysis():
             if not isinstance(storage, dict):
                 continue
             target_audio_analysis = False if media_type == "image" else run_config["audio_analysis"]
+            target_key = image_asset_id if media_type == "image" else video_id
+            if not run_config["analysis_force_refresh"]:
+                hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+                conn = hook.get_conn()
+                try:
+                    already_processed = creative_media_analysis_target_already_processed(
+                        conn,
+                        ad_id=ad_id,
+                        partition_datetime=partition_datetime,
+                        media_type=media_type,
+                        video_id=video_id,
+                        image_asset_id=image_asset_id,
+                        audio_analysis=target_audio_analysis,
+                        media_config=ad_config,
+                    )
+                finally:
+                    conn.close()
+                if already_processed:
+                    print(
+                        f"{DAG_ID}: skipping ad_id={ad_id} media_type={media_type} "
+                        f"key={target_key}: analysis_cache_and_traffic_ready"
+                    )
+                    results.append(
+                        {
+                            "media_type": media_type,
+                            "video_id": video_id,
+                            "image_asset_id": image_asset_id,
+                            "already_processed": True,
+                            "from_cache": True,
+                        }
+                    )
+                    continue
+
             analysis = creative_media_analysis(
                 storage,
                 ad_id=ad_id,
@@ -309,7 +343,6 @@ def meta_creative_media_analysis():
                 log_generation_input=run_config["log_generation_input"],
                 config=ad_config,
             )
-            target_key = image_asset_id if media_type == "image" else video_id
             if analysis.get("skipped"):
                 warning = str(analysis.get("warning") or "analysis skipped")
                 print(
@@ -339,6 +372,78 @@ def meta_creative_media_analysis():
                     video_id=video_id,
                 )
             preview_url = build_video_preview_url(gcs_uri) if gcs_uri else None
+            from_cache = bool(analysis.get("from_cache"))
+
+            if from_cache:
+                hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
+                conn = hook.get_conn()
+                try:
+                    already_processed = creative_media_analysis_target_already_processed(
+                        conn,
+                        ad_id=ad_id,
+                        partition_datetime=partition_datetime,
+                        media_type=media_type,
+                        video_id=video_id,
+                        image_asset_id=image_asset_id,
+                        audio_analysis=target_audio_analysis,
+                        media_config=ad_config,
+                    )
+                    if already_processed:
+                        print(
+                            f"{DAG_ID}: skipping ad_id={ad_id} media_type={media_type} "
+                            f"key={target_key}: cached_analysis_and_traffic_ready"
+                        )
+                        results.append(
+                            {
+                                "media_type": media_type,
+                                "video_id": video_id,
+                                "image_asset_id": image_asset_id,
+                                "already_processed": True,
+                                "from_cache": True,
+                                "redis_key": analysis.get("redis_key"),
+                            }
+                        )
+                        continue
+
+                    snapshot_id = upsert_creative_media_analysis(
+                        conn,
+                        campaign_id=campaign_id,
+                        adset_id=adset_id,
+                        ad_id=ad_id,
+                        creative_id=target_creative_id,
+                        video_id=video_id,
+                        media_type=media_type,
+                        image_asset_id=image_asset_id,
+                        partition_datetime=partition_datetime,
+                        analysis=analysis,
+                        video_gcs_uri=gcs_uri if media_type == "video" else None,
+                        video_preview_url=preview_url if media_type == "video" else None,
+                        image_gcs_uri=gcs_uri if media_type == "image" else None,
+                        image_preview_url=preview_url if media_type == "image" else None,
+                    )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
+                finally:
+                    conn.close()
+
+                print(
+                    f"{DAG_ID}: linked cached analysis for ad_id={ad_id} media_type={media_type} "
+                    f"key={target_key} snapshot_id={snapshot_id}; skipping Chinese translation"
+                )
+                results.append(
+                    {
+                        "media_type": media_type,
+                        "video_id": video_id,
+                        "image_asset_id": image_asset_id,
+                        "from_cache": True,
+                        "translation_skipped": True,
+                        "redis_key": analysis.get("redis_key"),
+                        "snapshot_id": snapshot_id,
+                    }
+                )
+                continue
 
             hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
@@ -402,7 +507,6 @@ def meta_creative_media_analysis():
             finally:
                 conn.close()
 
-            from_cache = bool(analysis.get("from_cache"))
             print(
                 f"{DAG_ID}: analyzed ad_id={ad_id} media_type={media_type} key={target_key} "
                 f"from_cache={from_cache} snapshot_id={snapshot_id} "

@@ -529,6 +529,64 @@ def recorded_media_analysis_video_ids(
     return {str(row[0]) for row in rows if row and row[0]}
 
 
+def creative_media_analysis_target_already_processed(
+    conn: Any,
+    *,
+    ad_id: str,
+    partition_datetime: datetime | str,
+    media_type: str,
+    video_id: str,
+    image_asset_id: str,
+    audio_analysis: bool,
+    media_config: dict[str, Any] | None = None,
+    redis_client: Any | None = None,
+) -> bool:
+    """True when MCP Redis analysis cache and the partition traffic row both exist."""
+    media_id = image_asset_id if media_type == "image" else video_id
+    if not media_id:
+        return False
+
+    client = redis_client if redis_client is not None else media_analysis_redis_client()
+    if client is None:
+        return False
+
+    cached = redis_json_payload_for_keys(
+        client,
+        media_analysis_analyzed_creative_cache_key(ad_id, media_id),
+        media_analysis_legacy_analyzed_creative_cache_key(ad_id, media_id),
+    )
+    if not media_analysis_cache_matches(
+        cached,
+        ad_id=ad_id,
+        media_id=media_id,
+        audio_analysis=audio_analysis,
+        media_config=media_config,
+    ):
+        return False
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            f"""
+            SELECT 1
+            FROM {CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE}
+            WHERE ad_id = %s
+              AND media_type = %s
+              AND partition_datetime = %s
+              AND video_id = %s
+              AND image_asset_id = %s
+            LIMIT 1
+            """,
+            (
+                ad_id,
+                media_type,
+                _partition_datetime(partition_datetime),
+                video_id,
+                image_asset_id,
+            ),
+        )
+        return cursor.fetchone() is not None
+
+
 def creative_media_analysis_skip_status(
     conn: Any,
     *,
