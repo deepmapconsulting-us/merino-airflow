@@ -506,7 +506,7 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
             )
         )
 
-    def test_skip_status_requires_redis_cache_and_current_traffic_row(self) -> None:
+    def test_skip_status_skips_when_redis_cache_ready(self) -> None:
         redis_client = MagicMock()
         redis_client.get.side_effect = lambda key: json.dumps(
             {
@@ -529,7 +529,6 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         cursor = conn.cursor.return_value.__enter__.return_value
         cursor.fetchall.side_effect = [
             [(["video_1"],)],
-            [("video_1",)],
         ]
 
         status = creative_media_analysis_skip_status(
@@ -541,17 +540,13 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         )
 
         self.assertTrue(status["skip"])
-        self.assertEqual(status["reason"], "redis_cache_and_traffic_ready")
+        self.assertEqual(status["reason"], "redis_cache_ready")
         self.assertEqual(status["video_ids"], ["video_1"])
 
-    def test_skip_status_runs_when_current_traffic_row_is_missing(self) -> None:
+    def test_skip_status_runs_when_redis_cache_missing(self) -> None:
         redis_client = MagicMock()
         redis_client.get.side_effect = lambda key: json.dumps(
             {
-                "meta:meta_media_analysis:processed_files:ad_1:video_1": {
-                    "ad_id": "ad_1",
-                    "video_id": "video_1",
-                },
                 "meta:meta_media_analysis:analyzed_creative:ad_1:video_1": {
                     "ad_id": "ad_1",
                     "video_id": "video_1",
@@ -567,7 +562,6 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         cursor = conn.cursor.return_value.__enter__.return_value
         cursor.fetchall.side_effect = [
             [(["video_1"],)],
-            [],
         ]
 
         status = creative_media_analysis_skip_status(
@@ -579,12 +573,41 @@ class MediaAnalysisRedisSkipTest(unittest.TestCase):
         )
 
         self.assertFalse(status["skip"])
-        self.assertEqual(status["reason"], "traffic_snapshot_missing")
-        self.assertEqual(status["missing_traffic"], ["video_1"])
+        self.assertEqual(status["reason"], "redis_cache_missing")
+        self.assertEqual(status["missing_files"], ["video_1"])
+
+    def test_skip_status_runs_when_analysis_cache_missing(self) -> None:
+        redis_client = MagicMock()
+        redis_client.get.side_effect = lambda key: json.dumps(
+            {
+                "meta:meta_media_analysis:processed_files:ad_1:video_1": {
+                    "ad_id": "ad_1",
+                    "video_id": "video_1",
+                },
+            }.get(key)
+        )
+
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchall.side_effect = [
+            [(["video_1"],)],
+        ]
+
+        status = creative_media_analysis_skip_status(
+            conn,
+            ad_id="ad_1",
+            partition_datetime=datetime(2026, 6, 1, 12, tzinfo=timezone.utc),
+            audio_analysis=True,
+            redis_client=redis_client,
+        )
+
+        self.assertFalse(status["skip"])
+        self.assertEqual(status["reason"], "redis_cache_missing")
+        self.assertEqual(status["missing_analysis"], ["video_1"])
 
 
 class CreativeMediaAnalysisTargetAlreadyProcessedTest(unittest.TestCase):
-    def test_target_already_processed_when_redis_cache_and_traffic_exist(self) -> None:
+    def test_target_already_processed_when_redis_cache_exists(self) -> None:
         redis_client = MagicMock()
         redis_client.get.side_effect = lambda key: json.dumps(
             {
@@ -600,8 +623,6 @@ class CreativeMediaAnalysisTargetAlreadyProcessedTest(unittest.TestCase):
         )
 
         conn = MagicMock()
-        cursor = conn.cursor.return_value.__enter__.return_value
-        cursor.fetchone.return_value = (1,)
 
         ready = creative_media_analysis_target_already_processed(
             conn,
@@ -616,24 +637,11 @@ class CreativeMediaAnalysisTargetAlreadyProcessedTest(unittest.TestCase):
 
         self.assertTrue(ready)
 
-    def test_target_not_processed_when_traffic_row_missing(self) -> None:
+    def test_target_not_processed_when_redis_cache_missing(self) -> None:
         redis_client = MagicMock()
-        redis_client.get.side_effect = lambda key: json.dumps(
-            {
-                "meta:meta_media_analysis:analyzed_creative:ad_1:video_1": {
-                    "ad_id": "ad_1",
-                    "video_id": "video_1",
-                    "freeform_video_summary": "summary",
-                    "video_analysis": {"hook": "demo"},
-                    "audio_analysis": {"music": "upbeat"},
-                    "media_config": {},
-                },
-            }.get(key)
-        )
+        redis_client.get.return_value = None
 
         conn = MagicMock()
-        cursor = conn.cursor.return_value.__enter__.return_value
-        cursor.fetchone.return_value = None
 
         ready = creative_media_analysis_target_already_processed(
             conn,

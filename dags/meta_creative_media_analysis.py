@@ -159,7 +159,7 @@ def meta_creative_media_analysis():
         print(f"{DAG_ID}: no creative media analysis tasks were created")
 
     @task
-    def download_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
+    def download_and_analyze_ad_creative(ad: dict[str, Any], run_config: dict[str, Any]) -> dict[str, Any]:
         from airflow.exceptions import AirflowSkipException  # type: ignore[import-not-found]
         from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
         from airflow.sdk import get_current_context  # type: ignore[import-not-found]
@@ -169,12 +169,12 @@ def meta_creative_media_analysis():
             ad_id,
             run_config.get("media_analysis_config_by_ad", {}),
         )
+        partition_datetime = report_partition_datetime(
+            resolve_logical_date_from_context(get_current_context())
+        ).isoformat()
         if run_config["download_force_refresh"] or run_config["analysis_force_refresh"]:
             print(f"{DAG_ID}: cache gate will run ad_id={ad_id}: force_refresh_enabled")
         else:
-            partition_datetime = report_partition_datetime(
-                resolve_logical_date_from_context(get_current_context())
-            ).isoformat()
             hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
             conn = hook.get_conn()
             try:
@@ -191,7 +191,7 @@ def meta_creative_media_analysis():
             print(f"{DAG_ID}: cache gate ad_id={ad_id}: {json.dumps(status, default=str)}")
             if status.get("skip"):
                 raise AirflowSkipException(
-                    f"{DAG_ID}: Redis analysis cache and traffic rows already exist for ad_id={ad_id}"
+                    f"{DAG_ID}: Redis download + analysis cache already exist for ad_id={ad_id}"
                 )
 
         base_url = media_analysis_base_url()
@@ -230,29 +230,10 @@ def meta_creative_media_analysis():
             "cache_hits": [str(v) for v in cache_hits],
         }
         _print_download_gcs_links(ad_id, payload)
-        return result
-
-    @task
-    def analyze_ad_creative(
-        download_result: dict[str, Any], run_config: dict[str, Any]
-    ) -> dict[str, Any]:
-        from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
-        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
-
-        ad_id = str(download_result.get("ad_id") or "")
-        ad_config = media_analysis_config_for_ad(
-            ad_id,
-            run_config.get("media_analysis_config_by_ad", {}),
-        )
-        download_payload = download_result.get("download")
-        if not isinstance(download_payload, dict):
-            raise RuntimeError(f"download_ad_creative missing download payload for ad_id={ad_id}")
+        download_payload = result["download"]
 
         campaign_id = str(download_payload.get("campaign_id") or "")
         adset_id = str(download_payload.get("adset_id") or "")
-        partition_datetime = report_partition_datetime(
-            resolve_logical_date_from_context(get_current_context())
-        ).isoformat()
         targets = analysis_targets_from_download(download_payload, config=ad_config)
         creative_id = str(download_payload.get("creative_id") or "")
         if not targets:
@@ -316,7 +297,7 @@ def meta_creative_media_analysis():
                 if already_processed:
                     print(
                         f"{DAG_ID}: skipping ad_id={ad_id} media_type={media_type} "
-                        f"key={target_key}: analysis_cache_and_traffic_ready"
+                        f"key={target_key}: analysis_redis_cache_ready"
                     )
                     results.append(
                         {
@@ -391,7 +372,7 @@ def meta_creative_media_analysis():
                     if already_processed:
                         print(
                             f"{DAG_ID}: skipping ad_id={ad_id} media_type={media_type} "
-                            f"key={target_key}: cached_analysis_and_traffic_ready"
+                            f"key={target_key}: cached_analysis_redis_ready"
                         )
                         results.append(
                             {
@@ -595,14 +576,10 @@ def meta_creative_media_analysis():
                         with TaskGroup(group_id=f"adset_{adset_id}") as adset_group:
                             for ad in ads:
                                 ad_task_id = _airflow_id(str(ad["id"]))
-                                downloaded = download_ad_creative.override(
-                                    task_id=f"download_ad_{ad_task_id}",
+                                download_and_analyze_ad_creative.override(
+                                    task_id=f"download_and_analyze_ad_{ad_task_id}",
                                     show_return_value_in_logs=False,
                                 )(ad, dag_params)
-                                analyzed = analyze_ad_creative.override(
-                                    task_id=f"analyze_ad_{ad_task_id}"
-                                )(downloaded, dag_params)
-                                downloaded >> analyzed
                         config_task >> adset_group
                 config_task >> campaign_group
         config_task >> account_group

@@ -541,7 +541,7 @@ def creative_media_analysis_target_already_processed(
     media_config: dict[str, Any] | None = None,
     redis_client: Any | None = None,
 ) -> bool:
-    """True when MCP Redis analysis cache and the partition traffic row both exist."""
+    """True when MCP Redis analysis cache exists for this ad + media id."""
     media_id = image_asset_id if media_type == "image" else video_id
     if not media_id:
         return False
@@ -555,36 +555,13 @@ def creative_media_analysis_target_already_processed(
         media_analysis_analyzed_creative_cache_key(ad_id, media_id),
         media_analysis_legacy_analyzed_creative_cache_key(ad_id, media_id),
     )
-    if not media_analysis_cache_matches(
+    return media_analysis_cache_matches(
         cached,
         ad_id=ad_id,
         media_id=media_id,
         audio_analysis=audio_analysis,
         media_config=media_config,
-    ):
-        return False
-
-    with conn.cursor() as cursor:
-        cursor.execute(
-            f"""
-            SELECT 1
-            FROM {CREATIVE_MEDIA_ANALYSIS_TRAFFIC_TABLE}
-            WHERE ad_id = %s
-              AND media_type = %s
-              AND partition_datetime = %s
-              AND video_id = %s
-              AND image_asset_id = %s
-            LIMIT 1
-            """,
-            (
-                ad_id,
-                media_type,
-                _partition_datetime(partition_datetime),
-                video_id,
-                image_asset_id,
-            ),
-        )
-        return cursor.fetchone() is not None
+    )
 
 
 def creative_media_analysis_skip_status(
@@ -638,25 +615,9 @@ def creative_media_analysis_skip_status(
             "redis_keys": redis_keys,
         }
 
-    recorded_video_ids = recorded_media_analysis_video_ids(
-        conn,
-        ad_id=ad_id,
-        partition_datetime=partition_datetime,
-        video_ids=video_ids,
-    )
-    missing_traffic = [video_id for video_id in video_ids if video_id not in recorded_video_ids]
-    if missing_traffic:
-        return {
-            "skip": False,
-            "reason": "traffic_snapshot_missing",
-            "video_ids": video_ids,
-            "missing_traffic": missing_traffic,
-            "redis_keys": redis_keys,
-        }
-
     return {
         "skip": True,
-        "reason": "redis_cache_and_traffic_ready",
+        "reason": "redis_cache_ready",
         "video_ids": video_ids,
         "redis_keys": redis_keys,
     }
