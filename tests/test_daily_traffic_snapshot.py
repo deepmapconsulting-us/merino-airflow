@@ -300,6 +300,9 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
             repo.parents[0] / "metabase_schema" / "schema" / "meta_ad_region_daily_snapshot.sql"
         ).read_text()
         dag_py = (repo / "dags" / "meta_traffic_snapshot.py").read_text()
+        row_module_py = (
+            repo / "module" / "meta" / "merino_meta_jobs" / "traffic_snapshot_rows.py"
+        ).read_text()
 
         self.assertNotIn("snapshot_run_id,\n        source_account_id", schema_sql)
         self.assertIn("report_date,\n        source_account_id", schema_sql)
@@ -321,9 +324,9 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
         self.assertIn("pull_campaign_region_snapshots", dag_py)
         self.assertIn("pull_adset_region_snapshots", dag_py)
         self.assertIn("pull_ad_region_snapshots", dag_py)
-        self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", dag_py)
-        self.assertIn("update_count = target.update_count + 1", dag_py)
-        self.assertIn('f"target.{column} IS DISTINCT FROM EXCLUDED.{column}"', dag_py)
+        self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", row_module_py)
+        self.assertIn("update_count = target.update_count + 1", row_module_py)
+        self.assertIn('f"target.{column} IS DISTINCT FROM EXCLUDED.{column}"', row_module_py)
 
     def test_daily_active_status_can_be_hybrid(self) -> None:
         active_snapshot = {

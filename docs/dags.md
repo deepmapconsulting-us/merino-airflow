@@ -85,6 +85,7 @@ flowchart TB
 | Dimensions | [`meta_object_property_sync`](../dags/meta_object_property_sync.py) | Postgres `marketing.meta_campaign`, `meta_adset`, `meta_ad`, `meta_adset_config`, `meta_ad_creative` |
 | Hourly metrics | [`meta_ad_hourly_metric`](../dags/meta_ad_hourly_metric.py) | Postgres `marketing.meta_ad_hourly_metric` |
 | Daily snapshots | [`meta_traffic_snapshot`](../dags/meta_traffic_snapshot.py) | Postgres `marketing.meta_*_daily_snapshot`, `meta_*_region_daily_snapshot`, `meta_ad_gender_age_daily_snapshot` |
+| Backfills | [`meta_region_snapshot_backfill`](../dags/meta_region_snapshot_backfill.py), [`meta_campaign_config_backfill`](../dags/meta_campaign_config_backfill.py) | Region snapshot backfill rows, GCS config inventory report |
 | Media analysis | [`meta_creative_media_analysis`](../dags/meta_creative_media_analysis.py) | GCS `meta_analysis/...` via MCP, Postgres `marketing.creative_media_analysis_*` |
 
 ---
@@ -190,11 +191,88 @@ flowchart TB
 | `pull_ad_region_snapshots` → `write_ad_region_snapshots` | `marketing.meta_ad_region_daily_snapshot` |
 | `pull_ad_gender_age_snapshots` → `write_ad_gender_age_snapshots` | `marketing.meta_ad_gender_age_daily_snapshot` |
 
-Same external sensors as hourly metrics (`sync_object_properties` only).
+### 6. `meta_campaign_config_backfill`
+
+**Code:** [`dags/meta_campaign_config_backfill.py`](../dags/meta_campaign_config_backfill.py)  
+**Schedule:** manual (`schedule=None`)  
+**Module:** [`campaign_config_backfill.py`](../module/meta/merino_meta_jobs/campaign_config_backfill.py)
+
+Reads every historical `facebook_campaign_config_update/.../snapshot.json` from GCS,
+builds per-snapshot campaign/adset/ad counts, and writes a union inventory report to
+`gs://airflow-run-us-west2/meta_campaign_config_backfill/<date>/<datetime>/snapshot.json`.
+
+Use this before metric backfills: dimension tables `marketing.meta_campaign` /
+`meta_adset` / `meta_ad` only store the latest object state, not historical status
+timelines. Optional env: `CAMPAIGN_CONFIG_BACKFILL_MAX_SNAPSHOTS` to limit scan size.
 
 ---
 
-### 5. `meta_creative_media_analysis`
+### 7. `meta_region_snapshot_backfill`
+
+**Code:** [`dags/meta_region_snapshot_backfill.py`](../dags/meta_region_snapshot_backfill.py)  
+**Schedule:** manual (`schedule=None`)  
+**Module:** [`region_snapshot_backfill.py`](../module/meta/merino_meta_jobs/region_snapshot_backfill.py)
+
+Backfills Meta `region` breakdown tables from the dimension tables:
+
+- `marketing.meta_campaign_region_daily_snapshot`
+- `marketing.meta_adset_region_daily_snapshot`
+- `marketing.meta_ad_region_daily_snapshot`
+
+Run `meta_object_property_sync` once with Airflow Variable
+`meta_object_property_full_init=true` before large backfills. That populates
+`marketing.meta_campaign.start_time` / `stop_time` and
+`marketing.meta_adset.start_time` / `end_time`, which the planner uses to avoid
+pulling every entity for every day.
+
+Manual DAG conf:
+
+```json
+{
+  "start_date": "2026-01-01",
+  "end_date": "2026-06-10",
+  "account_ids": ["act_4157857287789311"],
+  "levels": ["campaign", "adset", "ad"],
+  "force": false
+}
+```
+
+Planning rules:
+
+- `force=false` skips entity/date pairs that already exist in the region target table.
+- Campaign batches are grouped by account/date.
+- Adset and ad batches are grouped by account/campaign/date.
+- Chunk sizes default to 50 and can be changed with
+  `META_REGION_BACKFILL_CAMPAIGN_CHUNK_SIZE`,
+  `META_REGION_BACKFILL_ADSET_CHUNK_SIZE`, and
+  `META_REGION_BACKFILL_AD_CHUNK_SIZE`.
+
+Validation queries:
+
+```sql
+SELECT report_date, COUNT(*) AS rows
+FROM marketing.meta_campaign_region_daily_snapshot
+GROUP BY report_date
+ORDER BY report_date;
+
+SELECT report_date, COUNT(*) AS rows
+FROM marketing.meta_adset_region_daily_snapshot
+GROUP BY report_date
+ORDER BY report_date;
+
+SELECT report_date, COUNT(*) AS rows
+FROM marketing.meta_ad_region_daily_snapshot
+GROUP BY report_date
+ORDER BY report_date;
+```
+
+`start_time` / `stop_time` are schedule fields, not exact pause/unpause history.
+If a planned entity did not deliver on a date, Meta Insights returns no region
+rows and the upsert writes nothing.
+
+---
+
+### 8. `meta_creative_media_analysis`
 
 **Code:** [`dags/meta_creative_media_analysis.py`](../dags/meta_creative_media_analysis.py)  
 **Schedule:** `0 3 * * *` (daily 03:00 Pacific)  
