@@ -305,6 +305,89 @@ def ad_daily_snapshot(
     return _daily_snapshot(account_id, metric_date, insights, campaign_id=campaign_id)
 
 
+def campaign_region_daily_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch campaign-level daily insights with region breakdown."""
+    account_id = ensure_act_prefix(account_id)
+    if not campaign_ids:
+        return _empty_daily_snapshot(account_id, metric_date)
+
+    client = MetaGraphClient(access_token)
+    params = _insight_params(
+        level="campaign",
+        fields=CAMPAIGN_INSIGHT_FIELDS,
+        metric_date=metric_date,
+        page_limit=page_limit,
+        id_field="campaign.id",
+        ids=campaign_ids,
+    )
+    params["breakdowns"] = "region"
+    insights = client.get_all(f"{account_id}/insights", params)
+    return _daily_snapshot(account_id, metric_date, insights)
+
+
+def adset_region_daily_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_id: str,
+    adset_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch adset-level daily insights with region breakdown."""
+    account_id = ensure_act_prefix(account_id)
+    if not adset_ids:
+        return _empty_daily_snapshot(account_id, metric_date, campaign_id=campaign_id)
+
+    client = MetaGraphClient(access_token)
+    params = _insight_params(
+        level="adset",
+        fields=ADSET_INSIGHT_FIELDS,
+        metric_date=metric_date,
+        page_limit=page_limit,
+        id_field="adset.id",
+        ids=adset_ids,
+    )
+    params["breakdowns"] = "region"
+    insights = client.get_all(f"{campaign_id}/insights", params)
+    return _daily_snapshot(account_id, metric_date, insights, campaign_id=campaign_id)
+
+
+def ad_region_daily_snapshot(
+    access_token: str,
+    account_id: str,
+    campaign_id: str,
+    ad_ids: list[str],
+    metric_date: str,
+    *,
+    page_limit: int = 500,
+) -> dict[str, Any]:
+    """Fetch ad-level daily insights with region breakdown."""
+    account_id = ensure_act_prefix(account_id)
+    if not ad_ids:
+        return _empty_daily_snapshot(account_id, metric_date, campaign_id=campaign_id)
+
+    client = MetaGraphClient(access_token)
+    params = _insight_params(
+        level="ad",
+        fields=AD_INSIGHT_FIELDS,
+        metric_date=metric_date,
+        page_limit=page_limit,
+        id_field="ad.id",
+        ids=ad_ids,
+    )
+    params["breakdowns"] = "region"
+    insights = client.get_all(f"{campaign_id}/insights", params)
+    return _daily_snapshot(account_id, metric_date, insights, campaign_id=campaign_id)
+
+
 def ad_gender_age_daily_snapshot(
     access_token: str,
     account_id: str,

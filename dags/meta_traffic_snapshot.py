@@ -51,8 +51,11 @@ from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-
     ad_daily_snapshot,
     ad_gender_age_daily_snapshot,
     ad_ids_from_config,
+    ad_region_daily_snapshot,
     adset_daily_snapshot,
+    adset_region_daily_snapshot,
     campaign_daily_snapshot,
+    campaign_region_daily_snapshot,
     insight_metric_values,
     traffic_accounts_from_config,
 )
@@ -68,8 +71,11 @@ COMPANY = "merino"
 PLATFORM = "meta"
 SOURCE = "facebook"
 CAMPAIGN_DAILY_TABLE = "marketing.meta_campaign_daily_snapshot"
+CAMPAIGN_REGION_DAILY_TABLE = "marketing.meta_campaign_region_daily_snapshot"
 ADSET_DAILY_TABLE = "marketing.meta_adset_daily_snapshot"
+ADSET_REGION_DAILY_TABLE = "marketing.meta_adset_region_daily_snapshot"
 AD_DAILY_TABLE = "marketing.meta_ad_daily_snapshot"
+AD_REGION_DAILY_TABLE = "marketing.meta_ad_region_daily_snapshot"
 AD_GENDER_AGE_DAILY_TABLE = "marketing.meta_ad_gender_age_daily_snapshot"
 JSON_COLUMNS = {
     "actions",
@@ -124,10 +130,26 @@ BASE_INSERT_COLUMNS = (
     "campaign_name",
 )
 CAMPAIGN_INSERT_COLUMNS = (*BASE_INSERT_COLUMNS, "attribution_window", "active_status", *METRIC_COLUMNS)
+CAMPAIGN_REGION_INSERT_COLUMNS = (
+    *BASE_INSERT_COLUMNS,
+    "region",
+    "attribution_window",
+    "active_status",
+    *METRIC_COLUMNS,
+)
 ADSET_INSERT_COLUMNS = (
     *BASE_INSERT_COLUMNS,
     "adset_id",
     "adset_name",
+    "attribution_window",
+    "active_status",
+    *METRIC_COLUMNS,
+)
+ADSET_REGION_INSERT_COLUMNS = (
+    *BASE_INSERT_COLUMNS,
+    "adset_id",
+    "adset_name",
+    "region",
     "attribution_window",
     "active_status",
     *METRIC_COLUMNS,
@@ -144,10 +166,30 @@ AD_INSERT_COLUMNS = (
     "active_status",
     *METRIC_COLUMNS,
 )
+AD_REGION_INSERT_COLUMNS = (
+    *BASE_INSERT_COLUMNS,
+    "adset_id",
+    "adset_name",
+    "ad_id",
+    "ad_name",
+    "creative_id",
+    "creative_name",
+    "region",
+    "attribution_window",
+    "active_status",
+    *METRIC_COLUMNS,
+)
 CAMPAIGN_CONFLICT_COLUMNS = (
     "report_date",
     "source_account_id",
     "campaign_id",
+    "(COALESCE(attribution_window, ''))",
+)
+CAMPAIGN_REGION_CONFLICT_COLUMNS = (
+    "report_date",
+    "source_account_id",
+    "campaign_id",
+    "region",
     "(COALESCE(attribution_window, ''))",
 )
 ADSET_CONFLICT_COLUMNS = (
@@ -157,12 +199,29 @@ ADSET_CONFLICT_COLUMNS = (
     "adset_id",
     "(COALESCE(attribution_window, ''))",
 )
+ADSET_REGION_CONFLICT_COLUMNS = (
+    "report_date",
+    "source_account_id",
+    "campaign_id",
+    "adset_id",
+    "region",
+    "(COALESCE(attribution_window, ''))",
+)
 AD_CONFLICT_COLUMNS = (
     "report_date",
     "source_account_id",
     "campaign_id",
     "adset_id",
     "ad_id",
+    "(COALESCE(attribution_window, ''))",
+)
+AD_REGION_CONFLICT_COLUMNS = (
+    "report_date",
+    "source_account_id",
+    "campaign_id",
+    "adset_id",
+    "ad_id",
+    "region",
     "(COALESCE(attribution_window, ''))",
 )
 AD_GENDER_AGE_INSERT_COLUMNS = (
@@ -281,6 +340,58 @@ def meta_traffic_snapshot():
         return {"level": "campaign", "row_count": len(rows), "account_id": account["id"]}
 
     @task
+    def pull_campaign_region_snapshots(account: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        access_token = meta_access_token()
+        context = get_current_context()
+        page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
+        campaign_ids = [campaign["id"] for campaign in account.get("campaigns", []) if campaign.get("id")]
+        snapshots = [
+            campaign_region_daily_snapshot(
+                access_token,
+                account["id"],
+                campaign_ids,
+                report_date,
+                page_limit=page_limit,
+            )
+            for report_date in _report_dates(_context_logical_date(context))
+        ]
+        for snapshot in snapshots:
+            snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+        print(
+            f"{DAG_ID}: pulled {sum(len(snapshot['insights']) for snapshot in snapshots)} "
+            f"campaign region daily rows for account={account['id']}"
+        )
+        return {"snapshots": snapshots}
+
+    @task
+    def write_campaign_region_snapshots(
+        campaign_region_snapshots: dict[str, Any],
+        account: dict[str, Any],
+    ) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        context = get_current_context()
+        snapshot_run_id = _snapshot_run_id(context["run_id"], "campaign_region", account["id"])
+        report_date = _snapshot_report_date(_context_logical_date(context))
+        status_resolver = _daily_status_resolver()
+        rows = [
+            _campaign_region_row(snapshot, insight, account, snapshot_run_id, report_date, status_resolver)
+            for snapshot in campaign_region_snapshots.get("snapshots", [])
+            for insight in snapshot.get("insights", [])
+            if insight.get("campaign_id") and insight.get("region")
+        ]
+        _upsert_daily_rows(
+            CAMPAIGN_REGION_DAILY_TABLE,
+            CAMPAIGN_REGION_INSERT_COLUMNS,
+            CAMPAIGN_REGION_CONFLICT_COLUMNS,
+            rows,
+        )
+        print(f"{DAG_ID}: upserted {len(rows)} campaign region daily rows for account={account['id']}")
+        return {"level": "campaign_region", "row_count": len(rows), "account_id": account["id"]}
+
+    @task
     def pull_adset_snapshots(
         account: dict[str, Any],
         campaign: dict[str, Any],
@@ -335,6 +446,67 @@ def meta_traffic_snapshot():
             f"account={account['id']} campaign={campaign['id']}"
         )
         return {"level": "adset", "row_count": len(rows), "account_id": account["id"], "campaign_id": campaign["id"]}
+
+    @task
+    def pull_adset_region_snapshots(
+        account: dict[str, Any],
+        campaign: dict[str, Any],
+        source: dict[str, Any],
+    ) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        access_token = meta_access_token()
+        context = get_current_context()
+        page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
+        adset_ids = [adset["id"] for adset in campaign.get("adsets", []) if adset.get("id")]
+        snapshots = [
+            adset_region_daily_snapshot(
+                access_token,
+                account["id"],
+                campaign["id"],
+                adset_ids,
+                report_date,
+                page_limit=page_limit,
+            )
+            for report_date in _report_dates(_context_logical_date(context))
+        ]
+        for snapshot in snapshots:
+            snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+        print(
+            f"{DAG_ID}: pulled {sum(len(snapshot['insights']) for snapshot in snapshots)} "
+            f"adset region daily rows for account={account['id']} campaign={campaign['id']}"
+        )
+        return {"snapshots": snapshots}
+
+    @task
+    def write_adset_region_snapshots(
+        adset_region_snapshots: dict[str, Any],
+        account: dict[str, Any],
+        campaign: dict[str, Any],
+    ) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        context = get_current_context()
+        snapshot_run_id = _snapshot_run_id(context["run_id"], "adset_region", account["id"], campaign["id"])
+        report_date = _snapshot_report_date(_context_logical_date(context))
+        status_resolver = _daily_status_resolver()
+        rows = [
+            _adset_region_row(snapshot, insight, account, campaign, snapshot_run_id, report_date, status_resolver)
+            for snapshot in adset_region_snapshots.get("snapshots", [])
+            for insight in snapshot.get("insights", [])
+            if insight.get("adset_id") and insight.get("region")
+        ]
+        _upsert_daily_rows(
+            ADSET_REGION_DAILY_TABLE,
+            ADSET_REGION_INSERT_COLUMNS,
+            ADSET_REGION_CONFLICT_COLUMNS,
+            rows,
+        )
+        print(
+            f"{DAG_ID}: upserted {len(rows)} adset region daily rows for "
+            f"account={account['id']} campaign={campaign['id']}"
+        )
+        return {"level": "adset_region", "row_count": len(rows), "account_id": account["id"], "campaign_id": campaign["id"]}
 
     @task
     def pull_ad_snapshots(
@@ -396,6 +568,76 @@ def meta_traffic_snapshot():
             f"account={account['id']} campaign={campaign['id']}"
         )
         return {"level": "ad", "row_count": len(rows), "account_id": account["id"], "campaign_id": campaign["id"]}
+
+    @task
+    def pull_ad_region_snapshots(
+        account: dict[str, Any],
+        campaign: dict[str, Any],
+        source: dict[str, Any],
+    ) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        access_token = meta_access_token()
+        context = get_current_context()
+        page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
+        ad_ids = [
+            ad_id
+            for adset in campaign.get("adsets", [])
+            for ad_id in ad_ids_from_config(adset)
+        ]
+        snapshots = [
+            ad_region_daily_snapshot(
+                access_token,
+                account["id"],
+                campaign["id"],
+                ad_ids,
+                report_date,
+                page_limit=page_limit,
+            )
+            for report_date in _report_dates(_context_logical_date(context))
+        ]
+        for snapshot in snapshots:
+            snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+        print(
+            f"{DAG_ID}: pulled {sum(len(snapshot['insights']) for snapshot in snapshots)} "
+            f"ad region daily rows for account={account['id']} campaign={campaign['id']}"
+        )
+        return {"snapshots": snapshots}
+
+    @task
+    def write_ad_region_snapshots(
+        ad_region_snapshots: dict[str, Any],
+        account: dict[str, Any],
+        campaign: dict[str, Any],
+    ) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        context = get_current_context()
+        snapshot_run_id = _snapshot_run_id(context["run_id"], "ad_region", account["id"], campaign["id"])
+        report_date = _snapshot_report_date(_context_logical_date(context))
+        adset_by_ad_id = _adset_by_ad_id(campaign)
+        status_resolver = _daily_status_resolver()
+        rows = [
+            _ad_region_row(
+                snapshot,
+                insight,
+                account,
+                campaign,
+                adset_by_ad_id,
+                snapshot_run_id,
+                report_date,
+                status_resolver,
+            )
+            for snapshot in ad_region_snapshots.get("snapshots", [])
+            for insight in snapshot.get("insights", [])
+            if insight.get("ad_id") in adset_by_ad_id and insight.get("region")
+        ]
+        _upsert_daily_rows(AD_REGION_DAILY_TABLE, AD_REGION_INSERT_COLUMNS, AD_REGION_CONFLICT_COLUMNS, rows)
+        print(
+            f"{DAG_ID}: upserted {len(rows)} ad region daily rows for "
+            f"account={account['id']} campaign={campaign['id']}"
+        )
+        return {"level": "ad_region", "row_count": len(rows), "account_id": account["id"], "campaign_id": campaign["id"]}
 
     @task
     def pull_ad_gender_age_snapshots(
@@ -516,6 +758,17 @@ def meta_traffic_snapshot():
             )
             write_campaign_snapshots.override(task_id="write_campaign_snapshots")(campaign_snapshots, account)
 
+            campaign_region_snapshots = pull_campaign_region_snapshots.override(
+                task_id="pull_campaign_region_snapshots"
+            )(
+                account,
+                config_log,
+            )
+            write_campaign_region_snapshots.override(task_id="write_campaign_region_snapshots")(
+                campaign_region_snapshots,
+                account,
+            )
+
             for campaign in account["campaigns"]:
                 with TaskGroup(group_id=f"campaign_{_airflow_id(campaign['id'])}") as campaign_group:
                     adset_snapshots = pull_adset_snapshots.override(task_id="pull_adset_snapshots")(
@@ -529,6 +782,19 @@ def meta_traffic_snapshot():
                         campaign,
                     )
 
+                    adset_region_snapshots = pull_adset_region_snapshots.override(
+                        task_id="pull_adset_region_snapshots"
+                    )(
+                        account,
+                        campaign,
+                        config_log,
+                    )
+                    write_adset_region_snapshots.override(task_id="write_adset_region_snapshots")(
+                        adset_region_snapshots,
+                        account,
+                        campaign,
+                    )
+
                     ad_snapshots = pull_ad_snapshots.override(task_id="pull_ad_snapshots")(
                         account,
                         campaign,
@@ -536,6 +802,19 @@ def meta_traffic_snapshot():
                     )
                     write_ad_snapshots.override(task_id="write_ad_snapshots")(
                         ad_snapshots,
+                        account,
+                        campaign,
+                    )
+
+                    ad_region_snapshots = pull_ad_region_snapshots.override(
+                        task_id="pull_ad_region_snapshots"
+                    )(
+                        account,
+                        campaign,
+                        config_log,
+                    )
+                    write_ad_region_snapshots.override(task_id="write_ad_region_snapshots")(
+                        ad_region_snapshots,
                         account,
                         campaign,
                     )
@@ -649,6 +928,25 @@ def _campaign_row(
     )
 
 
+def _campaign_region_row(
+    snapshot: dict[str, Any],
+    insight: dict[str, Any],
+    account: dict[str, Any],
+    snapshot_run_id: str,
+    report_date: str,
+    status_resolver: DailyStatusResolver,
+) -> tuple[Any, ...]:
+    row_report_date = _row_report_date(snapshot, insight, report_date)
+    campaign_id = str(insight.get("campaign_id") or "")
+    return (
+        *_base_values(snapshot, insight, account, snapshot_run_id, report_date),
+        str(insight["region"]),
+        insight.get("attribution_window"),
+        status_resolver.campaign_status(row_report_date, campaign_id),
+        *_metric_values(insight),
+    )
+
+
 def _adset_row(
     snapshot: dict[str, Any],
     insight: dict[str, Any],
@@ -665,6 +963,29 @@ def _adset_row(
         *_base_values(snapshot, insight, account, snapshot_run_id, report_date, campaign),
         adset_id,
         insight.get("adset_name"),
+        insight.get("attribution_window"),
+        status_resolver.adset_status(row_report_date, campaign_id, adset_id),
+        *_metric_values(insight),
+    )
+
+
+def _adset_region_row(
+    snapshot: dict[str, Any],
+    insight: dict[str, Any],
+    account: dict[str, Any],
+    campaign: dict[str, Any],
+    snapshot_run_id: str,
+    report_date: str,
+    status_resolver: DailyStatusResolver,
+) -> tuple[Any, ...]:
+    row_report_date = _row_report_date(snapshot, insight, report_date)
+    campaign_id = str(insight.get("campaign_id") or campaign["id"])
+    adset_id = str(insight.get("adset_id") or "")
+    return (
+        *_base_values(snapshot, insight, account, snapshot_run_id, report_date, campaign),
+        adset_id,
+        insight.get("adset_name"),
+        str(insight["region"]),
         insight.get("attribution_window"),
         status_resolver.adset_status(row_report_date, campaign_id, adset_id),
         *_metric_values(insight),
@@ -694,6 +1015,36 @@ def _ad_row(
         insight.get("ad_name"),
         _creative_id_by_ad_id(adset).get(ad_id),
         None,
+        insight.get("attribution_window"),
+        status_resolver.ad_status(row_report_date, campaign_id, adset_id, ad_id),
+        *_metric_values(insight),
+    )
+
+
+def _ad_region_row(
+    snapshot: dict[str, Any],
+    insight: dict[str, Any],
+    account: dict[str, Any],
+    campaign: dict[str, Any],
+    adset_by_ad_id: dict[str, dict[str, Any]],
+    snapshot_run_id: str,
+    report_date: str,
+    status_resolver: DailyStatusResolver,
+) -> tuple[Any, ...]:
+    ad_id = str(insight["ad_id"])
+    adset = adset_by_ad_id[ad_id]
+    row_report_date = _row_report_date(snapshot, insight, report_date)
+    campaign_id = str(insight.get("campaign_id") or campaign["id"])
+    adset_id = str(insight.get("adset_id") or adset["id"])
+    return (
+        *_base_values(snapshot, insight, account, snapshot_run_id, report_date, campaign),
+        adset_id,
+        insight.get("adset_name"),
+        ad_id,
+        insight.get("ad_name"),
+        _creative_id_by_ad_id(adset).get(ad_id),
+        None,
+        str(insight["region"]),
         insight.get("attribution_window"),
         status_resolver.ad_status(row_report_date, campaign_id, adset_id, ad_id),
         *_metric_values(insight),

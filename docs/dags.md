@@ -84,7 +84,7 @@ flowchart TB
 | Config | [`facebook_campaign_config_update`](../dags/facebook_campaign_config_update.py) | GCS `facebook_campaign_config_update/.../snapshot.json`, `latest_success.json`, Redis `meta:campaign_config:*` |
 | Dimensions | [`meta_object_property_sync`](../dags/meta_object_property_sync.py) | Postgres `marketing.meta_campaign`, `meta_adset`, `meta_ad`, `meta_adset_config`, `meta_ad_creative` |
 | Hourly metrics | [`meta_ad_hourly_metric`](../dags/meta_ad_hourly_metric.py) | Postgres `marketing.meta_ad_hourly_metric` |
-| Daily snapshots | [`meta_traffic_snapshot`](../dags/meta_traffic_snapshot.py) | Postgres `marketing.meta_*_daily_snapshot`, `meta_ad_gender_age_daily_snapshot` |
+| Daily snapshots | [`meta_traffic_snapshot`](../dags/meta_traffic_snapshot.py) | Postgres `marketing.meta_*_daily_snapshot`, `meta_*_region_daily_snapshot`, `meta_ad_gender_age_daily_snapshot` |
 | Media analysis | [`meta_creative_media_analysis`](../dags/meta_creative_media_analysis.py) | GCS `meta_analysis/...` via MCP, Postgres `marketing.creative_media_analysis_*` |
 
 ---
@@ -172,16 +172,22 @@ flowchart TB
   W2 --> L["log_campaign_config_source"]
   L --> TG["TaskGroup account_* / campaign_*"]
   TG --> C["pull/write campaign snapshots"]
+  TG --> CR["pull/write campaign region snapshots"]
   TG --> AS["pull/write adset snapshots"]
+  TG --> ASR["pull/write adset region snapshots"]
   TG --> AD["pull/write ad snapshots"]
+  TG --> ADR["pull/write ad region snapshots"]
   TG --> GA["pull/write ad gender/age snapshots"]
 ```
 
 | Task pair (per campaign) | Postgres table |
 | --- | --- |
 | `pull_campaign_snapshots` → `write_campaign_snapshots` | `marketing.meta_campaign_daily_snapshot` |
+| `pull_campaign_region_snapshots` → `write_campaign_region_snapshots` | `marketing.meta_campaign_region_daily_snapshot` |
 | `pull_adset_snapshots` → `write_adset_snapshots` | `marketing.meta_adset_daily_snapshot` |
+| `pull_adset_region_snapshots` → `write_adset_region_snapshots` | `marketing.meta_adset_region_daily_snapshot` |
 | `pull_ad_snapshots` → `write_ad_snapshots` | `marketing.meta_ad_daily_snapshot` |
+| `pull_ad_region_snapshots` → `write_ad_region_snapshots` | `marketing.meta_ad_region_daily_snapshot` |
 | `pull_ad_gender_age_snapshots` → `write_ad_gender_age_snapshots` | `marketing.meta_ad_gender_age_daily_snapshot` |
 
 Same external sensors as hourly metrics (`sync_object_properties` only).
