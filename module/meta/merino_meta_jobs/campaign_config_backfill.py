@@ -116,6 +116,21 @@ def list_config_snapshot_refs(
     return sorted(refs, key=lambda item: (item.run_date, item.run_datetime))
 
 
+def filter_snapshot_refs_by_run_date(
+    refs: list[ConfigSnapshotRef],
+    *,
+    start_date: str | None,
+    end_date: str | None,
+) -> list[ConfigSnapshotRef]:
+    """Keep refs whose GCS partition date ``run_date`` falls in ``[start_date, end_date]``."""
+    if start_date is None and end_date is None:
+        return refs
+    start = start_date or end_date
+    end = end_date or start_date
+    assert start is not None and end is not None
+    return [ref for ref in refs if start <= ref.run_date <= end]
+
+
 def _observed_at(snapshot: dict[str, Any], ref: ConfigSnapshotRef) -> str:
     generated_at = snapshot.get("generated_at")
     if isinstance(generated_at, str) and generated_at.strip():
@@ -217,9 +232,12 @@ def scan_config_snapshots(
     bucket: str = DEFAULT_CONFIG_GCS_BUCKET,
     prefix: str = DEFAULT_CONFIG_GCS_PREFIX,
     max_snapshots: int | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> dict[str, Any]:
     """Read each historical config snapshot and build summary + inventory."""
     refs = list_config_snapshot_refs(storage_client, bucket=bucket, prefix=prefix)
+    refs = filter_snapshot_refs_by_run_date(refs, start_date=start_date, end_date=end_date)
     if max_snapshots is not None:
         refs = refs[:max_snapshots]
 

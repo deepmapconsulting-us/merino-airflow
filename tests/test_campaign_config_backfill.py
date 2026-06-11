@@ -116,6 +116,28 @@ class CampaignConfigBackfillTest(unittest.TestCase):
         adsets = {row["object_id"]: row for row in report["inventory"]["adsets"]}
         self.assertEqual(adsets["adset_2"]["first_observed_at"], "2026-01-02T10:00:00+00:00")
 
+    def test_filter_snapshot_refs_by_run_date(self) -> None:
+        refs = backfill.iter_snapshot_refs_from_names(
+            [
+                "facebook_campaign_config_update/2026-01-01/20260101T020000-0800/snapshot.json",
+                "facebook_campaign_config_update/2026-01-02/20260102T020000-0800/snapshot.json",
+                "facebook_campaign_config_update/2026-01-03/20260103T020000-0800/snapshot.json",
+            ]
+        )
+        filtered = backfill.filter_snapshot_refs_by_run_date(
+            refs,
+            start_date="2026-01-02",
+            end_date="2026-01-02",
+        )
+        self.assertEqual([ref.run_date for ref in filtered], ["2026-01-02"])
+
+        ranged = backfill.filter_snapshot_refs_by_run_date(
+            refs,
+            start_date="2026-01-01",
+            end_date="2026-01-02",
+        )
+        self.assertEqual([ref.run_date for ref in ranged], ["2026-01-01", "2026-01-02"])
+
 
 if __name__ == "__main__":
     unittest.main()

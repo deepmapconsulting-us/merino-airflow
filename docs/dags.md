@@ -194,12 +194,16 @@ flowchart TB
 ### 6. `meta_campaign_config_backfill`
 
 **Code:** [`dags/meta_campaign_config_backfill.py`](../dags/meta_campaign_config_backfill.py)  
-**Schedule:** manual (`schedule=None`)  
+**Schedule:** `0 4 * * *` (daily 04:00 Pacific; keep paused — use trigger/backfill only)  
 **Module:** [`campaign_config_backfill.py`](../module/meta/merino_meta_jobs/campaign_config_backfill.py)
 
-Reads every historical `facebook_campaign_config_update/.../snapshot.json` from GCS,
-builds per-snapshot campaign/adset/ad counts, and writes a union inventory report to
+Reads historical `facebook_campaign_config_update/.../snapshot.json` from GCS,
+builds per-snapshot campaign/adset/ad counts, and writes an inventory report to
 `gs://airflow-run-us-west2/meta_campaign_config_backfill/<date>/<datetime>/snapshot.json`.
+
+- **UI Backfill:** one report per logical date in the selected range.
+- **Single Run (no conf):** full scan of every snapshot (union inventory).
+- **Single Run conf:** `{"start_date":"2026-01-01","end_date":"2026-06-10"}` for a custom range.
 
 Use this before metric backfills: dimension tables `marketing.meta_campaign` /
 `meta_adset` / `meta_ad` only store the latest object state, not historical status

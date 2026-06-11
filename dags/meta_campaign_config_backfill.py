@@ -1,8 +1,11 @@
 """Scan historical facebook_campaign_config_update GCS snapshots for backfill planning.
 
-Manual DAG. Reads every ``snapshot.json`` under the campaign config GCS prefix,
-prints per-snapshot counts, and writes a union inventory (first/last seen,
-active observation windows) to GCS.
+Daily schedule enables Airflow UI backfill (one run per logical date). Keep this DAG
+paused for normal ops; trigger manually or backfill when needed.
+
+- **Backfill** (UI): one inventory report per day in the selected date range.
+- **Single Run** with no conf: scans every snapshot (full union inventory).
+- **Single Run** conf ``{"start_date": "...", "end_date": "..."}``: scans that range only.
 
 Dimension tables ``marketing.meta_campaign`` / ``meta_adset`` / ``meta_ad`` hold
 only the latest object properties from ``meta_object_property_sync``. They do
@@ -12,7 +15,6 @@ metric backfills.
 
 from __future__ import annotations
 
-import json
 import os
 import sys
 from datetime import timedelta
@@ -20,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 import pendulum  # type: ignore[import-not-found]
-from airflow.sdk import dag, task  # type: ignore[import-not-found]
+from airflow.sdk import dag, get_current_context, task  # type: ignore[import-not-found]
 
 from meta_gcs import REPORT_TIMEZONE, read_json_from_gcs, run_partition, write_snapshot_to_gcs
 
@@ -38,11 +40,34 @@ OUTPUT_GCS_PREFIX = "meta_campaign_config_backfill"
 MAX_SNAPSHOTS_ENV = "CAMPAIGN_CONFIG_BACKFILL_MAX_SNAPSHOTS"
 
 
+def _scan_date_range(context: dict[str, Any]) -> tuple[str | None, str | None]:
+    dag_run = context.get("dag_run")
+    conf = dict(getattr(dag_run, "conf", None) or {})
+
+    if conf.get("scan_all"):
+        return None, None
+
+    start_date = str(conf.get("start_date") or "").strip() or None
+    end_date = str(conf.get("end_date") or "").strip() or None
+    if start_date or end_date:
+        return start_date or end_date, end_date or start_date
+
+    run_type = str(getattr(dag_run, "run_type", "") or "")
+    if run_type in {"backfill", "scheduled"}:
+        logical_date = context.get("logical_date") or getattr(dag_run, "logical_date", None)
+        if logical_date is not None:
+            day = pendulum.instance(logical_date).in_timezone(REPORT_TIMEZONE).format("YYYY-MM-DD")
+            return day, day
+
+    return None, None
+
+
 @dag(
     dag_id=DAG_ID,
-    schedule=None,
+    schedule="0 4 * * *",
     start_date=pendulum.datetime(2026, 1, 1, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["meta", "config", "backfill"],
     default_args={
         "owner": "data-platform",
@@ -57,6 +82,9 @@ def meta_campaign_config_backfill():
         import google.auth  # type: ignore[import-not-found]
         from google.cloud import storage  # type: ignore[import-not-found]
 
+        context = get_current_context()
+        start_date, end_date = _scan_date_range(context)
+
         max_snapshots_raw = os.environ.get(MAX_SNAPSHOTS_ENV, "").strip()
         max_snapshots = int(max_snapshots_raw) if max_snapshots_raw else None
 
@@ -67,6 +95,8 @@ def meta_campaign_config_backfill():
             read_json_from_gcs,
             prefix=DEFAULT_CONFIG_GCS_PREFIX,
             max_snapshots=max_snapshots,
+            start_date=start_date,
+            end_date=end_date,
         )
 
         run_date, run_datetime = run_partition()
@@ -78,8 +108,9 @@ def meta_campaign_config_backfill():
             run_datetime,
         )
 
+        range_label = f"{start_date}..{end_date}" if start_date else "all"
         print(
-            f"{DAG_ID}: scanned {report['snapshot_count']} config snapshots; "
+            f"{DAG_ID}: scanned {report['snapshot_count']} config snapshots ({range_label}); "
             f"unique campaigns={report['unique_campaigns']} "
             f"adsets={report['unique_adsets']} ads={report['unique_ads']}"
         )
@@ -102,6 +133,8 @@ def meta_campaign_config_backfill():
             "unique_campaigns": report["unique_campaigns"],
             "unique_adsets": report["unique_adsets"],
             "unique_ads": report["unique_ads"],
+            "scan_start_date": start_date,
+            "scan_end_date": end_date,
         }
 
     scan_historical_config_snapshots()
