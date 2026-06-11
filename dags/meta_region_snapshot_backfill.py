@@ -241,10 +241,22 @@ def meta_region_snapshot_backfill():
         print(f"{DAG_ID}: ad region batch {report_date} {account['id']} {campaign['id']} rows={len(rows)}")
         return {"level": "ad_region", "report_date": report_date, "row_count": len(rows)}
 
+    @task
+    def campaign_batches(plan: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        return plan["campaign_batches"]
+
+    @task
+    def adset_batches(plan: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        return plan["adset_batches"]
+
+    @task
+    def ad_batches(plan: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+        return plan["ad_batches"]
+
     plan = plan_backfill_work()
-    run_campaign_region_batch.expand(batch=plan["campaign_batches"])
-    run_adset_region_batch.expand(batch=plan["adset_batches"])
-    run_ad_region_batch.expand(batch=plan["ad_batches"])
+    run_campaign_region_batch.expand(batch=campaign_batches(plan))
+    run_adset_region_batch.expand(batch=adset_batches(plan))
+    run_ad_region_batch.expand(batch=ad_batches(plan))
 
 
 def _snapshot_run_id(level: str, *ids: str) -> str:
