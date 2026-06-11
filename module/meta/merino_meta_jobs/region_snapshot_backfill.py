@@ -75,8 +75,12 @@ def entity_window(
     parent_start: date | None = None,
     parent_end: date | None = None,
 ) -> EntityWindow | None:
-    start = _latest(lower_bound, parent_start, _date_value(start_time), _date_value(created_at))
-    end = _earliest(upper_bound, parent_end, _date_value(stop_time))
+    # Backfill should run from existing dimension rows without requiring Graph
+    # schedule fields from a full object-property init. Schedule args are kept
+    # for call-site compatibility but intentionally do not restrict planning.
+    _ = (start_time, stop_time, parent_end)
+    start = _latest(lower_bound, parent_start, _date_value(created_at))
+    end = upper_bound
     if start is None:
         start = lower_bound
     if end is None:

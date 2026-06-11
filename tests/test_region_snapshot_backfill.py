@@ -11,7 +11,7 @@ from merino_meta_jobs.region_snapshot_backfill import plan_region_backfill  # no
 
 
 class RegionSnapshotBackfillTest(unittest.TestCase):
-    def test_entity_windows_follow_parent_schedule(self) -> None:
+    def test_entity_windows_use_created_at_not_schedule_fields(self) -> None:
         plan = plan_region_backfill(
             campaigns=[
                 {
@@ -49,17 +49,39 @@ class RegionSnapshotBackfillTest(unittest.TestCase):
 
         self.assertEqual(
             [batch["report_date"] for batch in plan["campaign_batches"]],
-            ["2026-01-02", "2026-01-03"],
+            ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"],
         )
         self.assertEqual(
             [batch["report_date"] for batch in plan["adset_batches"]],
-            ["2026-01-03"],
+            ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"],
         )
         self.assertEqual(
             [batch["report_date"] for batch in plan["ad_batches"]],
-            ["2026-01-03"],
+            ["2026-01-03", "2026-01-04", "2026-01-05"],
         )
         self.assertEqual(plan["ad_batches"][0]["campaign"]["adsets"][0]["ads"][0]["creative_id"], "creative_1")
+
+    def test_missing_created_at_falls_back_to_requested_start_date(self) -> None:
+        plan = plan_region_backfill(
+            campaigns=[
+                {
+                    "campaign_id": "campaign_1",
+                    "source_account_id": "act_1",
+                    "created_at": None,
+                }
+            ],
+            adsets=[],
+            ads=[],
+            existing={},
+            start_date="2026-01-01",
+            end_date="2026-01-02",
+            levels=["campaign"],
+        )
+
+        self.assertEqual(
+            [batch["report_date"] for batch in plan["campaign_batches"]],
+            ["2026-01-01", "2026-01-02"],
+        )
 
     def test_skip_existing_unless_force(self) -> None:
         campaigns = [

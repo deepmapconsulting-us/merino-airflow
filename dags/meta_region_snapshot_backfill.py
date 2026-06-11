@@ -10,8 +10,8 @@ Manual DAG. Example conf:
   "force": false
 }
 
-Run `meta_object_property_sync` with `meta_object_property_full_init=true` first
-so campaign/adset schedule fields are populated before planning.
+The DAG is independent: it reads existing campaign/adset/ad dimension rows from
+Postgres and uses `created_at` plus the requested date range to plan work.
 """
 
 from __future__ import annotations
@@ -67,7 +67,7 @@ DEFAULT_META_PAGE_LIMIT = 500
 
 
 class BackfillStatusResolver:
-    """Backfill rows are planned from schedule windows, not historical status logs."""
+    """Backfill rows are planned from dimension rows, not historical status logs."""
 
     def campaign_status(self, _report_date: str, _campaign_id: str) -> str:
         return "active"

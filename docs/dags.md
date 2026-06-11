@@ -219,11 +219,11 @@ Backfills Meta `region` breakdown tables from the dimension tables:
 - `marketing.meta_adset_region_daily_snapshot`
 - `marketing.meta_ad_region_daily_snapshot`
 
-Run `meta_object_property_sync` once with Airflow Variable
-`meta_object_property_full_init=true` before large backfills. That populates
-`marketing.meta_campaign.start_time` / `stop_time` and
-`marketing.meta_adset.start_time` / `end_time`, which the planner uses to avoid
-pulling every entity for every day.
+This DAG is independent from GCS scans and full object-property init. It reads
+existing rows in `marketing.meta_campaign`, `marketing.meta_adset`, and
+`marketing.meta_ad`, then uses each entity's `created_at` plus the requested date
+range to plan work. If `created_at` is missing, it falls back to the requested
+`start_date`.
 
 Manual DAG conf:
 
@@ -240,6 +240,7 @@ Manual DAG conf:
 Planning rules:
 
 - `force=false` skips entity/date pairs that already exist in the region target table.
+- Campaign/adset/ad lower bounds come from `created_at` and parent entity `created_at` values.
 - Campaign batches are grouped by account/date.
 - Adset and ad batches are grouped by account/campaign/date.
 - Chunk sizes default to 50 and can be changed with
@@ -266,9 +267,9 @@ GROUP BY report_date
 ORDER BY report_date;
 ```
 
-`start_time` / `stop_time` are schedule fields, not exact pause/unpause history.
-If a planned entity did not deliver on a date, Meta Insights returns no region
-rows and the upsert writes nothing.
+The planner does not require `start_time` / `stop_time` schedule fields. This can
+plan some no-delivery dates, but Meta Insights returns no region rows for those
+dates and the upsert writes nothing.
 
 ---
 
