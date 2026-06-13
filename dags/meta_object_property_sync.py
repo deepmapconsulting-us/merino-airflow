@@ -78,7 +78,7 @@ DEFAULT_META_PAGE_LIMIT = 500
 
 @dag(
     dag_id=DAG_ID,
-    schedule="0 */2 * * *",
+    schedule="*/30 * * * *",
     start_date=pendulum.datetime(2026, 1, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["meta", "config", "dimension"],

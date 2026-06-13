@@ -5,11 +5,14 @@ import unittest
 from pathlib import Path
 from typing import Any
 
+import pendulum
+
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
 sys.path.insert(0, str(MODULE_PATH))
 DAGS_PATH = Path(__file__).resolve().parents[1] / "dags"
 sys.path.insert(0, str(DAGS_PATH))
 
+import meta_gcs  # noqa: E402
 import meta_status  # noqa: E402
 from meta_status import (  # noqa: E402
     ACTIVE_STATUS,
@@ -77,25 +80,32 @@ class AdHourlyMetricTest(unittest.TestCase):
         self.assertIn("metric_hour,\n        ad_id", schema_sql)
         self.assertIn('AD_HOURLY_CONFLICT_COLUMNS = ("metric_hour", "ad_id")', dag_py)
         self.assertIn("CREATE UNIQUE INDEX IF NOT EXISTS meta_ad_hourly_metric_metric_hour_ad_id_unique_idx", dag_py)
-        self.assertIn('schedule="0 */2 * * *"', dag_py)
+        self.assertIn('schedule="*/30 * * * *"', dag_py)
         self.assertIn("AD_BATCH_SIZE = 5", dag_py)
         self.assertIn("LOOKBACK_HOURS = 12", dag_py)
         self.assertIn("campaign_config_logical_date", dag_py)
         config_dag_py = (repo / "dags" / "facebook_campaign_config_update.py").read_text()
-        self.assertIn('schedule="0 */2 * * *"', config_dag_py)
+        self.assertIn('schedule="*/30 * * * *"', config_dag_py)
         property_dag_py = (repo / "dags" / "meta_object_property_sync.py").read_text()
-        self.assertIn('schedule="0 */2 * * *"', property_dag_py)
+        self.assertIn('schedule="*/30 * * * *"', property_dag_py)
         meta_gcs_py = (repo / "dags" / "meta_gcs.py").read_text()
-        self.assertIn("REPORT_PARTITION_HOURS = 2", meta_gcs_py)
+        self.assertIn("REPORT_PARTITION_MINUTES = 30", meta_gcs_py)
         self.assertIn("def campaign_config_logical_date", meta_gcs_py)
         self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", dag_py)
         self.assertIn("update_count = target.update_count + 1", dag_py)
 
-    def test_hourly_active_status_uses_same_two_hour_bucket(self) -> None:
-        calls: list[tuple[str, int]] = []
+    def test_hourly_active_status_uses_same_thirty_minute_bucket(self) -> None:
+        calls: list[tuple[str, int, int]] = []
 
-        def fake_load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, redis_client=None):
-            calls.append((run_date, hour))
+        def fake_load_config_snapshot(
+            storage_client,
+            prefix: str,
+            run_date: str,
+            hour: int,
+            minute: int = 0,
+            redis_client=None,
+        ):
+            calls.append((run_date, hour, minute))
             return {
                 "accounts": {
                     "act_1": {
@@ -131,7 +141,15 @@ class AdHourlyMetricTest(unittest.TestCase):
         finally:
             meta_status.load_config_snapshot = original_load
 
-        self.assertEqual(calls, [("2026-05-23", 12)])
+        self.assertEqual(calls, [("2026-05-23", 13, 0)])
+
+    def test_campaign_config_logical_date_uses_thirty_minute_bucket(self) -> None:
+        logical_date = pendulum.datetime(2026, 5, 23, 13, 45, tz="America/Los_Angeles")
+
+        self.assertEqual(
+            meta_gcs.campaign_config_logical_date(logical_date),
+            pendulum.datetime(2026, 5, 23, 13, 30, tz="America/Los_Angeles"),
+        )
 
     def test_config_loader_uses_closest_gcs_snapshot_on_exact_miss(self) -> None:
         class FakeRedis:
@@ -149,7 +167,7 @@ class AdHourlyMetricTest(unittest.TestCase):
                 self.object_name = object_name
 
             def download_as_text(self) -> str:
-                if "/20260523T120000-0700/" in self.object_name:
+                if "/20260523T083000-0700/" in self.object_name:
                     return '{"accounts":{"act_1":{"campaigns":[]}}}'
                 raise FileNotFoundError(self.object_name)
 
@@ -166,6 +184,7 @@ class AdHourlyMetricTest(unittest.TestCase):
             "facebook_campaign_config_update",
             "2026-05-23",
             8,
+            30,
             FakeRedis(),
         )
 
@@ -185,9 +204,9 @@ class AdHourlyMetricTest(unittest.TestCase):
         redis_client = FakeRedis()
         snapshot = {"accounts": {"act_1": {"campaigns": []}}}
 
-        key = cache_config_snapshot(snapshot, "2026-06-01", "20260601T120000-0700", redis_client)
+        key = cache_config_snapshot(snapshot, "2026-06-01", "20260601T123000-0700", redis_client)
 
-        self.assertEqual(key, "meta:campaign_config:2026-06-01:12")
+        self.assertEqual(key, "meta:campaign_config:2026-06-01:1230")
         self.assertEqual(redis_client.values[CONFIG_LATEST_CACHE_KEY], key)
         self.assertEqual(latest_config_cache_key(redis_client), key)
         self.assertEqual(load_latest_config_snapshot(redis_client), snapshot)

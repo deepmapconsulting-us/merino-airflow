@@ -11,10 +11,13 @@ from zoneinfo import ZoneInfo
 
 SNAPSHOT_BUCKET = "airflow-run-us-west2"
 REPORT_TIMEZONE = os.environ.get("META_REPORT_TIMEZONE", "America/Los_Angeles")
-REPORT_PARTITION_HOURS = 2  # keep in sync with meta_gcs.REPORT_PARTITION_HOURS
+REPORT_PARTITION_MINUTES = 30  # keep in sync with meta_gcs.REPORT_PARTITION_MINUTES
 CONFIG_CACHE_TTL_SECONDS = 2 * 24 * 60 * 60
 CONFIG_LATEST_CACHE_KEY = "meta:campaign_config_latest"
-CONFIG_BUCKET_HOURS = tuple(range(0, 24, REPORT_PARTITION_HOURS))
+CONFIG_BUCKET_TIMES = tuple(
+    (minute_of_day // 60, minute_of_day % 60)
+    for minute_of_day in range(0, 24 * 60, REPORT_PARTITION_MINUTES)
+)
 CONFIG_FALLBACK_DAYS = 2
 ACTIVE_STATUS = "active"
 NOT_ACTIVE_STATUS = "not_active"
@@ -27,14 +30,15 @@ def get_redis():
     return RedisHook(redis_conn_id="merino_redis").get_conn()
 
 
-def config_cache_key(run_date: str, hour: int) -> str:
-    return f"meta:campaign_config:{run_date}:{hour:02d}"
+def config_cache_key(run_date: str, hour: int, minute: int = 0) -> str:
+    return f"meta:campaign_config:{run_date}:{hour:02d}{minute:02d}"
 
 
 def cache_config_snapshot(snapshot: dict[str, Any], run_date: str, run_datetime: str, redis_client=None) -> str:
     redis_client = redis_client or get_redis()
     hour = int(run_datetime[9:11])
-    key = config_cache_key(run_date, hour)
+    minute = int(run_datetime[11:13])
+    key = config_cache_key(run_date, hour, minute)
     redis_client.set(
         key,
         json.dumps(snapshot, separators=(",", ":"), sort_keys=True),
@@ -67,10 +71,10 @@ def load_latest_config_snapshot(redis_client=None) -> dict[str, Any] | None:
     return json.loads(cached)
 
 
-def config_snapshot_uri(prefix: str, run_date: str, hour: int) -> str:
+def config_snapshot_uri(prefix: str, run_date: str, hour: int, minute: int = 0) -> str:
     local = datetime.fromisoformat(run_date).replace(
         hour=hour,
-        minute=0,
+        minute=minute,
         second=0,
         microsecond=0,
         tzinfo=ZoneInfo(REPORT_TIMEZONE),
@@ -78,9 +82,19 @@ def config_snapshot_uri(prefix: str, run_date: str, hour: int) -> str:
     return f"gs://{SNAPSHOT_BUCKET}/{prefix}/{run_date}/{local.strftime('%Y%m%dT%H%M%S%z')}/snapshot.json"
 
 
-def load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, redis_client=None) -> dict[str, Any] | None:
+def load_config_snapshot(
+    storage_client,
+    prefix: str,
+    run_date: str,
+    hour: int,
+    minute: int = 0,
+    redis_client=None,
+) -> dict[str, Any] | None:
+    if redis_client is None and not isinstance(minute, int):
+        redis_client = minute
+        minute = 0
     redis_client = redis_client or get_redis()
-    key = config_cache_key(run_date, hour)
+    key = config_cache_key(run_date, hour, minute)
     cached = redis_client.get(key) if redis_client is not None else None
     if cached:
         if isinstance(cached, bytes):
@@ -91,10 +105,10 @@ def load_config_snapshot(storage_client, prefix: str, run_date: str, hour: int, 
         return None
 
     try:
-        snapshot = _read_json_from_gcs(storage_client, config_snapshot_uri(prefix, run_date, hour))
+        snapshot = _read_json_from_gcs(storage_client, config_snapshot_uri(prefix, run_date, hour, minute))
     except Exception as exc:
-        print(f"meta_status: no campaign config for {run_date} {hour:02d}:00: {exc}")
-        snapshot = _closest_config_snapshot(storage_client, prefix, run_date, hour)
+        print(f"meta_status: no campaign config for {run_date} {hour:02d}:{minute:02d}: {exc}")
+        snapshot = _closest_config_snapshot(storage_client, prefix, run_date, hour, minute)
         if snapshot is None:
             return None
 
@@ -111,31 +125,48 @@ def _read_json_from_gcs(storage_client, uri: str) -> dict[str, Any]:
     return json.loads(storage_client.bucket(bucket_name).blob(object_name).download_as_text())
 
 
-def _closest_config_snapshot(storage_client, prefix: str, run_date: str, hour: int) -> dict[str, Any] | None:
-    target = datetime.fromisoformat(run_date).replace(hour=hour, tzinfo=ZoneInfo(REPORT_TIMEZONE))
-    candidates: list[tuple[float, str, int]] = []
+def _closest_config_snapshot(
+    storage_client,
+    prefix: str,
+    run_date: str,
+    hour: int,
+    minute: int = 0,
+) -> dict[str, Any] | None:
+    target = datetime.fromisoformat(run_date).replace(
+        hour=hour,
+        minute=minute,
+        tzinfo=ZoneInfo(REPORT_TIMEZONE),
+    )
+    candidates: list[tuple[float, str, int, int]] = []
     for day_offset in range(-CONFIG_FALLBACK_DAYS, CONFIG_FALLBACK_DAYS + 1):
         candidate_date = (target + timedelta(days=day_offset)).strftime("%Y-%m-%d")
-        for candidate_hour in CONFIG_BUCKET_HOURS:
-            if candidate_date == run_date and candidate_hour == hour:
+        for candidate_hour, candidate_minute in CONFIG_BUCKET_TIMES:
+            if candidate_date == run_date and candidate_hour == hour and candidate_minute == minute:
                 continue
             candidate = datetime.fromisoformat(candidate_date).replace(
                 hour=candidate_hour,
+                minute=candidate_minute,
                 tzinfo=ZoneInfo(REPORT_TIMEZONE),
             )
-            candidates.append((abs((candidate - target).total_seconds()), candidate_date, candidate_hour))
+            candidates.append(
+                (abs((candidate - target).total_seconds()), candidate_date, candidate_hour, candidate_minute)
+            )
 
-    for _distance, candidate_date, candidate_hour in sorted(candidates):
+    for _distance, candidate_date, candidate_hour, candidate_minute in sorted(candidates):
         try:
-            snapshot = _read_json_from_gcs(storage_client, config_snapshot_uri(prefix, candidate_date, candidate_hour))
+            snapshot = _read_json_from_gcs(
+                storage_client,
+                config_snapshot_uri(prefix, candidate_date, candidate_hour, candidate_minute),
+            )
         except Exception:
             continue
         print(
             "meta_status: using closest campaign config "
-            f"{candidate_date} {candidate_hour:02d}:00 for requested {run_date} {hour:02d}:00"
+            f"{candidate_date} {candidate_hour:02d}:{candidate_minute:02d} "
+            f"for requested {run_date} {hour:02d}:{minute:02d}"
         )
         return snapshot
-    print(f"meta_status: no nearby campaign config found for {run_date} {hour:02d}:00")
+    print(f"meta_status: no nearby campaign config found for {run_date} {hour:02d}:{minute:02d}")
     return None
 
 
@@ -208,8 +239,15 @@ class DailyStatusResolver:
         report_date = str(report_date)
         if report_date not in self.maps_by_date:
             maps = []
-            for hour in CONFIG_BUCKET_HOURS:
-                snapshot = load_config_snapshot(self.storage_client, self.prefix, report_date, hour, self.redis_client)
+            for hour, minute in CONFIG_BUCKET_TIMES:
+                snapshot = load_config_snapshot(
+                    self.storage_client,
+                    self.prefix,
+                    report_date,
+                    hour,
+                    minute,
+                    self.redis_client,
+                )
                 if snapshot:
                     maps.append(ConfigStatusMap.from_snapshot(snapshot))
             if not maps:
@@ -223,7 +261,7 @@ class HourlyStatusResolver:
         self.storage_client = storage_client
         self.prefix = prefix
         self.redis_client = redis_client or get_redis()
-        self.maps_by_bucket: dict[tuple[str, int], ConfigStatusMap | None] = {}
+        self.maps_by_bucket: dict[tuple[str, int, int], ConfigStatusMap | None] = {}
 
     def ad_status(self, metric_hour: Any, campaign_id: str, adset_id: str, ad_id: str) -> str:
         status_map = self._map_for_metric_hour(metric_hour)
@@ -236,10 +274,18 @@ class HourlyStatusResolver:
         if local.tzinfo is None:
             local = local.replace(tzinfo=ZoneInfo(REPORT_TIMEZONE))
         local = local.astimezone(ZoneInfo(REPORT_TIMEZONE))
-        bucket_hour = (local.hour // REPORT_PARTITION_HOURS) * REPORT_PARTITION_HOURS
-        key = (local.strftime("%Y-%m-%d"), bucket_hour)
+        minute_of_day = local.hour * 60 + local.minute
+        bucket_minute = (minute_of_day // REPORT_PARTITION_MINUTES) * REPORT_PARTITION_MINUTES
+        key = (local.strftime("%Y-%m-%d"), bucket_minute // 60, bucket_minute % 60)
         if key not in self.maps_by_bucket:
-            snapshot = load_config_snapshot(self.storage_client, self.prefix, key[0], key[1], self.redis_client)
+            snapshot = load_config_snapshot(
+                self.storage_client,
+                self.prefix,
+                key[0],
+                key[1],
+                key[2],
+                self.redis_client,
+            )
             self.maps_by_bucket[key] = ConfigStatusMap.from_snapshot(snapshot) if snapshot else None
         return self.maps_by_bucket[key]
 

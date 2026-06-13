@@ -1,6 +1,6 @@
 """Sync Meta ad hourly metrics from campaign-config-driven ad batches.
 
-This DAG reads the matching 2-hour campaign config snapshot from GCS, pulls the
+This DAG reads the matching 30-minute campaign config snapshot from GCS, pulls the
 last 12 hours of advertiser-time-zone hourly ad insights, and upserts changed
 rows into `marketing.meta_ad_hourly_metric`.
 """
@@ -127,7 +127,7 @@ AD_HOURLY_CONFLICT_COLUMNS = ("metric_hour", "ad_id")
 
 @dag(
     dag_id=DAG_ID,
-    schedule="0 */2 * * *",
+    schedule="*/30 * * * *",
     start_date=pendulum.datetime(2026, 1, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["meta", "traffic", "hourly", "ad"],
