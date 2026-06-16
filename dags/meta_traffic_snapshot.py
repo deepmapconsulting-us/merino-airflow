@@ -20,7 +20,6 @@ from typing import Any
 import pendulum  # type: ignore[import-not-found]
 from pendulum.parsing.exceptions import ParserError  # type: ignore[import-not-found]
 from airflow.sdk import dag, task  # type: ignore[import-not-found]
-from airflow.utils.task_group import TaskGroup  # type: ignore[import-not-found]
 
 try:
     from airflow.providers.standard.sensors.external_task import ExternalTaskSensor  # type: ignore[import-not-found]
@@ -55,6 +54,7 @@ from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-
     adset_region_daily_snapshot,
     campaign_daily_snapshot,
     campaign_region_daily_snapshot,
+    delivered_ad_hierarchy,
     traffic_accounts_from_config,
 )
 from merino_meta_jobs.traffic_snapshot_rows import (  # noqa: E402  # type: ignore[import-not-found]
@@ -139,6 +139,275 @@ def meta_traffic_snapshot():
         )
         if source.get("error"):
             raise RuntimeError(source["error"])
+
+    @task
+    def sync_daily_reports_from_insights(source: dict[str, Any]) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        access_token = meta_access_token()
+        context = get_current_context()
+        page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
+        report_dates = _report_dates(_context_logical_date(context))
+        accounts = delivered_ad_hierarchy(
+            access_token,
+            report_dates,
+            active_accounts_value=env_config_value(ACTIVE_ACCOUNTS_ENV),
+            page_limit=page_limit,
+        )
+        if not accounts:
+            print(f"{DAG_ID}: no delivered ads found for report_dates={report_dates}")
+            return {"account_count": 0, "row_count": 0}
+
+        status_resolver = _daily_status_resolver()
+        total_rows = 0
+        for account in accounts:
+            campaign_ids = [campaign["id"] for campaign in account.get("campaigns", []) if campaign.get("id")]
+            campaign_snapshots = [
+                campaign_daily_snapshot(
+                    access_token,
+                    account["id"],
+                    campaign_ids,
+                    report_date,
+                    page_limit=page_limit,
+                )
+                for report_date in report_dates
+            ]
+            for snapshot in campaign_snapshots:
+                snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+            campaign_rows = [
+                _campaign_row(
+                    snapshot,
+                    insight,
+                    account,
+                    _snapshot_run_id(context["run_id"], "campaign", account["id"]),
+                    _snapshot_report_date(_context_logical_date(context)),
+                    status_resolver,
+                )
+                for snapshot in campaign_snapshots
+                for insight in snapshot.get("insights", [])
+                if insight.get("campaign_id")
+            ]
+            _upsert_daily_rows(CAMPAIGN_DAILY_TABLE, CAMPAIGN_INSERT_COLUMNS, CAMPAIGN_CONFLICT_COLUMNS, campaign_rows)
+            total_rows += len(campaign_rows)
+
+            campaign_region_snapshots = [
+                campaign_region_daily_snapshot(
+                    access_token,
+                    account["id"],
+                    campaign_ids,
+                    report_date,
+                    page_limit=page_limit,
+                )
+                for report_date in report_dates
+            ]
+            for snapshot in campaign_region_snapshots:
+                snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+            campaign_region_rows = [
+                _campaign_region_row(
+                    snapshot,
+                    insight,
+                    account,
+                    _snapshot_run_id(context["run_id"], "campaign_region", account["id"]),
+                    _snapshot_report_date(_context_logical_date(context)),
+                    status_resolver,
+                )
+                for snapshot in campaign_region_snapshots
+                for insight in snapshot.get("insights", [])
+                if insight.get("campaign_id") and insight.get("region")
+            ]
+            _upsert_daily_rows(
+                CAMPAIGN_REGION_DAILY_TABLE,
+                CAMPAIGN_REGION_INSERT_COLUMNS,
+                CAMPAIGN_REGION_CONFLICT_COLUMNS,
+                campaign_region_rows,
+            )
+            total_rows += len(campaign_region_rows)
+
+            for campaign in account.get("campaigns", []):
+                adset_ids = [adset["id"] for adset in campaign.get("adsets", []) if adset.get("id")]
+                ad_ids = [
+                    ad_id
+                    for adset in campaign.get("adsets", [])
+                    for ad_id in ad_ids_from_config(adset)
+                ]
+                report_date = _snapshot_report_date(_context_logical_date(context))
+
+                adset_snapshots = [
+                    adset_daily_snapshot(
+                        access_token,
+                        account["id"],
+                        campaign["id"],
+                        adset_ids,
+                        metric_date,
+                        page_limit=page_limit,
+                    )
+                    for metric_date in report_dates
+                ]
+                for snapshot in adset_snapshots:
+                    snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+                adset_rows = [
+                    _adset_row(
+                        snapshot,
+                        insight,
+                        account,
+                        campaign,
+                        _snapshot_run_id(context["run_id"], "adset", account["id"], campaign["id"]),
+                        report_date,
+                        status_resolver,
+                    )
+                    for snapshot in adset_snapshots
+                    for insight in snapshot.get("insights", [])
+                    if insight.get("adset_id")
+                ]
+                _upsert_daily_rows(ADSET_DAILY_TABLE, ADSET_INSERT_COLUMNS, ADSET_CONFLICT_COLUMNS, adset_rows)
+                total_rows += len(adset_rows)
+
+                adset_region_snapshots = [
+                    adset_region_daily_snapshot(
+                        access_token,
+                        account["id"],
+                        campaign["id"],
+                        adset_ids,
+                        metric_date,
+                        page_limit=page_limit,
+                    )
+                    for metric_date in report_dates
+                ]
+                for snapshot in adset_region_snapshots:
+                    snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+                adset_region_rows = [
+                    _adset_region_row(
+                        snapshot,
+                        insight,
+                        account,
+                        campaign,
+                        _snapshot_run_id(context["run_id"], "adset_region", account["id"], campaign["id"]),
+                        report_date,
+                        status_resolver,
+                    )
+                    for snapshot in adset_region_snapshots
+                    for insight in snapshot.get("insights", [])
+                    if insight.get("adset_id") and insight.get("region")
+                ]
+                _upsert_daily_rows(
+                    ADSET_REGION_DAILY_TABLE,
+                    ADSET_REGION_INSERT_COLUMNS,
+                    ADSET_REGION_CONFLICT_COLUMNS,
+                    adset_region_rows,
+                )
+                total_rows += len(adset_region_rows)
+
+                adset_by_ad_id = _adset_by_ad_id(campaign)
+                ad_snapshots = [
+                    ad_daily_snapshot(
+                        access_token,
+                        account["id"],
+                        campaign["id"],
+                        ad_ids,
+                        metric_date,
+                        page_limit=page_limit,
+                    )
+                    for metric_date in report_dates
+                ]
+                for snapshot in ad_snapshots:
+                    snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+                ad_rows = [
+                    _ad_row(
+                        snapshot,
+                        insight,
+                        account,
+                        campaign,
+                        adset_by_ad_id,
+                        _snapshot_run_id(context["run_id"], "ad", account["id"], campaign["id"]),
+                        report_date,
+                        status_resolver,
+                    )
+                    for snapshot in ad_snapshots
+                    for insight in snapshot.get("insights", [])
+                    if insight.get("ad_id") in adset_by_ad_id
+                ]
+                _upsert_daily_rows(AD_DAILY_TABLE, AD_INSERT_COLUMNS, AD_CONFLICT_COLUMNS, ad_rows)
+                total_rows += len(ad_rows)
+
+                ad_region_snapshots = [
+                    ad_region_daily_snapshot(
+                        access_token,
+                        account["id"],
+                        campaign["id"],
+                        ad_ids,
+                        metric_date,
+                        page_limit=page_limit,
+                    )
+                    for metric_date in report_dates
+                ]
+                for snapshot in ad_region_snapshots:
+                    snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+                ad_region_rows = [
+                    _ad_region_row(
+                        snapshot,
+                        insight,
+                        account,
+                        campaign,
+                        adset_by_ad_id,
+                        _snapshot_run_id(context["run_id"], "ad_region", account["id"], campaign["id"]),
+                        report_date,
+                        status_resolver,
+                    )
+                    for snapshot in ad_region_snapshots
+                    for insight in snapshot.get("insights", [])
+                    if insight.get("ad_id") in adset_by_ad_id and insight.get("region")
+                ]
+                _upsert_daily_rows(
+                    AD_REGION_DAILY_TABLE,
+                    AD_REGION_INSERT_COLUMNS,
+                    AD_REGION_CONFLICT_COLUMNS,
+                    ad_region_rows,
+                )
+                total_rows += len(ad_region_rows)
+
+                ad_gender_age_snapshots = [
+                    ad_gender_age_daily_snapshot(
+                        access_token,
+                        account["id"],
+                        campaign["id"],
+                        ad_ids,
+                        metric_date,
+                        page_limit=page_limit,
+                    )
+                    for metric_date in report_dates
+                ]
+                for snapshot in ad_gender_age_snapshots:
+                    snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+                ad_gender_age_rows = [
+                    _ad_gender_age_row(
+                        snapshot,
+                        insight,
+                        account,
+                        campaign,
+                        adset_by_ad_id,
+                        _snapshot_run_id(context["run_id"], "ad_gender_age", account["id"], campaign["id"]),
+                        report_date,
+                        status_resolver,
+                    )
+                    for snapshot in ad_gender_age_snapshots
+                    for insight in snapshot.get("insights", [])
+                    if insight.get("ad_id") in adset_by_ad_id
+                    and insight.get("age")
+                    and insight.get("gender")
+                ]
+                _upsert_daily_rows(
+                    AD_GENDER_AGE_DAILY_TABLE,
+                    AD_GENDER_AGE_INSERT_COLUMNS,
+                    AD_GENDER_AGE_CONFLICT_COLUMNS,
+                    ad_gender_age_rows,
+                )
+                total_rows += len(ad_gender_age_rows)
+
+        print(
+            f"{DAG_ID}: synced {total_rows} daily report rows from "
+            f"{_campaign_count(accounts)} delivered campaigns and {_adset_count(accounts)} delivered adsets"
+        )
+        return {"account_count": len(accounts), "row_count": total_rows}
 
     @task
     def pull_campaign_snapshots(account: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
@@ -593,96 +862,7 @@ def meta_traffic_snapshot():
     )
     config_task = log_campaign_config_source(config_log)
     wait_for_campaign_config >> wait_for_object_property >> config_task
-    accounts = config_source.get("accounts", [])
-    if not accounts:
-        config_task >> no_campaigns_from_campaign_config(config_log)
-        return
-
-    for account in accounts:
-        with TaskGroup(group_id=f"account_{_airflow_id(account['id'])}") as account_group:
-            campaign_snapshots = pull_campaign_snapshots.override(task_id="pull_campaign_snapshots")(
-                account,
-                config_log,
-            )
-            write_campaign_snapshots.override(task_id="write_campaign_snapshots")(campaign_snapshots, account)
-
-            campaign_region_snapshots = pull_campaign_region_snapshots.override(
-                task_id="pull_campaign_region_snapshots"
-            )(
-                account,
-                config_log,
-            )
-            write_campaign_region_snapshots.override(task_id="write_campaign_region_snapshots")(
-                campaign_region_snapshots,
-                account,
-            )
-
-            for campaign in account["campaigns"]:
-                with TaskGroup(group_id=f"campaign_{_airflow_id(campaign['id'])}") as campaign_group:
-                    adset_snapshots = pull_adset_snapshots.override(task_id="pull_adset_snapshots")(
-                        account,
-                        campaign,
-                        config_log,
-                    )
-                    write_adset_snapshots.override(task_id="write_adset_snapshots")(
-                        adset_snapshots,
-                        account,
-                        campaign,
-                    )
-
-                    adset_region_snapshots = pull_adset_region_snapshots.override(
-                        task_id="pull_adset_region_snapshots"
-                    )(
-                        account,
-                        campaign,
-                        config_log,
-                    )
-                    write_adset_region_snapshots.override(task_id="write_adset_region_snapshots")(
-                        adset_region_snapshots,
-                        account,
-                        campaign,
-                    )
-
-                    ad_snapshots = pull_ad_snapshots.override(task_id="pull_ad_snapshots")(
-                        account,
-                        campaign,
-                        config_log,
-                    )
-                    write_ad_snapshots.override(task_id="write_ad_snapshots")(
-                        ad_snapshots,
-                        account,
-                        campaign,
-                    )
-
-                    ad_region_snapshots = pull_ad_region_snapshots.override(
-                        task_id="pull_ad_region_snapshots"
-                    )(
-                        account,
-                        campaign,
-                        config_log,
-                    )
-                    write_ad_region_snapshots.override(task_id="write_ad_region_snapshots")(
-                        ad_region_snapshots,
-                        account,
-                        campaign,
-                    )
-
-                    ad_gender_age_snapshots = pull_ad_gender_age_snapshots.override(
-                        task_id="pull_ad_gender_age_snapshots"
-                    )(
-                        account,
-                        campaign,
-                        config_log,
-                    )
-                    write_ad_gender_age_snapshots.override(task_id="write_ad_gender_age_snapshots")(
-                        ad_gender_age_snapshots,
-                        account,
-                        campaign,
-                    )
-
-                config_task >> campaign_group
-
-        config_task >> account_group
+    config_task >> sync_daily_reports_from_insights(config_log)
 
 
 def _campaign_config_for_display() -> dict[str, Any]:

@@ -28,6 +28,42 @@ from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-fo
 
 
 class AdHourlyMetricTest(unittest.TestCase):
+    def test_delivered_ad_hierarchy_can_feed_hourly_batches_without_config(self) -> None:
+        class FakeMetaGraphClient:
+            def __init__(self, access_token: str) -> None:
+                self.access_token = access_token
+
+            def get(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
+                return {"id": endpoint, "account_status": 1}
+
+            def get_all(self, endpoint: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+                return [
+                    {
+                        "account_id": "4157857287789311",
+                        "campaign_id": "campaign_1",
+                        "campaign_name": "Campaign 1",
+                        "adset_id": "adset_missing_from_config",
+                        "adset_name": "Delivered Adset",
+                        "ad_id": "ad_missing_from_config",
+                        "ad_name": "Delivered Ad",
+                    }
+                ]
+
+        original_client = traffic.MetaGraphClient
+        traffic.MetaGraphClient = FakeMetaGraphClient  # type: ignore[assignment]
+        try:
+            accounts = traffic.delivered_ad_hierarchy(
+                "token",
+                ["2026-06-14"],
+                active_accounts_value="4157857287789311",
+            )
+        finally:
+            traffic.MetaGraphClient = original_client
+
+        campaign = accounts[0]["campaigns"][0]
+        ad_ids = [ad["id"] for adset in campaign["adsets"] for ad in adset["ads"]]
+        self.assertEqual(ad_ids, ["ad_missing_from_config"])
+
     def test_ad_hourly_snapshot_uses_hourly_breakdown_and_ad_filter(self) -> None:
         calls: list[tuple[str, dict[str, Any]]] = []
 

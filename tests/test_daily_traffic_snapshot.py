@@ -15,6 +15,73 @@ from merino_meta_jobs import traffic  # noqa: E402  # type: ignore[import-not-fo
 
 
 class DailyTrafficSnapshotTest(unittest.TestCase):
+    def test_delivered_ad_hierarchy_groups_distinct_insight_ids(self) -> None:
+        calls: list[tuple[str, dict[str, Any]]] = []
+
+        class FakeMetaGraphClient:
+            def __init__(self, access_token: str) -> None:
+                self.access_token = access_token
+
+            def get(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
+                return {"id": endpoint, "account_status": 1}
+
+            def get_all(self, endpoint: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+                calls.append((endpoint, params))
+                return [
+                    {
+                        "account_id": "4157857287789311",
+                        "account_name": "Merino",
+                        "campaign_id": "campaign_1",
+                        "campaign_name": "Campaign 1",
+                        "adset_id": "adset_1",
+                        "adset_name": "Adset 1",
+                        "ad_id": "ad_1",
+                        "ad_name": "Ad 1",
+                    },
+                    {
+                        "account_id": "4157857287789311",
+                        "account_name": "Merino",
+                        "campaign_id": "campaign_1",
+                        "campaign_name": "Campaign 1",
+                        "adset_id": "adset_1",
+                        "adset_name": "Adset 1",
+                        "ad_id": "ad_1",
+                        "ad_name": "Ad 1 duplicate",
+                    },
+                    {
+                        "account_id": "4157857287789311",
+                        "account_name": "Merino",
+                        "campaign_id": "campaign_1",
+                        "campaign_name": "Campaign 1",
+                        "adset_id": "adset_2",
+                        "adset_name": "Adset 2",
+                        "ad_id": "ad_2",
+                        "ad_name": "Ad 2",
+                    },
+                ]
+
+        original_client = traffic.MetaGraphClient
+        traffic.MetaGraphClient = FakeMetaGraphClient  # type: ignore[assignment]
+        try:
+            accounts = traffic.delivered_ad_hierarchy(
+                "token",
+                ["2026-06-14"],
+                active_accounts_value="4157857287789311",
+            )
+        finally:
+            traffic.MetaGraphClient = original_client
+
+        self.assertEqual(calls[0][0], "act_4157857287789311/insights")
+        self.assertEqual(calls[0][1]["level"], "ad")
+        self.assertEqual(calls[0][1]["time_range"], {"since": "2026-06-14", "until": "2026-06-14"})
+        self.assertEqual(accounts[0]["id"], "act_4157857287789311")
+        self.assertEqual(len(accounts[0]["campaigns"]), 1)
+        campaign = accounts[0]["campaigns"][0]
+        self.assertEqual(campaign["id"], "campaign_1")
+        self.assertEqual([adset["id"] for adset in campaign["adsets"]], ["adset_1", "adset_2"])
+        self.assertEqual([ad["id"] for ad in campaign["adsets"][0]["ads"]], ["ad_1"])
+        self.assertEqual([ad["id"] for ad in campaign["adsets"][1]["ads"]], ["ad_2"])
+
     def test_grouped_daily_snapshot_calls_use_id_filters(self) -> None:
         calls: list[tuple[str, dict[str, Any]]] = []
 

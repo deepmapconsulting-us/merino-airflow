@@ -560,6 +560,68 @@ def traffic_accounts_from_config(
     return selected_accounts
 
 
+def delivered_ad_hierarchy(
+    access_token: str,
+    metric_dates: list[str],
+    *,
+    active_accounts_value: str | None = None,
+    page_limit: int = 500,
+) -> list[dict[str, Any]]:
+    """Return account/campaign/adset/ad work from delivered ad-level insights."""
+    dates = list(dict.fromkeys(date for date in metric_dates if date))
+    if not dates:
+        return []
+
+    client = MetaGraphClient(access_token)
+    active_accounts = account_ids_from_text(
+        active_accounts_value
+        if active_accounts_value is not None
+        else os.environ.get(FACEBOOK_ACTIVE_ACCOUNTS_ENV, "")
+    )
+    account_rows = (
+        _explicit_account_rows(client, active_accounts)
+        if active_accounts
+        else _discover_account_rows(client, page_limit)
+    )
+
+    accounts_by_id: dict[str, dict[str, Any]] = {}
+    for account in account_rows:
+        account_id = ensure_act_prefix(str(account.get("id") or account.get("account_id") or ""))
+        if not account_id:
+            continue
+        report_account = accounts_by_id.setdefault(
+            account_id,
+            {
+                "id": account_id,
+                "status": account.get("status") or account.get("account_status"),
+                "timezone_name": account.get("timezone_name"),
+                "campaigns": [],
+            },
+        )
+        campaigns_by_id: dict[str, dict[str, Any]] = {}
+        adsets_by_id: dict[tuple[str, str], dict[str, Any]] = {}
+        ads_by_id: set[str] = set()
+
+        for metric_date in dates:
+            insights = client.get_all(
+                f"{account_id}/insights",
+                _insight_params(
+                    level="ad",
+                    fields=AD_INSIGHT_FIELDS,
+                    metric_date=metric_date,
+                    page_limit=page_limit,
+                ),
+            )
+            for insight in insights:
+                _add_delivered_ad(report_account, campaigns_by_id, adsets_by_id, ads_by_id, insight)
+
+    return [
+        account
+        for _account_id, account in sorted(accounts_by_id.items())
+        if account.get("campaigns")
+    ]
+
+
 def ad_ids_from_config(adset: dict[str, Any]) -> list[str]:
     """Return ad IDs listed in a campaign config adset node."""
     return [str(ad["id"]) for ad in adset.get("ads", []) if ad.get("id")]
@@ -597,6 +659,55 @@ def insight_ad_is_configured(insight: dict[str, Any], adset: dict[str, Any]) -> 
 
 def account_ids_from_text(value: str) -> list[str]:
     return [account_id.strip() for account_id in value.split(",") if account_id.strip()]
+
+
+def _add_delivered_ad(
+    account: dict[str, Any],
+    campaigns_by_id: dict[str, dict[str, Any]],
+    adsets_by_id: dict[tuple[str, str], dict[str, Any]],
+    ads_by_id: set[str],
+    insight: dict[str, Any],
+) -> None:
+    campaign_id = str(insight.get("campaign_id") or "")
+    adset_id = str(insight.get("adset_id") or "")
+    ad_id = str(insight.get("ad_id") or "")
+    if not campaign_id or not adset_id or not ad_id:
+        return
+
+    campaign = campaigns_by_id.get(campaign_id)
+    if campaign is None:
+        campaign = {
+            "id": campaign_id,
+            "name": insight.get("campaign_name"),
+            "adsets": [],
+        }
+        campaigns_by_id[campaign_id] = campaign
+        account["campaigns"].append(campaign)
+
+    adset_key = (campaign_id, adset_id)
+    adset = adsets_by_id.get(adset_key)
+    if adset is None:
+        adset = {
+            "id": adset_id,
+            "name": insight.get("adset_name"),
+            "campaign_id": campaign_id,
+            "ads": [],
+        }
+        adsets_by_id[adset_key] = adset
+        campaign["adsets"].append(adset)
+
+    if ad_id in ads_by_id:
+        return
+    ads_by_id.add(ad_id)
+    adset["ads"].append(
+        {
+            "id": ad_id,
+            "name": insight.get("ad_name"),
+            "status": None,
+            "updated_at": None,
+            "creative_id": None,
+        }
+    )
 
 
 def _insight_params(

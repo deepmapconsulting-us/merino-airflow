@@ -19,7 +19,6 @@ from typing import Any
 import pendulum  # type: ignore[import-not-found]
 from pendulum.parsing.exceptions import ParserError  # type: ignore[import-not-found]
 from airflow.sdk import dag, task  # type: ignore[import-not-found]
-from airflow.utils.task_group import TaskGroup  # type: ignore[import-not-found]
 
 try:
     from airflow.providers.standard.sensors.external_task import ExternalTaskSensor  # type: ignore[import-not-found]
@@ -49,6 +48,7 @@ from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-
     DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS,
     ad_hourly_snapshot,
     ad_ids_from_config,
+    delivered_ad_hierarchy,
     insight_metric_values,
     traffic_accounts_from_config,
 )
@@ -162,6 +162,75 @@ def meta_ad_hourly_metric():
         print(f"{DAG_ID}: no ad hourly metric tasks were created")
 
     @task
+    def sync_hourly_reports_from_insights(source: dict[str, Any]) -> dict[str, Any]:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        access_token = meta_access_token()
+        context = get_current_context()
+        page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
+        window_start, window_end = _hourly_window(_context_logical_date(context))
+        report_dates = _hourly_report_dates(window_start, window_end)
+        accounts = delivered_ad_hierarchy(
+            access_token,
+            report_dates,
+            active_accounts_value=env_config_value(ACTIVE_ACCOUNTS_ENV),
+            page_limit=page_limit,
+        )
+        if not accounts:
+            print(
+                f"{DAG_ID}: no delivered ads found for "
+                f"window={window_start.isoformat()}..{window_end.isoformat()}"
+            )
+            return {"account_count": 0, "row_count": 0}
+
+        status_resolver = _hourly_status_resolver()
+        report_datetime = report_datetime_for_row(_context_logical_date(context))
+        total_rows = 0
+        for account in accounts:
+            for campaign in account.get("campaigns", []):
+                ad_batches = _ad_id_batches(campaign, AD_BATCH_SIZE)
+                snapshots: list[dict[str, Any]] = []
+                for report_date in report_dates:
+                    for ad_ids in ad_batches:
+                        snapshot = ad_hourly_snapshot(
+                            access_token,
+                            account["id"],
+                            campaign["id"],
+                            ad_ids,
+                            report_date,
+                            page_limit=page_limit,
+                        )
+                        snapshot["config_snapshot_uri"] = source.get("snapshot_uri")
+                        snapshot["ad_ids"] = ad_ids
+                        snapshots.append(snapshot)
+
+                adset_by_ad_id = _ad_context_by_ad_id(campaign)
+                hourly_run_id = _hourly_run_id(context["run_id"], account["id"], campaign["id"])
+                rows = [
+                    _ad_hourly_row(
+                        snapshot,
+                        insight,
+                        campaign,
+                        adset_by_ad_id,
+                        hourly_run_id,
+                        report_datetime,
+                        status_resolver,
+                    )
+                    for snapshot in snapshots
+                    for insight in snapshot.get("insights", [])
+                    if _include_hourly_row(insight, adset_by_ad_id, window_start, window_end)
+                ]
+                _upsert_hourly_rows(AD_HOURLY_TABLE, AD_HOURLY_INSERT_COLUMNS, AD_HOURLY_CONFLICT_COLUMNS, rows)
+                total_rows += len(rows)
+
+        print(
+            f"{DAG_ID}: synced {total_rows} hourly report rows from "
+            f"{_campaign_count(accounts)} delivered campaigns and {_adset_count(accounts)} delivered adsets "
+            f"window={window_start.isoformat()}..{window_end.isoformat()}"
+        )
+        return {"account_count": len(accounts), "row_count": total_rows}
+
+    @task
     def pull_campaign_ad_hourly_metrics(
         account: dict[str, Any],
         campaign: dict[str, Any],
@@ -259,29 +328,7 @@ def meta_ad_hourly_metric():
     )
     config_task = log_campaign_config_source(config_log)
     wait_for_campaign_config >> wait_for_object_property >> config_task
-    accounts = config_source.get("accounts", [])
-    if not accounts:
-        config_task >> no_campaigns_from_campaign_config(config_log)
-        return
-
-    for account in accounts:
-        with TaskGroup(group_id=f"account_{_airflow_id(account['id'])}") as account_group:
-            for campaign in account["campaigns"]:
-                with TaskGroup(group_id=f"campaign_{_airflow_id(campaign['id'])}") as campaign_group:
-                    hourly_metrics = pull_campaign_ad_hourly_metrics.override(
-                        task_id="pull_campaign_ad_hourly_metrics"
-                    )(
-                        account,
-                        campaign,
-                        config_log,
-                    )
-                    write_campaign_ad_hourly_metrics.override(task_id="write_campaign_ad_hourly_metrics")(
-                        hourly_metrics,
-                        account,
-                        campaign,
-                    )
-                config_task >> campaign_group
-        config_task >> account_group
+    config_task >> sync_hourly_reports_from_insights(config_log)
 
 
 def _campaign_config_for_display() -> dict[str, Any]:
