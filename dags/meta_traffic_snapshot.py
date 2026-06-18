@@ -148,11 +148,13 @@ def meta_traffic_snapshot():
         context = get_current_context()
         page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
         report_dates = _report_dates(_context_logical_date(context))
+        config_accounts = _config_accounts_from_source(source)
         accounts = delivered_ad_hierarchy(
             access_token,
             report_dates,
             active_accounts_value=env_config_value(ACTIVE_ACCOUNTS_ENV),
             page_limit=page_limit,
+            config_accounts=config_accounts,
         )
         if not accounts:
             print(f"{DAG_ID}: no delivered ads found for report_dates={report_dates}")
@@ -911,6 +913,30 @@ def _campaign_config_for_display() -> dict[str, Any]:
     except Exception as exc:
         source["error"] = str(exc)
     return source
+
+
+def _config_accounts_from_source(source: dict[str, Any]) -> list[dict[str, Any]]:
+    snapshot_uri = source.get("snapshot_uri")
+    if not snapshot_uri:
+        return []
+    try:
+        import google.auth  # type: ignore[import-not-found]
+        from google.cloud import storage  # type: ignore[import-not-found]
+
+        credentials, _project_id = google.auth.default()
+        storage_client = storage.Client(credentials=credentials)
+        snapshot = read_json_from_gcs(storage_client, snapshot_uri)
+        lookup_window_days = int(
+            env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
+        )
+        return traffic_accounts_from_config(
+            snapshot,
+            active_accounts_value=env_config_value(ACTIVE_ACCOUNTS_ENV),
+            lookup_window_days=lookup_window_days,
+        )
+    except Exception as exc:
+        print(f"{DAG_ID}: could not load config accounts from {snapshot_uri}: {exc}")
+        return []
 
 
 def _config_log_payload(source: dict[str, Any]) -> dict[str, Any]:

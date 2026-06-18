@@ -8,6 +8,7 @@ from typing import Any
 from merino_meta_jobs.traffic import insight_metric_values
 
 POSTGRES_CONN_ID = "merino_analytics"
+COALESCE_ON_UPDATE_COLUMNS = frozenset({"creative_id"})
 COMPANY = "merino"
 PLATFORM = "meta"
 SOURCE = "facebook"
@@ -430,7 +431,14 @@ def upsert_daily_rows(
         [
             "record_updated_at = now()",
             "update_count = target.update_count + 1",
-            *[f"{column} = EXCLUDED.{column}" for column in update_columns],
+            *[
+                (
+                    f"{column} = COALESCE(EXCLUDED.{column}, target.{column})"
+                    if column in COALESCE_ON_UPDATE_COLUMNS
+                    else f"{column} = EXCLUDED.{column}"
+                )
+                for column in update_columns
+            ],
         ]
     )
     changed = "\n            OR ".join(

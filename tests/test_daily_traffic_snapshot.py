@@ -82,6 +82,84 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
         self.assertEqual([ad["id"] for ad in campaign["adsets"][0]["ads"]], ["ad_1"])
         self.assertEqual([ad["id"] for ad in campaign["adsets"][1]["ads"]], ["ad_2"])
 
+    def test_delivered_ad_hierarchy_enriches_creative_id_from_config(self) -> None:
+        class FakeMetaGraphClient:
+            def __init__(self, access_token: str) -> None:
+                self.access_token = access_token
+
+            def get(self, endpoint: str, params: dict[str, Any]) -> dict[str, Any]:
+                return {"id": endpoint, "account_status": 1}
+
+            def get_all(self, endpoint: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+                return [
+                    {
+                        "account_id": "4157857287789311",
+                        "campaign_id": "campaign_1",
+                        "adset_id": "adset_1",
+                        "ad_id": "ad_1",
+                        "ad_name": "Ad 1",
+                    }
+                ]
+
+        config_accounts = [
+            {
+                "id": "act_4157857287789311",
+                "campaigns": [
+                    {
+                        "id": "campaign_1",
+                        "adsets": [
+                            {
+                                "id": "adset_1",
+                                "ads": [{"id": "ad_1", "creative_id": "creative_99"}],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+        original_client = traffic.MetaGraphClient
+        traffic.MetaGraphClient = FakeMetaGraphClient  # type: ignore[assignment]
+        try:
+            accounts = traffic.delivered_ad_hierarchy(
+                "token",
+                ["2026-06-14"],
+                active_accounts_value="4157857287789311",
+                config_accounts=config_accounts,
+            )
+        finally:
+            traffic.MetaGraphClient = original_client
+
+        ad = accounts[0]["campaigns"][0]["adsets"][0]["ads"][0]
+        self.assertEqual(ad["id"], "ad_1")
+        self.assertEqual(ad["creative_id"], "creative_99")
+
+    def test_ad_row_uses_creative_id_from_enriched_adset(self) -> None:
+        from merino_meta_jobs.traffic_snapshot_rows import AD_INSERT_COLUMNS, ad_row  # noqa: E402
+
+        class FakeStatusResolver:
+            def ad_status(self, *args: Any) -> str:
+                return "active"
+
+        adset_by_ad_id = {
+            "ad_1": {
+                "id": "adset_1",
+                "ads": [{"id": "ad_1", "creative_id": "creative_99"}],
+            }
+        }
+        row = ad_row(
+            {"report_date": "2026-06-14", "metric_date": "2026-06-14"},
+            {"ad_id": "ad_1", "campaign_id": "campaign_1", "adset_id": "adset_1"},
+            {"id": "act_1", "timezone_name": "America/Los_Angeles"},
+            {"id": "campaign_1"},
+            adset_by_ad_id,
+            "run_1",
+            "2026-06-14",
+            FakeStatusResolver(),
+        )
+        creative_id_index = AD_INSERT_COLUMNS.index("creative_id")
+        self.assertEqual(row[creative_id_index], "creative_99")
+
     def test_grouped_daily_snapshot_calls_use_id_filters(self) -> None:
         calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -393,6 +471,8 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
         self.assertIn("pull_ad_region_snapshots", dag_py)
         self.assertIn("ON CONFLICT ({conflict_target}) DO UPDATE", row_module_py)
         self.assertIn("update_count = target.update_count + 1", row_module_py)
+        self.assertIn("config_accounts=config_accounts", dag_py)
+        self.assertIn("COALESCE_ON_UPDATE_COLUMNS", row_module_py)
         self.assertIn('f"target.{column} IS DISTINCT FROM EXCLUDED.{column}"', row_module_py)
 
     def test_daily_active_status_can_be_hybrid(self) -> None:

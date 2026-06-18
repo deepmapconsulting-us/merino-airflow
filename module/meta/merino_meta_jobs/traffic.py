@@ -566,6 +566,7 @@ def delivered_ad_hierarchy(
     *,
     active_accounts_value: str | None = None,
     page_limit: int = 500,
+    config_accounts: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     """Return account/campaign/adset/ad work from delivered ad-level insights."""
     dates = list(dict.fromkeys(date for date in metric_dates if date))
@@ -615,11 +616,52 @@ def delivered_ad_hierarchy(
             for insight in insights:
                 _add_delivered_ad(report_account, campaigns_by_id, adsets_by_id, ads_by_id, insight)
 
-    return [
+    accounts = [
         account
         for _account_id, account in sorted(accounts_by_id.items())
         if account.get("campaigns")
     ]
+    if config_accounts:
+        enrich_accounts_with_config_creatives(accounts, config_accounts)
+    return accounts
+
+
+def config_creative_id_by_ad_id(config_accounts: list[dict[str, Any]]) -> dict[str, str]:
+    """Map ad_id -> creative_id from a campaign config snapshot hierarchy."""
+    creative_by_ad_id: dict[str, str] = {}
+    for account in config_accounts:
+        for campaign in account.get("campaigns", []):
+            for adset in campaign.get("adsets", []):
+                for ad in adset.get("ads", []):
+                    if not isinstance(ad, dict) or not ad.get("id"):
+                        continue
+                    creative_id = ad.get("creative_id")
+                    if creative_id:
+                        creative_by_ad_id[str(ad["id"])] = str(creative_id)
+    return creative_by_ad_id
+
+
+def enrich_accounts_with_config_creatives(
+    accounts: list[dict[str, Any]],
+    config_accounts: list[dict[str, Any]],
+) -> None:
+    """Copy creative_id from config ad nodes onto insight-delivered ad stubs."""
+    config_creatives = config_creative_id_by_ad_id(config_accounts)
+    if not config_creatives:
+        return
+
+    for account in accounts:
+        for campaign in account.get("campaigns", []):
+            for adset in campaign.get("adsets", []):
+                for ad in adset.get("ads", []):
+                    if not isinstance(ad, dict) or not ad.get("id"):
+                        continue
+                    ad_id = str(ad["id"])
+                    if ad.get("creative_id"):
+                        continue
+                    creative_id = config_creatives.get(ad_id)
+                    if creative_id:
+                        ad["creative_id"] = creative_id
 
 
 def ad_ids_from_config(adset: dict[str, Any]) -> list[str]:

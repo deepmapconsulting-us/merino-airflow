@@ -170,11 +170,13 @@ def meta_ad_hourly_metric():
         page_limit = int(os.environ.get("META_GRAPH_PAGE_LIMIT", DEFAULT_META_PAGE_LIMIT))
         window_start, window_end = _hourly_window(_context_logical_date(context))
         report_dates = _hourly_report_dates(window_start, window_end)
+        config_accounts = _config_accounts_from_source(source)
         accounts = delivered_ad_hierarchy(
             access_token,
             report_dates,
             active_accounts_value=env_config_value(ACTIVE_ACCOUNTS_ENV),
             page_limit=page_limit,
+            config_accounts=config_accounts,
         )
         if not accounts:
             print(
@@ -371,6 +373,30 @@ def _campaign_config_for_display() -> dict[str, Any]:
     except Exception as exc:
         source["error"] = str(exc)
     return source
+
+
+def _config_accounts_from_source(source: dict[str, Any]) -> list[dict[str, Any]]:
+    snapshot_uri = source.get("snapshot_uri")
+    if not snapshot_uri:
+        return []
+    try:
+        import google.auth  # type: ignore[import-not-found]
+        from google.cloud import storage  # type: ignore[import-not-found]
+
+        credentials, _project_id = google.auth.default()
+        storage_client = storage.Client(credentials=credentials)
+        snapshot = read_json_from_gcs(storage_client, snapshot_uri)
+        lookup_window_days = int(
+            env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
+        )
+        return traffic_accounts_from_config(
+            snapshot,
+            active_accounts_value=env_config_value(ACTIVE_ACCOUNTS_ENV),
+            lookup_window_days=lookup_window_days,
+        )
+    except Exception as exc:
+        print(f"{DAG_ID}: could not load config accounts from {snapshot_uri}: {exc}")
+        return []
 
 
 def _config_log_payload(source: dict[str, Any]) -> dict[str, Any]:
@@ -574,7 +600,14 @@ def _upsert_hourly_rows(
         [
             "updated_at = now()",
             "update_count = target.update_count + 1",
-            *[f"{column} = EXCLUDED.{column}" for column in update_columns],
+            *[
+                (
+                    f"{column} = COALESCE(EXCLUDED.{column}, target.{column})"
+                    if column == "creative_id"
+                    else f"{column} = EXCLUDED.{column}"
+                )
+                for column in update_columns
+            ],
         ]
     )
     changed = "\n            OR ".join(
