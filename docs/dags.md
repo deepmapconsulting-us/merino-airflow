@@ -349,6 +349,43 @@ gantt
 
 ---
 
+---
+
+## `shopify_import`
+
+| | |
+| --- | --- |
+| **Schedule** | `0 */12 * * *` (every 12 hours, UTC) |
+| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.0` |
+| **Executor** | `KubernetesPodOperator` in namespace `airflow` (KSA `merino-airflow-task-runner`) |
+
+### Tasks
+
+| Task | Description |
+| --- | --- |
+| `import_shopify` | Runs `scripts/run_shopify_all.sh`: customers → orders → inventory. Default window is yesterday through today (UTC); inventory uses today as `partition_date`. Skips rows already in Postgres unless `--overwrite`. |
+
+### Secrets and connections
+
+- Postgres: Airflow connection `merino_analytics` → `POSTGRES_*` env (database `merino-shopify`)
+- Geocoding: Airflow Variable `google_geocoding_api_key`
+- Shopify CLI store auth: K8s secret `shopify-cli-store-auth` mounted at `/root/.config/shopify-cli-store-nodejs` (sync with `terraform/scripts/sync-shopify-cli-auth-secret.sh`)
+
+### Manual backfill config
+
+```json
+{
+  "from_date": "2026-06-01",
+  "to_date": "2026-06-14",
+  "partition_date": "2026-06-14",
+  "overwrite": true
+}
+```
+
+DAG definition: [`shopify_import.py`](../dags/shopify_import.py), pod helper: [`shopify_k8s.py`](../dags/shopify_k8s.py).
+
+---
+
 ## Related docs
 
 - Repo layout: [`structure.md`](structure.md)
