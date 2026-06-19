@@ -8,6 +8,8 @@ Prerequisites:
 
 - Airflow connection ``merino_analytics`` (GSM: ``airflow-connections-merino_analytics``)
 - Airflow Variable ``google_geocoding_api_key`` (GSM: ``airflow-variables-google_geocoding_api_key``)
+  — required for **customer import** (Google Geocoding API → lat/lng → H3). Not used by inventory
+  or by the standalone ``backfill_h3.py`` job (that only reads existing lat/lng from Postgres).
 - Kubernetes secret ``shopify-cli-store-auth`` in namespace ``airflow``::
 
     SHOPIFY_CLI_AUTH_NAMESPACES=airflow bash terraform/scripts/sync-shopify-cli-auth-secret.sh

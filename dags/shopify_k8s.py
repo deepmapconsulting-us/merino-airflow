@@ -19,6 +19,7 @@ TASK_RUNNER_KSA = "merino-airflow-task-runner"
 POSTGRES_CONN_ID = "merino_analytics"
 POSTGRES_DB = "merino-shopify"
 GOOGLE_GEOCODING_VARIABLE = "google_geocoding_api_key"
+GOOGLE_GEOCODING_GSM_SECRET = "airflow-variables-google_geocoding_api_key"
 SHOPIFY_AUTH_SECRET = "shopify-cli-store-auth"
 SHOPIFY_AUTH_SECRET_KEY = "config.json"
 SHOPIFY_AUTH_MOUNT = "/root/.config/shopify-cli-store-nodejs"
@@ -47,7 +48,7 @@ def shopify_pod_env() -> dict[str, str]:
         "POSTGRES_PASSWORD": f"{{{{ conn.{POSTGRES_CONN_ID}.password }}}}",
         "POSTGRES_DB": POSTGRES_DB,
         "POSTGRES_CONNECT_TIMEOUT": "30",
-        "GOOGLE_GEOCODING_API_KEY": f"{{{{ var.value.{GOOGLE_GEOCODING_VARIABLE} }}}}",
+        "GOOGLE_GEOCODING_API_KEY": f"{{{{ var.value.get('{GOOGLE_GEOCODING_VARIABLE}', default='') }}}}",
     }
 
 
