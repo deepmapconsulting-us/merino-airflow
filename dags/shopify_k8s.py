@@ -13,7 +13,7 @@ except ImportError:  # pragma: no cover - older provider layout
 
 PROJECT_ID = "merino-agent"
 REGION = "us-west2"
-SHOPIFY_IMAGE = f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-shopify-cli:0.1.0"
+SHOPIFY_IMAGE = f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-shopify-cli:0.1.1"
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
 POSTGRES_CONN_ID = "merino_analytics"
