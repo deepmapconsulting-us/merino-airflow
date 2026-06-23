@@ -28,50 +28,31 @@ def load_dag_module():
 
 
 class ShopifyImportDagTest(unittest.TestCase):
-    def test_scheduled_run_uses_two_day_window(self) -> None:
+    def test_incremental_queries_use_interval_with_overlap(self) -> None:
         module = load_dag_module()
-        logical_date = pendulum.datetime(2026, 6, 14, 12, 0, tz="UTC")
+        interval_start = pendulum.datetime(2026, 6, 14, 12, 0, tz="UTC")
+        interval_end = pendulum.datetime(2026, 6, 15, 0, 0, tz="UTC")
 
-        args = module.shopify_run_arguments(logical_date=logical_date, dag_run_conf={})
-
-        self.assertEqual(
-            args,
-            [
-                "--from-date",
-                "2026-06-13",
-                "--to-date",
-                "2026-06-14",
-                "--partition-date",
-                "2026-06-14",
-            ],
-        )
-
-    def test_manual_conf_overrides_dates_and_adds_overwrite(self) -> None:
-        module = load_dag_module()
-        logical_date = pendulum.datetime(2026, 6, 14, 12, 0, tz="UTC")
-
-        args = module.shopify_run_arguments(
-            logical_date=logical_date,
-            dag_run_conf={
-                "from_date": "2026-06-01",
-                "to_date": "2026-06-10",
-                "partition_date": "2026-06-10",
-                "overwrite": "true",
-            },
+        queries = module.shopify_incremental_queries(
+            data_interval_start=interval_start,
+            data_interval_end=interval_end,
         )
 
         self.assertEqual(
-            args,
-            [
-                "--from-date",
-                "2026-06-01",
-                "--to-date",
-                "2026-06-10",
-                "--partition-date",
-                "2026-06-10",
-                "--overwrite",
-            ],
+            queries["customer_query"],
+            "updated_at:>=2026-06-14T11:30:00Z updated_at:<2026-06-15T00:00:00Z",
         )
+        self.assertEqual(
+            queries["order_query"],
+            "updated_at:>=2026-06-14T11:30:00Z updated_at:<2026-06-15T00:00:00Z financial_status:paid",
+        )
+
+    def test_import_command_uses_query_overrides_and_legacy_dates(self) -> None:
+        dag_path = REPO / "airflow" / "dags" / "shopify_import.py"
+        source = dag_path.read_text(encoding="utf-8")
+        self.assertIn('FROM_DATE=\'{{ dag_run.conf.get("from_date", "") }}\'', source)
+        self.assertIn('ARGS+=(--customer-query "$CUSTOMER_QUERY" --order-query "$ORDER_QUERY")', source)
+        self.assertIn('ARGS+=(--from-date "$FROM_DATE" --to-date "$TO_DATE")', source)
 
     def test_dag_schedule_is_every_twelve_hours(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "shopify_import.py"

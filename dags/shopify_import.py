@@ -1,8 +1,9 @@
 """Sync Shopify customers, orders, and inventory into Cloud SQL every 12 hours.
 
 Runs ``run_shopify_all.sh`` in the ``merino-shopify-cli`` image via
-``KubernetesPodOperator``. Default window: customers/orders last 2 days,
-inventory partition for today (UTC).
+``KubernetesPodOperator``. Default behavior uses an incremental ``updated_at``
+window from Airflow data interval boundaries with a small overlap to catch late
+writes; inventory uses the current run date partition.
 
 Prerequisites:
 
@@ -29,7 +30,6 @@ Manual backfill (Trigger DAG w/ config):
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import Any
 
 import pendulum  # type: ignore[import-not-found]
 from airflow.sdk import dag  # type: ignore[import-not-found]
@@ -38,13 +38,21 @@ from shopify_k8s import shopify_import_pod
 
 DAG_ID = "shopify_import"
 REPORT_TIMEZONE = "UTC"
+SHOPIFY_INCREMENTAL_OVERLAP_MINUTES = 30
 
 SHOPIFY_IMPORT_COMMAND = """\
 set -euo pipefail
-FROM_DATE='{{ dag_run.conf.get("from_date") or (logical_date - macros.timedelta(days=1)).strftime("%Y-%m-%d") }}'
-TO_DATE='{{ dag_run.conf.get("to_date") or logical_date.strftime("%Y-%m-%d") }}'
-PARTITION_DATE='{{ dag_run.conf.get("partition_date") or dag_run.conf.get("to_date") or logical_date.strftime("%Y-%m-%d") }}'
-ARGS=(--from-date "$FROM_DATE" --to-date "$TO_DATE" --partition-date "$PARTITION_DATE")
+FROM_DATE='{{ dag_run.conf.get("from_date", "") }}'
+TO_DATE='{{ dag_run.conf.get("to_date", "") }}'
+PARTITION_DATE='{{ dag_run.conf.get("partition_date") or dag_run.conf.get("to_date") or data_interval_end.in_timezone("UTC").strftime("%Y-%m-%d") }}'
+CUSTOMER_QUERY='{{ dag_run.conf.get("customer_query") or ("updated_at:>=" ~ (data_interval_start - macros.timedelta(minutes=30)).in_timezone("UTC").strftime("%Y-%m-%dT%H:%M:%SZ") ~ " updated_at:<" ~ data_interval_end.in_timezone("UTC").strftime("%Y-%m-%dT%H:%M:%SZ")) }}'
+ORDER_QUERY='{{ dag_run.conf.get("order_query") or ("updated_at:>=" ~ (data_interval_start - macros.timedelta(minutes=30)).in_timezone("UTC").strftime("%Y-%m-%dT%H:%M:%SZ") ~ " updated_at:<" ~ data_interval_end.in_timezone("UTC").strftime("%Y-%m-%dT%H:%M:%SZ") ~ " financial_status:paid") }}'
+ARGS=(--partition-date "$PARTITION_DATE")
+if [[ -n "$FROM_DATE" && -n "$TO_DATE" ]]; then
+  ARGS+=(--from-date "$FROM_DATE" --to-date "$TO_DATE")
+else
+  ARGS+=(--customer-query "$CUSTOMER_QUERY" --order-query "$ORDER_QUERY")
+fi
 {% if dag_run.conf.get("overwrite") in [True, "true", "1", "yes"] -%}
 ARGS+=(--overwrite)
 {% endif -%}
@@ -52,27 +60,23 @@ exec bash scripts/run_shopify_all.sh "${ARGS[@]}"
 """
 
 
-def shopify_run_arguments(*, logical_date: pendulum.DateTime, dag_run_conf: dict[str, Any]) -> list[str]:
-    """Build CLI args for ``run_shopify_all.sh`` from schedule or manual conf."""
-    if dag_run_conf.get("from_date") and dag_run_conf.get("to_date"):
-        from_date = str(dag_run_conf["from_date"])
-        to_date = str(dag_run_conf["to_date"])
-    else:
-        to_date = logical_date.format("YYYY-MM-DD")
-        from_date = logical_date.subtract(days=1).format("YYYY-MM-DD")
-
-    partition_date = str(dag_run_conf.get("partition_date") or to_date)
-    args = [
-        "--from-date",
-        from_date,
-        "--to-date",
-        to_date,
-        "--partition-date",
-        partition_date,
-    ]
-    if str(dag_run_conf.get("overwrite", "")).strip().lower() in {"1", "true", "yes"}:
-        args.append("--overwrite")
-    return args
+def shopify_incremental_queries(
+    *,
+    data_interval_start: pendulum.DateTime,
+    data_interval_end: pendulum.DateTime,
+    overlap_minutes: int = SHOPIFY_INCREMENTAL_OVERLAP_MINUTES,
+) -> dict[str, str]:
+    """Build default incremental Shopify search queries from the Airflow interval."""
+    window_start = pendulum.instance(data_interval_start).in_timezone("UTC").subtract(minutes=overlap_minutes)
+    window_end = pendulum.instance(data_interval_end).in_timezone("UTC")
+    customer_query = (
+        f"updated_at:>={window_start.strftime('%Y-%m-%dT%H:%M:%SZ')} "
+        f"updated_at:<{window_end.strftime('%Y-%m-%dT%H:%M:%SZ')}"
+    )
+    return {
+        "customer_query": customer_query,
+        "order_query": f"{customer_query} financial_status:paid",
+    }
 
 
 @dag(
