@@ -19,6 +19,7 @@ from merino_erp_jobs.lingxing import (  # noqa: E402  # type: ignore[import-not-
     lingxing_sign,
     parse_store_ids,
 )
+from merino_erp_jobs.logistics_import import warehouse_code  # noqa: E402  # type: ignore[import-not-found]
 
 
 class FakeVariableStore:
@@ -165,8 +166,31 @@ class LingXingClientTest(unittest.TestCase):
         self.assertEqual(client.fetch_all("/endpoint", {"sid": "1"}, page_size=2), [{"id": 1}, {"id": 2}, {"id": 3}])
         self.assertEqual([call["offset"] for call in calls], [0, 2])
 
+    def test_client_accepts_data_array_response(self) -> None:
+        def request_json(url: str, params: dict[str, Any], body: dict[str, Any] | None) -> dict[str, Any]:
+            del url, params, body
+            return {"code": 0, "data": [{"wid": 13345, "name": "梦迪仓库"}], "total": 1}
+
+        client = LingXingOpenApi(
+            host="https://openapi.lingxing.com",
+            app_key="1234567890abcdef",
+            access_token="token",
+            request_json=request_json,
+            sleep=lambda seconds: None,
+            clock=lambda: 100,
+        )
+
+        self.assertEqual(
+            client.fetch_all("/erp/sc/data/local_inventory/warehouse", {"type": 1}, page_size=1000),
+            [{"wid": 13345, "name": "梦迪仓库"}],
+        )
+
     def test_parse_store_ids_accepts_comma_separated_values(self) -> None:
         self.assertEqual(parse_store_ids(["1, 2", "3"]), ["1", "2", "3"])
+
+    def test_warehouse_code_maps_key_local_warehouses(self) -> None:
+        self.assertEqual(warehouse_code("梦迪仓库"), "mengdi")
+        self.assertEqual(warehouse_code("独立站"), "independent_site_fbm")
 
 
 def load_dag_module():
@@ -221,9 +245,12 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(module.POSTGRES_CONN_ID, "merino_analytics")
         self.assertEqual(module.ERP_LOGISTICS_DB, "erp_logistics")
         self.assertIn('schedule="30 */4 * * *"', source)
+        self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
+        self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站")
 
     def test_page_size_uses_default_for_bad_values(self) -> None:
         module = load_dag_module()
 
         self.assertEqual(module.page_size({"page_size": "bad"}), module.DEFAULT_PAGE_SIZE)
+        self.assertEqual(module.page_size({"page_size": "1000"}), module.MAX_PAGE_SIZE)
 

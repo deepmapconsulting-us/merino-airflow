@@ -180,7 +180,10 @@ class LingXingOpenApi:
             body["length"] = page_size
             response = self.post(endpoint, body)
             data = response.get("data") if isinstance(response, dict) else {}
-            page = data.get("list") if isinstance(data, dict) else None
+            if isinstance(data, list):
+                page = data
+            else:
+                page = data.get("list") if isinstance(data, dict) else None
             if not isinstance(page, list):
                 page = []
 

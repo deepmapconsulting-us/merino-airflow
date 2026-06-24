@@ -21,12 +21,42 @@ def import_lingxing_rows(
     listing_rows: Iterable[dict[str, Any]],
     stock_source: str | None,
     listing_source: str | None,
+    warehouse_rows: Iterable[dict[str, Any]] | None = None,
+    warehouse_source: str | None = None,
 ) -> dict[str, int]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.transaction():
+            warehouse_count = import_warehouse_rows(conn, warehouse_rows or [], warehouse_source)
             stock_count = import_stock_rows(conn, stock_rows, stock_source)
             listing_count = import_listing_rows(conn, listing_rows, listing_source)
-    return {"stock_rows": stock_count, "listing_rows": listing_count}
+    return {
+        "warehouse_rows": warehouse_count,
+        "stock_rows": stock_count,
+        "listing_rows": listing_count,
+    }
+
+
+def import_warehouse_rows(
+    conn: Connection[dict[str, Any]],
+    rows: Iterable[dict[str, Any]],
+    source_file: str | None,
+) -> int:
+    rows = list(rows)
+    if not rows:
+        return 0
+
+    import_run_id = create_import_run(
+        conn,
+        source_object="warehouse",
+        source_file=source_file,
+        row_count=len(rows),
+    )
+    imported = 0
+    for index, row in enumerate(rows, start=1):
+        upsert_warehouse(conn, row)
+        imported = index
+    finish_import_run(conn, import_run_id, imported)
+    return imported
 
 
 def import_stock_rows(
@@ -76,7 +106,7 @@ def import_stock_rows(
                 warehouse_id,
                 product_id,
                 store_id,
-                text(row.get("seller_sku")),
+                warehouse_product_sku(row),
                 text(row.get("sku")) or text(row.get("local_sku")),
                 text(row.get("asin")),
                 text(row.get("parent_asin_real")) or text(row.get("parent_asin")),
@@ -104,18 +134,15 @@ def import_stock_rows(
                 warehouse_id,
                 product_id,
                 store_id,
-                text(row.get("seller_sku")),
+                warehouse_product_sku(row),
                 product_sku(row),
-                number(row.get("available_total")) or number(row.get("quantity")) or 0,
-                number(row.get("reserved_customerorders")) or 0,
+                available_quantity(row),
+                reserved_quantity(row),
                 inbound_quantity(row),
                 damaged_quantity(row),
-                number(row.get("defective_quantity")) or 0,
-                number(row.get("total_onhand_quantity"))
-                or number(row.get("quantity"))
-                or number(row.get("available_total"))
-                or 0,
-                number(row.get("total_cost")),
+                defective_quantity(row),
+                total_quantity(row),
+                total_cost(row),
                 SOURCE_SYSTEM,
                 raw_stock_id,
                 Jsonb(row),
@@ -222,7 +249,7 @@ def insert_raw_stock(
         (
             import_run_id,
             snapshot_at,
-            integer(row.get("sid")),
+            integer(row.get("sid")) or integer(row.get("wid")),
             text(row.get("seller_name")),
             text(row.get("seller_id")),
             text(row.get("seller_account_name")),
@@ -242,11 +269,11 @@ def insert_raw_stock(
             text(row.get("product_name")),
             text(row.get("product_brand_text")),
             text(row.get("category_text")),
-            number(row.get("quantity")),
-            number(row.get("available_total")),
-            number(row.get("total_onhand_quantity")),
-            number(row.get("total_fulfillable_quantity")),
-            number(row.get("reserved_customerorders")),
+            number(row.get("quantity")) or number(row.get("product_total")),
+            number(row.get("available_total")) or number(row.get("product_valid_num")),
+            number(row.get("total_onhand_quantity")) or number(row.get("product_total")),
+            number(row.get("total_fulfillable_quantity")) or number(row.get("product_valid_num")),
+            number(row.get("reserved_customerorders")) or number(row.get("product_lock_num")),
             number(row.get("reserved_fc_transfers")),
             number(row.get("reserved_fc_processing")),
             number(row.get("afn_inbound_working_quantity")),
@@ -256,7 +283,7 @@ def insert_raw_stock(
             damaged_quantity(row),
             number(row.get("defective_quantity")),
             number(row.get("total_price")),
-            number(row.get("total_cost")),
+            total_cost(row),
             Jsonb(row),
         ),
     ).fetchone()
@@ -315,20 +342,21 @@ def insert_raw_listing(
 
 
 def upsert_store(conn: Connection[dict[str, Any]], row: dict[str, Any]) -> int | None:
-    sid = integer(row.get("sid"))
-    store_name = text(row.get("shop")) or text(row.get("seller_name"))
+    sid = integer(row.get("sid")) or integer(row.get("wid"))
+    store_name = text(row.get("shop")) or text(row.get("seller_name")) or text(row.get("name"))
     if sid is None or not store_name:
         return None
 
     result = conn.execute(
         """
         insert into store (
-            source_system, sid, store_name, seller_id, seller_account_name,
+            store_id, source_system, store_name, seller_id, seller_account_name,
             marketplace, platform, updated_at
         )
         values (%s, %s, %s, %s, %s, %s, %s, now())
-        on conflict (source_system, sid)
+        on conflict (store_id)
         do update set
+            source_system = excluded.source_system,
             store_name = excluded.store_name,
             seller_id = coalesce(excluded.seller_id, store.seller_id),
             seller_account_name = coalesce(excluded.seller_account_name, store.seller_account_name),
@@ -339,8 +367,8 @@ def upsert_store(conn: Connection[dict[str, Any]], row: dict[str, Any]) -> int |
         returning store_id
         """,
         (
-            SOURCE_SYSTEM,
             sid,
+            SOURCE_SYSTEM,
             store_name,
             text(row.get("seller_id")),
             text(row.get("seller_account_name")),
@@ -352,26 +380,52 @@ def upsert_store(conn: Connection[dict[str, Any]], row: dict[str, Any]) -> int |
 
 
 def upsert_warehouse(conn: Connection[dict[str, Any]], row: dict[str, Any]) -> int:
-    warehouse_name = text(row.get("name")) or "LingXing FBM"
-    code = warehouse_code(warehouse_name)
-    result = conn.execute(
+    warehouse_name = warehouse_name_from_row(row)
+    api_warehouse_id = warehouse_api_id(row)
+    if api_warehouse_id:
+        code = warehouse_code(warehouse_name, api_warehouse_id=api_warehouse_id)
+        result = conn.execute(
+            """
+            insert into warehouse (
+                warehouse_id, warehouse_code, warehouse_name, warehouse_type,
+                platform_scope, source_system, source_warehouse_name, updated_at
+            )
+            values (%s, %s, %s, %s, %s, %s, %s, now())
+            on conflict (warehouse_id)
+            do update set
+                warehouse_code = excluded.warehouse_code,
+                warehouse_name = excluded.warehouse_name,
+                source_warehouse_name = excluded.source_warehouse_name,
+                active = true,
+                updated_at = now()
+            returning warehouse_id
+            """,
+            (
+                api_warehouse_id,
+                code,
+                warehouse_name,
+                "non_fba",
+                "FBM",
+                SOURCE_SYSTEM,
+                warehouse_name,
+            ),
+        ).fetchone()
+        return int(result["warehouse_id"])
+
+    existing = conn.execute(
         """
-        insert into warehouse (
-            warehouse_code, warehouse_name, warehouse_type, platform_scope,
-            source_system, source_warehouse_name, updated_at
-        )
-        values (%s, %s, %s, %s, %s, %s, now())
-        on conflict (warehouse_code)
-        do update set
-            warehouse_name = excluded.warehouse_name,
-            source_warehouse_name = excluded.source_warehouse_name,
-            active = true,
-            updated_at = now()
-        returning warehouse_id
+        select warehouse_id
+        from warehouse
+        where source_system = %s
+          and warehouse_name = %s
+        order by warehouse_id
+        limit 1
         """,
-        (code, warehouse_name, "non_fba", "FBM", SOURCE_SYSTEM, warehouse_name),
+        (SOURCE_SYSTEM, warehouse_name),
     ).fetchone()
-    return int(result["warehouse_id"])
+    if existing:
+        return int(existing["warehouse_id"])
+    raise ValueError(f"LingXing warehouse row missing wid for new warehouse: {warehouse_name}")
 
 
 def upsert_product_from_stock(
@@ -384,14 +438,13 @@ def upsert_product_from_stock(
     return upsert_product(
         conn,
         sku=sku,
-        erp_sku=text(row.get("sku")) or None,
         seller_sku=text(row.get("seller_sku")),
         spu=text(row.get("spu")),
         spu_name=text(row.get("spu_name")),
         product_name=text(row.get("product_name")),
         brand=text(row.get("product_brand_text")),
         category=text(row.get("category_text")),
-        source_product_id=text(row.get("product_id")),
+        api_product_id=integer(row.get("product_id")),
     )
 
 
@@ -405,14 +458,13 @@ def upsert_product_from_listing(
     return upsert_product(
         conn,
         sku=sku,
-        erp_sku=text(row.get("local_sku")) or None,
         seller_sku=text(row.get("seller_sku")),
         spu=None,
         spu_name=None,
         product_name=text(row.get("local_name")) or text(row.get("item_name")),
         brand=text(row.get("product_brand_text")),
         category=text(row.get("category_text")),
-        source_product_id=text(row.get("product_relation_id")) or text(row.get("pid")),
+        api_product_id=integer(row.get("product_relation_id")) or integer(row.get("pid")),
     )
 
 
@@ -420,25 +472,49 @@ def upsert_product(
     conn: Connection[dict[str, Any]],
     *,
     sku: str,
-    erp_sku: str | None,
     seller_sku: str | None,
     spu: str | None,
     spu_name: str | None,
     product_name: str | None,
     brand: str | None,
     category: str | None,
-    source_product_id: str | None,
+    api_product_id: int | None,
 ) -> int:
+    if not api_product_id:
+        existing = conn.execute(
+            "select product_id from product where sku = %s",
+            (sku,),
+        ).fetchone()
+        if existing:
+            return int(existing["product_id"])
+        raise ValueError(f"LingXing product row missing usable product_id for new SKU: {sku}")
+
+    existing_for_sku = conn.execute(
+        "select product_id from product where sku = %s",
+        (sku,),
+    ).fetchone()
+    if existing_for_sku and int(existing_for_sku["product_id"]) != api_product_id:
+        existing_for_id = conn.execute(
+            "select product_id from product where product_id = %s",
+            (api_product_id,),
+        ).fetchone()
+        if existing_for_id:
+            return int(existing_for_id["product_id"])
+        conn.execute(
+            "update product set product_id = %s, updated_at = now() where product_id = %s",
+            (api_product_id, int(existing_for_sku["product_id"])),
+        )
+
     result = conn.execute(
         """
         insert into product (
-            sku, erp_sku, seller_sku, spu, spu_name, product_name,
-            brand, category, source_system, source_product_id, updated_at
+            product_id, sku, seller_sku, spu, spu_name, product_name,
+            brand, category, source_system, updated_at
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
-        on conflict (sku)
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+        on conflict (product_id)
         do update set
-            erp_sku = coalesce(excluded.erp_sku, product.erp_sku),
+            sku = excluded.sku,
             seller_sku = coalesce(excluded.seller_sku, product.seller_sku),
             spu = coalesce(excluded.spu, product.spu),
             spu_name = coalesce(excluded.spu_name, product.spu_name),
@@ -446,14 +522,13 @@ def upsert_product(
             brand = coalesce(excluded.brand, product.brand),
             category = coalesce(excluded.category, product.category),
             source_system = excluded.source_system,
-            source_product_id = coalesce(excluded.source_product_id, product.source_product_id),
             active = true,
             updated_at = now()
         returning product_id
         """,
         (
+            api_product_id,
             sku,
-            erp_sku,
             seller_sku,
             spu,
             spu_name,
@@ -461,7 +536,6 @@ def upsert_product(
             brand,
             category,
             SOURCE_SYSTEM,
-            source_product_id,
         ),
     ).fetchone()
     return int(result["product_id"])
@@ -471,11 +545,25 @@ def product_sku(row: dict[str, Any]) -> str | None:
     return text(row.get("local_sku")) or text(row.get("sku")) or text(row.get("seller_sku"))
 
 
-def warehouse_code(name: str) -> str:
+def warehouse_product_sku(row: dict[str, Any]) -> str | None:
+    return text(row.get("seller_sku")) or product_sku(row)
+
+
+def warehouse_name_from_row(row: dict[str, Any]) -> str:
+    return text(row.get("name")) or text(row.get("warehouse_name")) or "LingXing FBM"
+
+
+def warehouse_api_id(row: dict[str, Any]) -> int | None:
+    return integer(row.get("wid")) or integer(row.get("warehouse_id")) or integer(row.get("warehouseId"))
+
+
+def warehouse_code(name: str, *, api_warehouse_id: int | None = None) -> str:
     if "梦迪" in name:
         return "mengdi"
     if "独立站" in name:
         return "independent_site_fbm"
+    if api_warehouse_id:
+        return f"lingxing_wid_{api_warehouse_id}"[:80]
     slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
     if slug:
         return f"lingxing_{slug}"[:80]
@@ -489,6 +577,7 @@ def inbound_quantity(row: dict[str, Any]) -> Decimal:
             number(row.get("afn_inbound_working_quantity")),
             number(row.get("afn_inbound_shipped_quantity")),
             number(row.get("afn_inbound_receiving_quantity")),
+            number(row.get("product_onway")),
         ]
     )
 
@@ -501,8 +590,40 @@ def damaged_quantity(row: dict[str, Any]) -> Decimal:
             number(row.get("carrier_damaged_quantity")),
             number(row.get("distributor_damaged_quantity")),
             number(row.get("customer_damaged_quantity")),
+            number(row.get("product_bad_num")),
         ]
     )
+
+
+def available_quantity(row: dict[str, Any]) -> Decimal:
+    return (
+        number(row.get("available_total"))
+        or number(row.get("quantity"))
+        or number(row.get("product_valid_num"))
+        or Decimal("0")
+    )
+
+
+def reserved_quantity(row: dict[str, Any]) -> Decimal:
+    return number(row.get("reserved_customerorders")) or number(row.get("product_lock_num")) or Decimal("0")
+
+
+def defective_quantity(row: dict[str, Any]) -> Decimal:
+    return number(row.get("defective_quantity")) or number(row.get("product_bad_num")) or Decimal("0")
+
+
+def total_quantity(row: dict[str, Any]) -> Decimal:
+    return (
+        number(row.get("total_onhand_quantity"))
+        or number(row.get("quantity"))
+        or number(row.get("available_total"))
+        or number(row.get("product_total"))
+        or Decimal("0")
+    )
+
+
+def total_cost(row: dict[str, Any]) -> Decimal | None:
+    return number(row.get("total_cost")) or number(row.get("stock_cost_total"))
 
 
 def text(value: Any) -> str | None:
