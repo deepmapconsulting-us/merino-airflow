@@ -224,7 +224,7 @@ def upsert_inventory_latest(
             %s, %s, (%s)::date, %s, %s, %s, %s, %s,
             %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, %s, now()
         )
-        on conflict (warehouse_id, product_id, store_key)
+        on conflict (warehouse_id, product_id, (coalesce(store_id, (-1)::bigint)))
         do update set
             inventory_snapshot_id = excluded.inventory_snapshot_id,
             snapshot_at = excluded.snapshot_at,
@@ -232,14 +232,46 @@ def upsert_inventory_latest(
             store_id = excluded.store_id,
             seller_sku = excluded.seller_sku,
             sku = excluded.sku,
-            available_qty = excluded.available_qty,
-            reserved_qty = excluded.reserved_qty,
-            inbound_qty = excluded.inbound_qty,
-            outbound_qty = excluded.outbound_qty,
-            damaged_qty = excluded.damaged_qty,
-            defective_qty = excluded.defective_qty,
-            total_qty = excluded.total_qty,
-            total_cost = excluded.total_cost,
+            available_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.available_qty + excluded.available_qty
+                else excluded.available_qty
+            end,
+            reserved_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.reserved_qty + excluded.reserved_qty
+                else excluded.reserved_qty
+            end,
+            inbound_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.inbound_qty + excluded.inbound_qty
+                else excluded.inbound_qty
+            end,
+            outbound_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.outbound_qty + excluded.outbound_qty
+                else excluded.outbound_qty
+            end,
+            damaged_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.damaged_qty + excluded.damaged_qty
+                else excluded.damaged_qty
+            end,
+            defective_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.defective_qty + excluded.defective_qty
+                else excluded.defective_qty
+            end,
+            total_qty = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then inventory_latest.total_qty + excluded.total_qty
+                else excluded.total_qty
+            end,
+            total_cost = case
+                when inventory_latest.snapshot_at = excluded.snapshot_at
+                then coalesce(inventory_latest.total_cost, 0) + coalesce(excluded.total_cost, 0)
+                else excluded.total_cost
+            end,
             source_system = excluded.source_system,
             source_raw_id = excluded.source_raw_id,
             raw_snapshot = excluded.raw_snapshot,
