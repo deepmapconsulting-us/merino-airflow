@@ -41,7 +41,7 @@ from merino_erp_jobs.logistics_import import import_lingxing_rows  # noqa: E402
 DAG_ID = "lingxing_erp_logistics_import"
 REPORT_TIMEZONE = "UTC"
 POSTGRES_CONN_ID = "merino_analytics"
-ERP_LOGISTICS_DB = "erp_logistics"
+ERP_LOGISTICS_DB = "merino-shopify"
 
 TOKEN_CACHE_VARIABLE = "erp_lingxing_oauth_cache"
 STOCK_ENDPOINT_VARIABLE = "erp_lingxing_stock_endpoint"

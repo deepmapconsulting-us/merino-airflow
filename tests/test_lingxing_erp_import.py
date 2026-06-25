@@ -195,6 +195,7 @@ class LingXingClientTest(unittest.TestCase):
 
 def load_dag_module():
     airflow_module = types.ModuleType("airflow")
+    pendulum_module = types.ModuleType("pendulum")
     sdk_module = types.ModuleType("airflow.sdk")
 
     def fake_dag(**_kwargs):
@@ -223,6 +224,8 @@ def load_dag_module():
     sdk_module.dag = fake_dag
     sdk_module.task = fake_task
     sys.modules["airflow"] = airflow_module
+    pendulum_module.datetime = lambda *_args, **_kwargs: None
+    sys.modules["pendulum"] = pendulum_module
     sys.modules["airflow.sdk"] = sdk_module
 
     spec = importlib.util.spec_from_file_location(
@@ -243,7 +246,7 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(module.DAG_ID, "lingxing_erp_logistics_import")
         self.assertEqual(module.TOKEN_CACHE_VARIABLE, "erp_lingxing_oauth_cache")
         self.assertEqual(module.POSTGRES_CONN_ID, "merino_analytics")
-        self.assertEqual(module.ERP_LOGISTICS_DB, "erp_logistics")
+        self.assertEqual(module.ERP_LOGISTICS_DB, "merino-shopify")
         self.assertIn('schedule="30 */4 * * *"', source)
         self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
         self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站")

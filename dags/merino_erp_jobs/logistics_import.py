@@ -12,6 +12,7 @@ from psycopg.rows import dict_row  # type: ignore[import-not-found]
 from psycopg.types.json import Jsonb  # type: ignore[import-not-found]
 
 SOURCE_SYSTEM = "lingxing"
+ERP_LOGISTICS_SCHEMA = "erp_logistics"
 
 
 def import_lingxing_rows(
@@ -26,6 +27,7 @@ def import_lingxing_rows(
 ) -> dict[str, int]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.transaction():
+            use_erp_logistics_schema(conn)
             warehouse_count = import_warehouse_rows(conn, warehouse_rows or [], warehouse_source)
             stock_count = import_stock_rows(conn, stock_rows, stock_source)
             listing_count = import_listing_rows(conn, listing_rows, listing_source)
@@ -34,6 +36,10 @@ def import_lingxing_rows(
         "stock_rows": stock_count,
         "listing_rows": listing_count,
     }
+
+
+def use_erp_logistics_schema(conn: Connection[dict[str, Any]]) -> None:
+    conn.execute(f"set local search_path to {ERP_LOGISTICS_SCHEMA}, public")
 
 
 def import_warehouse_rows(
@@ -115,7 +121,18 @@ def import_stock_rows(
             ),
         )
 
-        conn.execute(
+        seller_sku = warehouse_product_sku(row)
+        sku = product_sku(row)
+        available_qty = available_quantity(row)
+        reserved_qty = reserved_quantity(row)
+        inbound_qty = inbound_quantity(row)
+        damaged_qty = damaged_quantity(row)
+        defective_qty = defective_quantity(row)
+        total_qty = total_quantity(row)
+        cost = total_cost(row)
+        raw_snapshot = Jsonb(row)
+
+        snapshot_row = conn.execute(
             """
             insert into inventory_snapshot (
                 snapshot_at, snapshot_date, warehouse_id, product_id, store_id,
@@ -127,6 +144,7 @@ def import_stock_rows(
                 %s, (%s)::date, %s, %s, %s, %s, %s, %s, %s, %s,
                 0, %s, %s, %s, %s, %s, %s, %s
             )
+            returning inventory_snapshot_id
             """,
             (
                 snapshot_at,
@@ -134,24 +152,125 @@ def import_stock_rows(
                 warehouse_id,
                 product_id,
                 store_id,
-                warehouse_product_sku(row),
-                product_sku(row),
-                available_quantity(row),
-                reserved_quantity(row),
-                inbound_quantity(row),
-                damaged_quantity(row),
-                defective_quantity(row),
-                total_quantity(row),
-                total_cost(row),
+                seller_sku,
+                sku,
+                available_qty,
+                reserved_qty,
+                inbound_qty,
+                damaged_qty,
+                defective_qty,
+                total_qty,
+                cost,
                 SOURCE_SYSTEM,
                 raw_stock_id,
-                Jsonb(row),
+                raw_snapshot,
             ),
+        ).fetchone()
+        upsert_inventory_latest(
+            conn,
+            inventory_snapshot_id=int(snapshot_row["inventory_snapshot_id"]),
+            snapshot_at=snapshot_at,
+            warehouse_id=warehouse_id,
+            product_id=product_id,
+            store_id=store_id,
+            seller_sku=seller_sku,
+            sku=sku,
+            available_qty=available_qty,
+            reserved_qty=reserved_qty,
+            inbound_qty=inbound_qty,
+            damaged_qty=damaged_qty,
+            defective_qty=defective_qty,
+            total_qty=total_qty,
+            total_cost=cost,
+            source_raw_id=raw_stock_id,
+            raw_snapshot=raw_snapshot,
         )
         imported = index
 
     finish_import_run(conn, import_run_id, imported)
     return imported
+
+
+def upsert_inventory_latest(
+    conn: Connection[dict[str, Any]],
+    *,
+    inventory_snapshot_id: int,
+    snapshot_at: Any,
+    warehouse_id: int,
+    product_id: int,
+    store_id: int | None,
+    seller_sku: str | None,
+    sku: str | None,
+    available_qty: Decimal,
+    reserved_qty: Decimal,
+    inbound_qty: Decimal,
+    damaged_qty: Decimal,
+    defective_qty: Decimal,
+    total_qty: Decimal,
+    total_cost: Decimal | None,
+    source_raw_id: int,
+    raw_snapshot: Jsonb,
+) -> None:
+    conn.execute(
+        """
+        insert into inventory_latest (
+            inventory_snapshot_id, snapshot_at, snapshot_date,
+            warehouse_id, product_id, store_id, seller_sku, sku,
+            available_qty, reserved_qty, inbound_qty, outbound_qty,
+            damaged_qty, defective_qty, total_qty, total_cost,
+            source_system, source_raw_id, raw_snapshot, updated_at
+        )
+        values (
+            %s, %s, (%s)::date, %s, %s, %s, %s, %s,
+            %s, %s, %s, 0, %s, %s, %s, %s, %s, %s, %s, now()
+        )
+        on conflict (warehouse_id, product_id, store_key)
+        do update set
+            inventory_snapshot_id = excluded.inventory_snapshot_id,
+            snapshot_at = excluded.snapshot_at,
+            snapshot_date = excluded.snapshot_date,
+            store_id = excluded.store_id,
+            seller_sku = excluded.seller_sku,
+            sku = excluded.sku,
+            available_qty = excluded.available_qty,
+            reserved_qty = excluded.reserved_qty,
+            inbound_qty = excluded.inbound_qty,
+            outbound_qty = excluded.outbound_qty,
+            damaged_qty = excluded.damaged_qty,
+            defective_qty = excluded.defective_qty,
+            total_qty = excluded.total_qty,
+            total_cost = excluded.total_cost,
+            source_system = excluded.source_system,
+            source_raw_id = excluded.source_raw_id,
+            raw_snapshot = excluded.raw_snapshot,
+            updated_at = now()
+        where inventory_latest.snapshot_at < excluded.snapshot_at
+           or (
+                inventory_latest.snapshot_at = excluded.snapshot_at
+            and inventory_latest.inventory_snapshot_id < excluded.inventory_snapshot_id
+           )
+        """,
+        (
+            inventory_snapshot_id,
+            snapshot_at,
+            snapshot_at,
+            warehouse_id,
+            product_id,
+            store_id,
+            seller_sku,
+            sku,
+            available_qty,
+            reserved_qty,
+            inbound_qty,
+            damaged_qty,
+            defective_qty,
+            total_qty,
+            total_cost,
+            SOURCE_SYSTEM,
+            source_raw_id,
+            raw_snapshot,
+        ),
+    )
 
 
 def import_listing_rows(
