@@ -66,6 +66,7 @@ SHOPIFY_AUTH_INIT_CONTAINER = k8s.V1Container(
 def shopify_pod_env() -> list[k8s.V1EnvVar]:
     """Env vars injected into the Shopify CLI batch image."""
     return [
+        k8s.V1EnvVar(name="CI", value="true"),
         k8s.V1EnvVar(name="PYTHONUNBUFFERED", value="1"),
         k8s.V1EnvVar(name="POSTGRES_HOST", value=f"{{{{ conn.{POSTGRES_CONN_ID}.host }}}}"),
         k8s.V1EnvVar(name="POSTGRES_PORT", value=f"{{{{ conn.{POSTGRES_CONN_ID}.port or 5432 }}}}"),
