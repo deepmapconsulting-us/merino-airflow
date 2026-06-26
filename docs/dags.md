@@ -372,7 +372,7 @@ gantt
   GSM secret `airflow-variables-google_geocoding_api_key`.
   Required for the **customers** step only (Google Geocoding API → lat/lng → H3). Not used by inventory
   or by local `backfill_h3.py` (that job reads existing lat/lng from Postgres and computes H3 locally).
-- Shopify CLI store auth: K8s secret `shopify-cli-store-auth` mounted at `/root/.config/shopify-cli-store-nodejs` (sync with `terraform/scripts/sync-shopify-cli-auth-secret.sh`)
+- Shopify CLI store auth: K8s secret `shopify-cli-store-auth` copied from `/mnt/shopify-cli-auth` into a writable `emptyDir` at `/root/.config/shopify-cli-store-nodejs` (init container; Shopify CLI must write there). Sync with `terraform/scripts/sync-shopify-cli-auth-secret.sh`
 
 ### Manual backfill config
 

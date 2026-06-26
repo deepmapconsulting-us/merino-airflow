@@ -23,18 +23,43 @@ GOOGLE_GEOCODING_SECRET_KEY = "api-key"
 SHOPIFY_AUTH_SECRET = "shopify-cli-store-auth"
 SHOPIFY_AUTH_SECRET_KEY = "config.json"
 SHOPIFY_AUTH_MOUNT = "/root/.config/shopify-cli-store-nodejs"
+# Shopify CLI rewrites config.json on load; mount the K8s secret elsewhere and copy into a writable dir.
+SHOPIFY_AUTH_SECRET_MOUNT = "/mnt/shopify-cli-auth"
 
-SHOPIFY_AUTH_VOLUME = k8s.V1Volume(
+SHOPIFY_AUTH_SECRET_VOLUME = k8s.V1Volume(
     name="shopify-cli-auth",
     secret=k8s.V1SecretVolumeSource(
         secret_name=SHOPIFY_AUTH_SECRET,
         items=[k8s.V1KeyToPath(key=SHOPIFY_AUTH_SECRET_KEY, path=SHOPIFY_AUTH_SECRET_KEY)],
     ),
 )
-SHOPIFY_AUTH_VOLUME_MOUNT = k8s.V1VolumeMount(
+SHOPIFY_AUTH_CONFIG_VOLUME = k8s.V1Volume(
+    name="shopify-cli-config",
+    empty_dir=k8s.V1EmptyDirVolumeSource(),
+)
+SHOPIFY_AUTH_SECRET_VOLUME_MOUNT = k8s.V1VolumeMount(
     name="shopify-cli-auth",
-    mount_path=SHOPIFY_AUTH_MOUNT,
+    mount_path=SHOPIFY_AUTH_SECRET_MOUNT,
     read_only=True,
+)
+SHOPIFY_AUTH_CONFIG_VOLUME_MOUNT = k8s.V1VolumeMount(
+    name="shopify-cli-config",
+    mount_path=SHOPIFY_AUTH_MOUNT,
+)
+SHOPIFY_AUTH_INIT_CONTAINER = k8s.V1Container(
+    name="shopify-cli-auth-init",
+    image="busybox:1.36",
+    command=[
+        "sh",
+        "-c",
+        (
+            f"mkdir -p {SHOPIFY_AUTH_MOUNT} && "
+            f"cp {SHOPIFY_AUTH_SECRET_MOUNT}/{SHOPIFY_AUTH_SECRET_KEY} "
+            f"{SHOPIFY_AUTH_MOUNT}/{SHOPIFY_AUTH_SECRET_KEY} && "
+            f"chmod 600 {SHOPIFY_AUTH_MOUNT}/{SHOPIFY_AUTH_SECRET_KEY}"
+        ),
+    ],
+    volume_mounts=[SHOPIFY_AUTH_SECRET_VOLUME_MOUNT, SHOPIFY_AUTH_CONFIG_VOLUME_MOUNT],
 )
 
 
@@ -82,8 +107,9 @@ def shopify_import_pod(
         cmds=cmds or ["bash", "scripts/run_shopify_all.sh"],
         arguments=arguments or [],
         env_vars=shopify_pod_env(),
-        volumes=[SHOPIFY_AUTH_VOLUME],
-        volume_mounts=[SHOPIFY_AUTH_VOLUME_MOUNT],
+        init_containers=[SHOPIFY_AUTH_INIT_CONTAINER],
+        volumes=[SHOPIFY_AUTH_SECRET_VOLUME, SHOPIFY_AUTH_CONFIG_VOLUME],
+        volume_mounts=[SHOPIFY_AUTH_CONFIG_VOLUME_MOUNT],
         container_resources=k8s.V1ResourceRequirements(
             requests={"cpu": "500m", "memory": "1Gi"},
             limits={"cpu": "2000m", "memory": "2Gi"},
