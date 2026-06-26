@@ -18,8 +18,8 @@ AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
 POSTGRES_CONN_ID = "merino_analytics"
 POSTGRES_DB = "merino-shopify"
-GOOGLE_GEOCODING_VARIABLE = "google_geocoding_api_key"
-GOOGLE_GEOCODING_GSM_SECRET = "airflow-variables-google_geocoding_api_key"
+GOOGLE_GEOCODING_SECRET = "merino-airflow-google-geocoding-api-key"
+GOOGLE_GEOCODING_SECRET_KEY = "api-key"
 SHOPIFY_AUTH_SECRET = "shopify-cli-store-auth"
 SHOPIFY_AUTH_SECRET_KEY = "config.json"
 SHOPIFY_AUTH_MOUNT = "/root/.config/shopify-cli-store-nodejs"
@@ -38,18 +38,26 @@ SHOPIFY_AUTH_VOLUME_MOUNT = k8s.V1VolumeMount(
 )
 
 
-def shopify_pod_env() -> dict[str, str]:
+def shopify_pod_env() -> list[k8s.V1EnvVar]:
     """Env vars injected into the Shopify CLI batch image."""
-    return {
-        "PYTHONUNBUFFERED": "1",
-        "POSTGRES_HOST": f"{{{{ conn.{POSTGRES_CONN_ID}.host }}}}",
-        "POSTGRES_PORT": f"{{{{ conn.{POSTGRES_CONN_ID}.port or 5432 }}}}",
-        "POSTGRES_USER": f"{{{{ conn.{POSTGRES_CONN_ID}.login }}}}",
-        "POSTGRES_PASSWORD": f"{{{{ conn.{POSTGRES_CONN_ID}.password }}}}",
-        "POSTGRES_DB": POSTGRES_DB,
-        "POSTGRES_CONNECT_TIMEOUT": "30",
-        "GOOGLE_GEOCODING_API_KEY": f"{{{{ var.value.get('{GOOGLE_GEOCODING_VARIABLE}', default='') }}}}",
-    }
+    return [
+        k8s.V1EnvVar(name="PYTHONUNBUFFERED", value="1"),
+        k8s.V1EnvVar(name="POSTGRES_HOST", value=f"{{{{ conn.{POSTGRES_CONN_ID}.host }}}}"),
+        k8s.V1EnvVar(name="POSTGRES_PORT", value=f"{{{{ conn.{POSTGRES_CONN_ID}.port or 5432 }}}}"),
+        k8s.V1EnvVar(name="POSTGRES_USER", value=f"{{{{ conn.{POSTGRES_CONN_ID}.login }}}}"),
+        k8s.V1EnvVar(name="POSTGRES_PASSWORD", value=f"{{{{ conn.{POSTGRES_CONN_ID}.password }}}}"),
+        k8s.V1EnvVar(name="POSTGRES_DB", value=POSTGRES_DB),
+        k8s.V1EnvVar(name="POSTGRES_CONNECT_TIMEOUT", value="30"),
+        k8s.V1EnvVar(
+            name="GOOGLE_GEOCODING_API_KEY",
+            value_from=k8s.V1EnvVarSource(
+                secret_key_ref=k8s.V1SecretKeySelector(
+                    name=GOOGLE_GEOCODING_SECRET,
+                    key=GOOGLE_GEOCODING_SECRET_KEY,
+                ),
+            ),
+        ),
+    ]
 
 
 def shopify_import_pod(
