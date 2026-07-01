@@ -13,11 +13,15 @@ sys.path.insert(0, str(MODULE_PATH))
 from merino_meta_jobs.adset_config import (  # noqa: E402  # type: ignore[import-not-found]
     active_adsets_from_flat,
     adset_config_row_from_graph,
+    budget_hash,
     canonical_targeting,
     config_hash,
     extract_targeting_columns,
+    insert_budget_version,
     insert_config_version,
+    sync_adset_budget_versions,
     sync_adset_config_versions,
+    sync_adset_targeting_daily_snapshots,
 )
 from merino_meta_jobs.object_property import flatten_config_snapshot  # noqa: E402  # type: ignore[import-not-found]
 
@@ -82,6 +86,19 @@ TARGETING_B = {
     "geo_locations": {"countries": ["US", "CA"]},
 }
 
+TARGETING_WITH_INTERESTS = {
+    "age_min": 21,
+    "age_max": 55,
+    "flexible_spec": [
+        {
+            "interests": [{"id": "6003139266461", "name": "Hiking"}],
+            "behaviors": [{"id": "6002714898572", "name": "Engaged Shoppers"}],
+        }
+    ],
+    "custom_audiences": [{"id": "aud_1", "name": "Purchasers"}],
+    "excluded_custom_audiences": [{"id": "aud_2", "name": "Recent buyers"}],
+}
+
 
 class ConfigHashTest(unittest.TestCase):
     def test_hash_stable_for_key_order(self) -> None:
@@ -111,6 +128,23 @@ class ExtractTargetingColumnsTest(unittest.TestCase):
         self.assertIsNone(extracted["age_min"])
         self.assertIsNone(extracted["advantage_audience"])
 
+    def test_extracts_interest_and_audience_json(self) -> None:
+        extracted = extract_targeting_columns(TARGETING_WITH_INTERESTS)
+        self.assertEqual(extracted["flexible_spec"], TARGETING_WITH_INTERESTS["flexible_spec"])
+        self.assertEqual(
+            extracted["interests"],
+            [{"id": "6003139266461", "name": "Hiking"}],
+        )
+        self.assertEqual(
+            extracted["behaviors"],
+            [{"id": "6002714898572", "name": "Engaged Shoppers"}],
+        )
+        self.assertEqual(extracted["custom_audiences"], TARGETING_WITH_INTERESTS["custom_audiences"])
+        self.assertEqual(
+            extracted["excluded_custom_audiences"],
+            TARGETING_WITH_INTERESTS["excluded_custom_audiences"],
+        )
+
 
 class ActiveAdsetFilterTest(unittest.TestCase):
     def test_active_adsets_from_flat_filters_hierarchy(self) -> None:
@@ -128,6 +162,11 @@ class AdsetConfigRowTest(unittest.TestCase):
                 "id": "adset_active",
                 "campaign_id": "camp_1",
                 "status": "ACTIVE",
+                "daily_budget": "2500",
+                "lifetime_budget": "10000",
+                "optimization_goal": "OFFSITE_CONVERSIONS",
+                "billing_event": "IMPRESSIONS",
+                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
                 "targeting": TARGETING_A,
             },
             source_account_id="act_111",
@@ -139,6 +178,11 @@ class AdsetConfigRowTest(unittest.TestCase):
         self.assertEqual(row["age_min"], 25)
         self.assertTrue(row["advantage_audience"])
         self.assertEqual(row["config_hash"], config_hash(TARGETING_A))
+        self.assertEqual(row["targeting_hash"], config_hash(TARGETING_A))
+        self.assertEqual(row["daily_budget"], 2500)
+        self.assertEqual(row["lifetime_budget"], 10000)
+        self.assertEqual(row["optimization_goal"], "OFFSITE_CONVERSIONS")
+        self.assertEqual(row["budget_hash"], budget_hash(row))
 
 
 class InsertConfigVersionTest(unittest.TestCase):
@@ -231,6 +275,119 @@ class InsertConfigVersionTest(unittest.TestCase):
         self.assertEqual(counts["fetched"], 2)
         self.assertEqual(counts["inserted"], 1)
         self.assertEqual(counts["skipped"], 1)
+
+
+class TargetingDailySnapshotTest(unittest.TestCase):
+    def test_sync_upserts_daily_partition_even_when_targeting_unchanged(self) -> None:
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value.__enter__ = MagicMock(return_value=cursor)
+        conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        observed_at = datetime(2026, 5, 30, 19, 0, tzinfo=timezone.utc)
+        rows = [
+            adset_config_row_from_graph(
+                {"id": "adset_1", "campaign_id": "camp_1", "targeting": TARGETING_A},
+                source_account_id="act_111",
+                observed_at=observed_at,
+            ),
+            adset_config_row_from_graph(
+                {"id": "adset_1", "campaign_id": "camp_1", "targeting": TARGETING_A},
+                source_account_id="act_111",
+                observed_at=observed_at,
+            ),
+        ]
+
+        counts = sync_adset_targeting_daily_snapshots(conn, rows)
+
+        self.assertEqual(counts["daily_upserted"], 2)
+        self.assertEqual(cursor.execute.call_count, 2)
+        sql = cursor.execute.call_args_list[0].args[0]
+        self.assertIn("ON CONFLICT (observed_date, adset_id) DO UPDATE", sql)
+        self.assertIn("update_count = marketing.meta_adset_targeting_daily_snapshot.update_count + 1", sql)
+
+
+class BudgetVersionTest(unittest.TestCase):
+    def _mock_conn(self, *, current_hash: str | None, next_version: int = 1) -> MagicMock:
+        conn = MagicMock()
+        cursor = MagicMock()
+        conn.cursor.return_value.__enter__ = MagicMock(return_value=cursor)
+        conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        def execute_side_effect(sql: str, params=None) -> None:
+            if "SELECT adset_id, budget_hash" in sql:
+                if current_hash is None:
+                    cursor.fetchall.return_value = []
+                else:
+                    cursor.fetchall.return_value = [("adset_1", current_hash)]
+            elif "COALESCE(MAX(budget_version)" in sql:
+                cursor.fetchone.return_value = (next_version,)
+            else:
+                cursor.rowcount = 1
+
+        cursor.execute.side_effect = execute_side_effect
+        return conn
+
+    def test_skips_insert_when_budget_hash_unchanged(self) -> None:
+        row = adset_config_row_from_graph(
+            {
+                "id": "adset_1",
+                "campaign_id": "camp_1",
+                "daily_budget": "2500",
+                "lifetime_budget": "10000",
+                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                "targeting": TARGETING_A,
+            },
+            source_account_id="act_111",
+            observed_at=datetime(2026, 5, 30, 19, 0, tzinfo=timezone.utc),
+        )
+        conn = self._mock_conn(current_hash=row["budget_hash"])
+
+        inserted = insert_budget_version(conn, row, current_hashes={"adset_1": row["budget_hash"]})
+
+        self.assertFalse(inserted)
+
+    def test_inserts_when_budget_hash_changed(self) -> None:
+        row = adset_config_row_from_graph(
+            {
+                "id": "adset_1",
+                "campaign_id": "camp_1",
+                "daily_budget": "5000",
+                "bid_strategy": "LOWEST_COST_WITHOUT_CAP",
+                "targeting": TARGETING_A,
+            },
+            source_account_id="act_111",
+            observed_at=datetime(2026, 5, 30, 19, 0, tzinfo=timezone.utc),
+        )
+        conn = self._mock_conn(current_hash="old", next_version=2)
+        current_hashes = {"adset_1": "old"}
+
+        inserted = insert_budget_version(conn, row, current_hashes=current_hashes)
+
+        self.assertTrue(inserted)
+        self.assertEqual(current_hashes["adset_1"], row["budget_hash"])
+
+    def test_sync_counts_budget_insert_and_skip(self) -> None:
+        conn = self._mock_conn(current_hash=None)
+        observed_at = datetime(2026, 5, 30, 19, 0, tzinfo=timezone.utc)
+        rows = [
+            adset_config_row_from_graph(
+                {"id": "adset_1", "campaign_id": "camp_1", "daily_budget": "2500"},
+                source_account_id="act_111",
+                observed_at=observed_at,
+            ),
+            adset_config_row_from_graph(
+                {"id": "adset_1", "campaign_id": "camp_1", "daily_budget": "2500"},
+                source_account_id="act_111",
+                observed_at=observed_at,
+            ),
+        ]
+
+        counts = sync_adset_budget_versions(conn, rows)
+
+        self.assertEqual(counts["budget_fetched"], 2)
+        self.assertEqual(counts["budget_inserted"], 1)
+        self.assertEqual(counts["budget_skipped"], 1)
 
 
 if __name__ == "__main__":

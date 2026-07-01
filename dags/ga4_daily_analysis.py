@@ -51,7 +51,6 @@ from merino_ga4_jobs.daily_purchaser_behavior import (  # noqa: E402  # type: ig
     daily_purchaser_behavior_query,
     merge_daily_purchaser_behavior,
 )
-
 DAG_ID = "ga4_daily_analysis"
 GCP_CONN_ID = "google_cloud_default"
 
@@ -187,7 +186,6 @@ def refresh_ga4_report_date(client: Any, report_date: date) -> dict[str, Any]:
             )
         ).result()
     ]
-
     merge_daily_analysis(daily_rows, report_date)
     merge_landing_page_daily_analysis(landing_page_rows, report_date)
     merge_daily_purchaser_behavior(purchaser_behavior_rows, report_date)

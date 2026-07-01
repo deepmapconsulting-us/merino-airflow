@@ -45,17 +45,22 @@ ERP_LOGISTICS_DB = "merino-shopify"
 
 TOKEN_CACHE_VARIABLE = "erp_lingxing_oauth_cache"
 STOCK_ENDPOINT_VARIABLE = "erp_lingxing_stock_endpoint"
+STOCK_LIST_ENDPOINT_VARIABLE = "erp_lingxing_stock_list_endpoint"
+STORE_IDS_VARIABLE = "erp_lingxing_stock_list_store_ids"
 LISTING_ENDPOINT_VARIABLE = "erp_lingxing_listing_endpoint"
 PAGE_SIZE_VARIABLE = "erp_lingxing_page_size"
 WAREHOUSE_ENDPOINT_VARIABLE = "erp_lingxing_warehouse_endpoint"
 WAREHOUSE_NAMES_VARIABLE = "erp_lingxing_warehouse_names"
 
 DEFAULT_STOCK_ENDPOINT = "/erp/sc/routing/data/local_inventory/inventoryDetails"
+DEFAULT_STOCK_LIST_ENDPOINT = "/erp/sc/routing/fba/fbaStock/fbaList"
+SELLER_LIST_ENDPOINT = "/erp/sc/data/seller/lists"
 DEFAULT_WAREHOUSE_ENDPOINT = "/erp/sc/data/local_inventory/warehouse"
 DEFAULT_WAREHOUSE_NAMES = "梦迪仓库,独立站"
 DEFAULT_PAGE_SIZE = 500
 MAX_PAGE_SIZE = 800
 WAREHOUSE_LIST_TYPES = (1, 3, 4, 6)
+STOCK_LIST_PAGE_SIZES = (20, 50, 100, 200, 500)
 
 
 class AirflowVariableStore:
@@ -184,6 +189,94 @@ def inventory_rows_for_warehouses(
     return rows
 
 
+def seller_names(client: LingXingOpenApi, page_size: int) -> dict[int, str]:
+    rows = client.fetch_all(SELLER_LIST_ENDPOINT, {}, page_size=page_size)
+    names: dict[int, str] = {}
+    for row in rows:
+        sid = row.get("sid")
+        name = str(row.get("name") or row.get("seller_name") or "").strip()
+        if sid is not None and name:
+            names[int(sid)] = name
+    return names
+
+
+def selected_store_ids(conf: dict[str, Any], store_names: dict[int, str]) -> list[int]:
+    raw = config_value(conf, "store_ids", STORE_IDS_VARIABLE, "")
+    if raw:
+        return [int(part.strip()) for part in raw.split(",") if part.strip()]
+    return sorted(store_names)
+
+
+def stock_spu_rows(
+    client: LingXingOpenApi,
+    conf: dict[str, Any],
+    store_ids: list[int],
+    *,
+    page_size: int,
+) -> list[dict[str, Any]]:
+    endpoint = config_value(conf, "stock_list_endpoint", STOCK_LIST_ENDPOINT_VARIABLE, DEFAULT_STOCK_LIST_ENDPOINT)
+    if not endpoint or not store_ids:
+        return []
+    return client.fetch_all_sids(
+        endpoint,
+        {
+            "sort_field": "sku",
+            "sort_type": "asc",
+            "is_cost_page": "0",
+            "is_hide_zero_stock": 0,
+        },
+        [str(sid) for sid in store_ids],
+        page_size=stock_list_page_size(page_size),
+    )
+
+
+def stock_list_page_size(page_size: int) -> int:
+    for allowed_size in reversed(STOCK_LIST_PAGE_SIZES):
+        if page_size >= allowed_size:
+            return allowed_size
+    return STOCK_LIST_PAGE_SIZES[0]
+
+
+def stock_rows_with_spu(
+    stock_rows: list[dict[str, Any]],
+    stock_list_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    spu_by_product_id: dict[str, dict[str, Any]] = {}
+    spu_by_sku: dict[str, dict[str, Any]] = {}
+    for row in stock_list_rows:
+        if not lingxing_text(row.get("spu")):
+            continue
+        product_id = lingxing_text(row.get("product_id")) or lingxing_text(row.get("id"))
+        sku = lingxing_text(row.get("sku"))
+        if product_id:
+            spu_by_product_id.setdefault(product_id, row)
+        if sku:
+            spu_by_sku.setdefault(sku, row)
+
+    enriched_rows: list[dict[str, Any]] = []
+    for row in stock_rows:
+        enriched = dict(row)
+        product_id = lingxing_text(row.get("product_id")) or lingxing_text(row.get("id"))
+        sku = lingxing_text(row.get("sku"))
+        spu_row = (spu_by_product_id.get(product_id) if product_id else None) or (
+            spu_by_sku.get(sku) if sku else None
+        )
+        if spu_row:
+            add_missing_product_fields(enriched, spu_row)
+        enriched_rows.append(enriched)
+    return enriched_rows
+
+
+def add_missing_product_fields(stock_row: dict[str, Any], spu_row: dict[str, Any]) -> None:
+    for field in ("seller_sku", "spu", "spu_name", "product_name", "product_brand_text", "category_text"):
+        if not lingxing_text(stock_row.get(field)) and lingxing_text(spu_row.get(field)):
+            stock_row[field] = spu_row[field]
+
+
+def lingxing_text(value: Any) -> str:
+    return str(value).strip() if value is not None else ""
+
+
 def fetch_lingxing_rows(
     conf: dict[str, Any],
 ) -> tuple[
@@ -210,6 +303,9 @@ def fetch_lingxing_rows(
     stock_endpoint = config_value(conf, "stock_endpoint", STOCK_ENDPOINT_VARIABLE, DEFAULT_STOCK_ENDPOINT)
     warehouses = stock_warehouses(client, conf, page_size=size)
     stock_rows = inventory_rows_for_warehouses(client, conf, warehouses, page_size=size)
+    store_names = seller_names(client, size)
+    store_ids = selected_store_ids(conf, store_names)
+    stock_rows = stock_rows_with_spu(stock_rows, stock_spu_rows(client, conf, store_ids, page_size=size))
 
     listing_endpoint = config_value(conf, "listing_endpoint", LISTING_ENDPOINT_VARIABLE, "")
     listing_rows: list[dict[str, Any]] = []

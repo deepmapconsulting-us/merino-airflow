@@ -130,7 +130,7 @@ flowchart LR
 | `wait_for_facebook_campaign_config_update` | Waits for the aligned `facebook_campaign_config_update` run (whole DAG success). |
 | `log_config_source` | Logs GCS pointer / snapshot URI and object counts (parse-time snapshot). |
 | `sync_object_properties` | Upserts campaign, adset, ad dimensions into Postgres (incremental from GCS snapshot, or full init when `meta_object_property_full_init=true`). **Metric DAGs sensor this task.** |
-| `sync_adset_configs` | Fetches ad set `targeting` from Graph; SCD Type 2 history in `marketing.meta_adset_config`. |
+| `sync_adset_configs` | Fetches ad set `targeting` plus budget/config fields from Graph; writes targeting SCD history in `marketing.meta_adset_config`, daily targeting partitions in `marketing.meta_adset_targeting_daily_snapshot`, and budget-change history in `marketing.meta_adset_budget_history`. |
 | `sync_ad_creative_media` | Fetches `/adcreatives` per ad; upserts `marketing.meta_ad_creative` (`has_video`, `has_image`, `video_ids`). **Not a media download**—Graph metadata only. |
 
 ---

@@ -72,6 +72,7 @@ def import_period_rows(
         row_count=len(rows),
     )
     imported = 0
+    total = len(rows)
     for index, row in enumerate(rows, start=1):
         raw_id = insert_raw_sales_report(conn, import_run_id, row, period_start, period_end)
         store_id = upsert_store(conn, row)
@@ -87,6 +88,11 @@ def import_period_rows(
             dimension=dimension,
         )
         imported = index
+        if index == 1 or index % 1000 == 0 or index == total:
+            print(
+                f"  Postgres import {period_start:%Y-%m}: {index}/{total} rows processed",
+                flush=True,
+            )
 
     finish_import_run(conn, import_run_id, imported)
     return imported

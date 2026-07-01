@@ -48,7 +48,9 @@ if MODULE_PATH.exists():
 from merino_meta_jobs.adset_config import (  # noqa: E402  # type: ignore[import-not-found]
     active_adsets_from_flat,
     fetch_active_adset_configs,
+    sync_adset_budget_versions,
     sync_adset_config_versions,
+    sync_adset_targeting_daily_snapshots,
 )
 from merino_meta_jobs.ad_creative import (  # noqa: E402  # type: ignore[import-not-found]
     ads_for_creative_registry_from_snapshot,
@@ -222,7 +224,9 @@ def meta_object_property_sync():
         hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
         conn = hook.get_conn()
         try:
-            counts = sync_adset_config_versions(conn, config_rows)
+            scd_counts = sync_adset_config_versions(conn, config_rows)
+            targeting_daily_counts = sync_adset_targeting_daily_snapshots(conn, config_rows)
+            budget_counts = sync_adset_budget_versions(conn, config_rows)
             conn.commit()
         except Exception:
             conn.rollback()
@@ -232,7 +236,9 @@ def meta_object_property_sync():
 
         result = {
             "active_adsets": len(active_adsets),
-            **counts,
+            **scd_counts,
+            **targeting_daily_counts,
+            **budget_counts,
         }
         print(f"{DAG_ID}: adset config sync complete {result}")
         return result

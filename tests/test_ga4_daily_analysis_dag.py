@@ -168,6 +168,5 @@ class GA4DailyAnalysisDagTest(unittest.TestCase):
 
         self.assertFalse(module.bigquery_table_exists(MissingClient(), "missing.table"))
 
-
 if __name__ == "__main__":
     unittest.main()

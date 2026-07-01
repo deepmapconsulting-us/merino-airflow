@@ -1,4 +1,4 @@
-"""Sync Meta ad set targeting config into marketing.meta_adset_config (SCD Type 2)."""
+"""Sync Meta ad set targeting and budget config into marketing history tables."""
 
 from __future__ import annotations
 
@@ -15,8 +15,13 @@ PLATFORM = "meta"
 SOURCE = "facebook"
 REPORT_TIMEZONE = "America/Los_Angeles"
 
-ADSET_CONFIG_FIELDS = "id,name,campaign_id,status,targeting"
+ADSET_CONFIG_FIELDS = (
+    "id,name,campaign_id,status,daily_budget,lifetime_budget,optimization_goal,"
+    "billing_event,bid_strategy,targeting"
+)
 ADSET_CONFIG_TABLE = "marketing.meta_adset_config"
+ADSET_TARGETING_DAILY_TABLE = "marketing.meta_adset_targeting_daily_snapshot"
+ADSET_BUDGET_HISTORY_TABLE = "marketing.meta_adset_budget_history"
 
 INSERT_COLUMNS = (
     "adset_id",
@@ -37,6 +42,52 @@ INSERT_COLUMNS = (
     "genders",
     "advantage_audience",
     "geo_countries",
+    "config_snapshot_uri",
+)
+
+TARGETING_DAILY_COLUMNS = (
+    "observed_date",
+    "observed_at",
+    "adset_id",
+    "campaign_id",
+    "source_account_id",
+    "company",
+    "platform",
+    "source",
+    "targeting",
+    "targeting_hash",
+    "age_min",
+    "age_max",
+    "genders",
+    "advantage_audience",
+    "geo_countries",
+    "flexible_spec",
+    "interests",
+    "behaviors",
+    "custom_audiences",
+    "excluded_custom_audiences",
+    "config_snapshot_uri",
+)
+
+BUDGET_COLUMNS = (
+    "adset_id",
+    "campaign_id",
+    "source_account_id",
+    "company",
+    "platform",
+    "source",
+    "observed_at",
+    "observed_date",
+    "valid_from",
+    "valid_to",
+    "budget_version",
+    "budget_hash",
+    "daily_budget",
+    "lifetime_budget",
+    "bid_strategy",
+    "optimization_goal",
+    "billing_event",
+    "status",
     "config_snapshot_uri",
 )
 
@@ -72,6 +123,23 @@ def config_hash(targeting: Any) -> str:
     return digest.hexdigest()
 
 
+def canonical_budget(row: dict[str, Any]) -> str:
+    payload = {
+        "daily_budget": _int_or_none(row.get("daily_budget")),
+        "lifetime_budget": _int_or_none(row.get("lifetime_budget")),
+        "bid_strategy": _clean_text(row.get("bid_strategy")),
+        "optimization_goal": _clean_text(row.get("optimization_goal")),
+        "billing_event": _clean_text(row.get("billing_event")),
+        "status": _clean_text(row.get("status")),
+    }
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+
+def budget_hash(row: dict[str, Any]) -> str:
+    digest = hashlib.sha256(canonical_budget(row).encode("utf-8"))
+    return digest.hexdigest()
+
+
 def extract_targeting_columns(targeting: Any) -> dict[str, Any]:
     if not isinstance(targeting, dict):
         targeting = {}
@@ -98,6 +166,11 @@ def extract_targeting_columns(targeting: Any) -> dict[str, Any]:
         "genders": genders,
         "advantage_audience": advantage_audience,
         "geo_countries": geo_countries,
+        "flexible_spec": _json_list_or_none(targeting.get("flexible_spec")),
+        "interests": _targeting_items(targeting, "interests"),
+        "behaviors": _targeting_items(targeting, "behaviors"),
+        "custom_audiences": _json_list_or_none(targeting.get("custom_audiences")),
+        "excluded_custom_audiences": _json_list_or_none(targeting.get("excluded_custom_audiences")),
     }
 
 
@@ -123,7 +196,15 @@ def adset_config_row_from_graph(
         "valid_from": observed_at,
         "valid_to": None,
         "config_hash": config_hash(targeting),
+        "targeting_hash": config_hash(targeting),
         "targeting": targeting,
+        "daily_budget": _int_or_none(graph_row.get("daily_budget")),
+        "lifetime_budget": _int_or_none(graph_row.get("lifetime_budget")),
+        "bid_strategy": _clean_text(graph_row.get("bid_strategy")),
+        "optimization_goal": _clean_text(graph_row.get("optimization_goal")),
+        "billing_event": _clean_text(graph_row.get("billing_event")),
+        "status": _clean_text(graph_row.get("status")),
+        "budget_hash": budget_hash(graph_row),
         "config_snapshot_uri": config_snapshot_uri or None,
         **extracted,
     }
@@ -214,6 +295,117 @@ def sync_adset_config_versions(
     return {"inserted": inserted, "skipped": skipped, "fetched": len(rows)}
 
 
+def sync_adset_targeting_daily_snapshots(
+    conn,
+    rows: list[dict[str, Any]],
+) -> dict[str, int]:
+    columns = ", ".join(TARGETING_DAILY_COLUMNS)
+    placeholders = ", ".join(["%s"] * len(TARGETING_DAILY_COLUMNS))
+    update_columns = [
+        column
+        for column in TARGETING_DAILY_COLUMNS
+        if column not in {"observed_date", "adset_id"}
+    ]
+    assignments = ",\n            ".join(
+        [f"{column} = EXCLUDED.{column}" for column in update_columns]
+        + ["record_updated_at = now()", "update_count = marketing.meta_adset_targeting_daily_snapshot.update_count + 1"]
+    )
+    sql = f"""
+        INSERT INTO {ADSET_TARGETING_DAILY_TABLE} ({columns})
+        VALUES ({placeholders})
+        ON CONFLICT (observed_date, adset_id) DO UPDATE SET
+            {assignments}
+    """
+    with conn.cursor() as cursor:
+        for row in rows:
+            cursor.execute(sql, tuple(_serialize_value(row.get(column)) for column in TARGETING_DAILY_COLUMNS))
+    return {"daily_upserted": len(rows)}
+
+
+def load_current_budget_hashes(conn) -> dict[str, str]:
+    sql = f"""
+        SELECT adset_id, budget_hash
+        FROM {ADSET_BUDGET_HISTORY_TABLE}
+        WHERE valid_to IS NULL
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql)
+        return {str(row[0]): str(row[1]) for row in cursor.fetchall()}
+
+
+def next_budget_version(conn, adset_id: str) -> int:
+    sql = f"""
+        SELECT COALESCE(MAX(budget_version), 0) + 1
+        FROM {ADSET_BUDGET_HISTORY_TABLE}
+        WHERE adset_id = %s
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql, (adset_id,))
+        row = cursor.fetchone()
+    return int(row[0]) if row else 1
+
+
+def close_open_budget_version(conn, adset_id: str, valid_to: datetime) -> None:
+    sql = f"""
+        UPDATE {ADSET_BUDGET_HISTORY_TABLE}
+        SET valid_to = %s
+        WHERE adset_id = %s AND valid_to IS NULL
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql, (valid_to, adset_id))
+
+
+def insert_budget_version(
+    conn,
+    row: dict[str, Any],
+    *,
+    current_hashes: dict[str, str],
+) -> bool:
+    adset_id = row["adset_id"]
+    budget_hash_value = row["budget_hash"]
+    if current_hashes.get(adset_id) == budget_hash_value:
+        return False
+
+    observed_at = row["observed_at"]
+    if not isinstance(observed_at, datetime):
+        observed_at = datetime.now(timezone.utc)
+    elif observed_at.tzinfo is None:
+        observed_at = observed_at.replace(tzinfo=timezone.utc)
+
+    row = {**row, "observed_at": observed_at, "valid_from": observed_at, "valid_to": None}
+    row["budget_version"] = next_budget_version(conn, adset_id)
+
+    close_open_budget_version(conn, adset_id, observed_at)
+
+    columns = ", ".join(BUDGET_COLUMNS)
+    placeholders = ", ".join(["%s"] * len(BUDGET_COLUMNS))
+    values = tuple(_serialize_value(row.get(column)) for column in BUDGET_COLUMNS)
+    sql = f"""
+        INSERT INTO {ADSET_BUDGET_HISTORY_TABLE} ({columns})
+        VALUES ({placeholders})
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(sql, values)
+
+    current_hashes[adset_id] = budget_hash_value
+    return True
+
+
+def sync_adset_budget_versions(
+    conn,
+    rows: list[dict[str, Any]],
+) -> dict[str, int]:
+    current_hashes = load_current_budget_hashes(conn)
+    inserted = 0
+    skipped = 0
+    for row in rows:
+        if insert_budget_version(conn, row, current_hashes=current_hashes):
+            inserted += 1
+        else:
+            skipped += 1
+    return {"budget_inserted": inserted, "budget_skipped": skipped, "budget_fetched": len(rows)}
+
+
 def fetch_active_adset_configs(
     client: MetaGraphClient,
     active_adsets: list[dict[str, Any]],
@@ -252,6 +444,34 @@ def _int_or_none(value: Any) -> int | None:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def _clean_text(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _json_list_or_none(value: Any) -> list[Any] | None:
+    return value if isinstance(value, list) else None
+
+
+def _targeting_items(targeting: dict[str, Any], key: str) -> list[Any] | None:
+    direct = _json_list_or_none(targeting.get(key))
+    if direct:
+        return direct
+
+    items: list[Any] = []
+    flexible_spec = targeting.get("flexible_spec")
+    if isinstance(flexible_spec, list):
+        for entry in flexible_spec:
+            if not isinstance(entry, dict):
+                continue
+            values = entry.get(key)
+            if isinstance(values, list):
+                items.extend(values)
+    return items or None
 
 
 def _serialize_value(value: Any) -> Any:

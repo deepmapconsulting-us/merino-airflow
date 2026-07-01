@@ -257,3 +257,64 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(module.page_size({"page_size": "bad"}), module.DEFAULT_PAGE_SIZE)
         self.assertEqual(module.page_size({"page_size": "1000"}), module.MAX_PAGE_SIZE)
 
+    def test_stock_spu_rows_use_stock_list_endpoint(self) -> None:
+        module = load_dag_module()
+        calls: list[tuple[str, dict[str, Any], list[str], int]] = []
+
+        class FakeClient:
+            def fetch_all_sids(
+                self,
+                endpoint: str,
+                params: dict[str, Any],
+                store_ids: list[str],
+                *,
+                page_size: int,
+            ) -> list[dict[str, Any]]:
+                calls.append((endpoint, params, store_ids, page_size))
+                return [{"product_id": 243225, "sku": "10004", "spu": "MT01"}]
+
+        rows = module.stock_spu_rows(FakeClient(), {}, [101, 102], page_size=500)
+
+        self.assertEqual(rows, [{"product_id": 243225, "sku": "10004", "spu": "MT01"}])
+        self.assertEqual(calls[0][0], module.DEFAULT_STOCK_LIST_ENDPOINT)
+        self.assertEqual(calls[0][1]["sort_field"], "sku")
+        self.assertEqual(calls[0][1]["is_hide_zero_stock"], 0)
+        self.assertEqual(calls[0][2], ["101", "102"])
+
+    def test_adds_spu_from_stock_list_rows(self) -> None:
+        module = load_dag_module()
+        stock_rows = [
+            {"product_id": 243225, "sku": "10004", "name": "梦迪仓库", "product_total": 12},
+            {"product_id": 243245, "sku": "10012", "name": "独立站", "product_total": 5},
+        ]
+        stock_list_rows = [
+            {
+                "product_id": 243225,
+                "sku": "10004",
+                "seller_sku": "MT10004",
+                "spu": "MT01",
+                "spu_name": "男士圆领短袖",
+                "product_name": "男士圆领短袖",
+                "product_brand_text": "Merino Protect",
+                "category_text": "MT01\\浅麻灰\\XXL",
+            }
+        ]
+
+        enriched = module.stock_rows_with_spu(stock_rows, stock_list_rows)
+
+        self.assertEqual(enriched[0]["spu"], "MT01")
+        self.assertEqual(enriched[0]["spu_name"], "男士圆领短袖")
+        self.assertEqual(enriched[0]["seller_sku"], "MT10004")
+        self.assertEqual(enriched[1].get("spu"), None)
+        self.assertNotIn("spu", stock_rows[0])
+
+    def test_existing_stock_spu_is_not_overwritten(self) -> None:
+        module = load_dag_module()
+        stock_rows = [{"product_id": 1, "sku": "SKU1", "spu": "EXISTING", "spu_name": "Existing"}]
+        stock_list_rows = [{"product_id": 1, "sku": "SKU1", "spu": "ERP", "spu_name": "ERP Name"}]
+
+        enriched = module.stock_rows_with_spu(stock_rows, stock_list_rows)
+
+        self.assertEqual(enriched[0]["spu"], "EXISTING")
+        self.assertEqual(enriched[0]["spu_name"], "Existing")
+
