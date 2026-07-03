@@ -88,6 +88,30 @@ class MetaGraphClient:
 
         return payload
 
+    def post(self, endpoint: str, data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+        """Post one Graph API endpoint and return the decoded JSON response."""
+        response = self.session.post(
+            f"{GRAPH_API_BASE}/{endpoint.lstrip('/')}",
+            data=self._query_params(data),
+            headers={"User-Agent": USER_AGENT},
+            timeout=self.timeout_seconds,
+        )
+        self._log_rate_limit_headers(endpoint, response.headers)
+
+        try:
+            payload = response.json()
+        except ValueError as exc:
+            response.raise_for_status()
+            raise MetaGraphError(endpoint, {"message": f"Non-JSON Graph response: {response.text[:200]}"}) from exc
+
+        if response.status_code >= 400 or "error" in payload:
+            error = payload.get("error", payload)
+            if isinstance(error, Mapping):
+                raise MetaGraphError(endpoint, error)
+            raise MetaGraphError(endpoint, {"message": str(error)})
+
+        return payload
+
     def get_all(self, endpoint: str, params: Mapping[str, Any] | None = None) -> list[dict[str, Any]]:
         """Fetch all pages from a Graph API list endpoint."""
         rows: list[dict[str, Any]] = []

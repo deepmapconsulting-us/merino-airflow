@@ -356,7 +356,7 @@ gantt
 | | |
 | --- | --- |
 | **Schedule** | `0 */12 * * *` (every 12 hours, UTC) |
-| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.1` |
+| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.2` |
 | **Executor** | `KubernetesPodOperator` in namespace `airflow` (KSA `merino-airflow-task-runner`) |
 
 ### Tasks
@@ -382,6 +382,31 @@ gantt
   "to_date": "2026-06-14",
   "partition_date": "2026-06-14",
   "overwrite": true
+}
+```
+
+---
+
+## `shopify_order_transactions`
+
+| | |
+| --- | --- |
+| **Schedule** | `0 */6 * * *` (every 6 hours, UTC) |
+| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.2` |
+| **Executor** | `KubernetesPodOperator` in namespace `airflow` (KSA `merino-airflow-task-runner`) |
+
+### Tasks
+
+| Task | Description |
+| --- | --- |
+| `import_shopify_order_transactions` | Runs `python3 shopify/import_order_transactions.py` against orders updated in the Airflow interval with a 48-hour overlap. Upserts `shopify.order_transactions` and replaces `shopify.order_transaction_fees` rows for each refreshed transaction. |
+
+### Manual Backfill Config
+
+```json
+{
+  "from_date": "2026-05-01",
+  "to_date": "2026-07-03"
 }
 ```
 
