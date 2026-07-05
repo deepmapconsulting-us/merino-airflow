@@ -431,18 +431,19 @@ class DailyTrafficSnapshotTest(unittest.TestCase):
 
     def test_schema_and_dag_use_daily_snapshot_upsert_keys(self) -> None:
         repo = Path(__file__).resolve().parents[1]
-        schema_sql = (repo.parents[0] / "metabase_schema" / "schema" / "meta_traffic_snapshot.sql").read_text()
+        schema_dir = repo.parents[0] / "metabase_schema" / "schema" / "merino-analytics" / "marketing"
+        schema_sql = (schema_dir / "meta_traffic_snapshot.sql").read_text()
         gender_age_sql = (
-            repo.parents[0] / "metabase_schema" / "schema" / "meta_ad_gender_age_daily_snapshot.sql"
+            schema_dir / "meta_ad_gender_age_daily_snapshot.sql"
         ).read_text()
         region_sql = (
-            repo.parents[0] / "metabase_schema" / "schema" / "meta_campaign_region_daily_snapshot.sql"
+            schema_dir / "meta_campaign_region_daily_snapshot.sql"
         ).read_text()
         adset_region_sql = (
-            repo.parents[0] / "metabase_schema" / "schema" / "meta_adset_region_daily_snapshot.sql"
+            schema_dir / "meta_adset_region_daily_snapshot.sql"
         ).read_text()
         ad_region_sql = (
-            repo.parents[0] / "metabase_schema" / "schema" / "meta_ad_region_daily_snapshot.sql"
+            schema_dir / "meta_ad_region_daily_snapshot.sql"
         ).read_text()
         dag_py = (repo / "dags" / "meta_traffic_snapshot.py").read_text()
         row_module_py = (

@@ -107,7 +107,14 @@ class AdHourlyMetricTest(unittest.TestCase):
 
     def test_hourly_schema_and_dag_use_metric_hour_ad_key(self) -> None:
         repo = Path(__file__).resolve().parents[1]
-        schema_sql = (repo.parents[0] / "metabase_schema" / "schema" / "meta_hourly_metric.sql").read_text()
+        schema_sql = (
+            repo.parents[0]
+            / "metabase_schema"
+            / "schema"
+            / "merino-analytics"
+            / "marketing"
+            / "meta_hourly_metric.sql"
+        ).read_text()
         dag_py = (repo / "dags" / "meta_ad_hourly_metric.py").read_text()
 
         self.assertNotIn("source_account_id TEXT", schema_sql)

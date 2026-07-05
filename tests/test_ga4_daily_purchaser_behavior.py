@@ -135,11 +135,12 @@ class GA4DailyPurchaserBehaviorTest(unittest.TestCase):
 
     def test_upsert_conflict_keys_match_schema_constraints(self) -> None:
         repo = Path(__file__).resolve().parents[2]
-        schema_sql = (repo / "metabase_schema" / "schema" / "ga4_daily_purchaser_behavior.sql").read_text()
+        schema_dir = repo / "metabase_schema" / "schema" / "merino-analytics" / "ga4"
+        schema_sql = (schema_dir / "ga4_daily_purchaser_behavior.sql").read_text()
         traffic_schema_sql = (
-            repo / "metabase_schema" / "schema" / "ga4_daily_purchaser_behavior_traffic_columns.sql"
+            schema_dir / "ga4_daily_purchaser_behavior_traffic_columns.sql"
         ).read_text()
-        source_schema_sql = (repo / "metabase_schema" / "schema" / "ga4_source_status_columns.sql").read_text()
+        source_schema_sql = (schema_dir / "ga4_source_status_columns.sql").read_text()
 
         self.assertIn(
             "ON ga4.daily_purchaser_behavior (report_date, user_pseudo_id, ga_session_id)",

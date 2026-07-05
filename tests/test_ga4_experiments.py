@@ -79,7 +79,14 @@ class GA4ExperimentsTest(unittest.TestCase):
 
     def test_schema_unique_index_matches_conflict_columns(self) -> None:
         repo = Path(__file__).resolve().parents[2]
-        schema_sql = (repo / "metabase_schema" / "schema" / "ga4_experiments.sql").read_text()
+        schema_sql = (
+            repo
+            / "metabase_schema"
+            / "schema"
+            / "merino-analytics"
+            / "ga4"
+            / "ga4_experiments.sql"
+        ).read_text()
 
         self.assertIn(
             "ON ga4.experiments (experiment_name, user_pseudo_id, ga_session_id, event_step)",

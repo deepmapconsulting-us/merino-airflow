@@ -183,7 +183,7 @@ class GA4USSessionBehaviorTest(unittest.TestCase):
 
     def test_conflict_keys_match_schema_constraints(self) -> None:
         repo = Path(__file__).resolve().parents[2]
-        schema_dir = repo / "metabase_schema" / "schema"
+        schema_dir = repo / "metabase_schema" / "schema" / "merino-analytics" / "ga4"
         schema_sql = "\n".join(
             [
                 (schema_dir / "ga4_us_session_behavior.sql").read_text(),

@@ -148,7 +148,7 @@ class GA4DailyAnalysisTest(unittest.TestCase):
 
     def test_upsert_conflict_keys_match_schema_constraints(self) -> None:
         repo = Path(__file__).resolve().parents[2]
-        schema_dir = repo / "metabase_schema" / "schema"
+        schema_dir = repo / "metabase_schema" / "schema" / "merino-analytics" / "ga4"
         schema_sql = "\n".join(path.read_text() for path in sorted(schema_dir.glob("ga4_*.sql")))
 
         self.assertIn("ON ga4.daily_analysis (report_date)", schema_sql)
