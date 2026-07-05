@@ -24,16 +24,20 @@ def import_lingxing_rows(
     listing_source: str | None,
     warehouse_rows: Iterable[dict[str, Any]] | None = None,
     warehouse_source: str | None = None,
+    fba_stock_rows: Iterable[dict[str, Any]] | None = None,
+    fba_stock_source: str | None = None,
 ) -> dict[str, int]:
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.transaction():
             use_erp_logistics_schema(conn)
             warehouse_count = import_warehouse_rows(conn, warehouse_rows or [], warehouse_source)
             stock_count = import_stock_rows(conn, stock_rows, stock_source)
+            fba_stock_count = import_fba_stock_rows(conn, fba_stock_rows or [], fba_stock_source)
             listing_count = import_listing_rows(conn, listing_rows, listing_source)
     return {
         "warehouse_rows": warehouse_count,
         "stock_rows": stock_count,
+        "fba_stock_rows": fba_stock_count,
         "listing_rows": listing_count,
     }
 
@@ -303,6 +307,66 @@ def upsert_inventory_latest(
             raw_snapshot,
         ),
     )
+
+
+def import_fba_stock_rows(
+    conn: Connection[dict[str, Any]],
+    rows: Iterable[dict[str, Any]],
+    source_file: str | None,
+) -> int:
+    rows = list(rows)
+    if not rows:
+        return 0
+
+    import_run_id = create_import_run(
+        conn,
+        source_object="fba_stock",
+        source_file=source_file,
+        row_count=len(rows),
+    )
+    snapshot_at = conn.execute("select now() as snapshot_at").fetchone()["snapshot_at"]
+    imported = 0
+
+    for index, row in enumerate(rows, start=1):
+        insert_raw_fba_stock(conn, import_run_id, snapshot_at, row)
+        upsert_store(conn, row)
+        imported = index
+
+    finish_import_run(conn, import_run_id, imported)
+    return imported
+
+
+def insert_raw_fba_stock(
+    conn: Connection[dict[str, Any]],
+    import_run_id: int,
+    snapshot_at: Any,
+    row: dict[str, Any],
+) -> int:
+    result = conn.execute(
+        """
+        insert into raw_lingxing_fba_stock (
+            import_run_id, snapshot_at, sid, seller_name, seller_sku,
+            local_sku, sku, spu, asin, fnsku, product_name, raw_row
+        )
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        returning raw_fba_stock_id
+        """,
+        (
+            import_run_id,
+            snapshot_at,
+            integer(row.get("sid")) or integer(row.get("wid")),
+            text(row.get("seller_name")) or text(row.get("shop")),
+            text(row.get("seller_sku")) or text(row.get("msku")),
+            text(row.get("local_sku")),
+            text(row.get("sku")),
+            text(row.get("spu")),
+            text(row.get("asin")),
+            text(row.get("fnsku")),
+            text(row.get("product_name")) or text(row.get("item_name")),
+            Jsonb(row),
+        ),
+    ).fetchone()
+    return int(result["raw_fba_stock_id"])
 
 
 def import_listing_rows(

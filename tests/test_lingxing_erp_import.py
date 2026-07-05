@@ -385,3 +385,23 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(enriched[0]["spu"], "EXISTING")
         self.assertEqual(enriched[0]["spu_name"], "Existing")
 
+    def test_logistics_dag_persists_fba_stock_rows(self) -> None:
+        dag_source = (REPO / "airflow" / "dags" / "lingxing_erp_logistics_import.py").read_text(encoding="utf-8")
+        import_source = (REPO / "airflow" / "dags" / "merino_erp_jobs" / "logistics_import.py").read_text(encoding="utf-8")
+
+        self.assertIn("fba_stock_rows=fba_stock_rows", dag_source)
+        self.assertIn("fba_stock_source=fba_stock_source", dag_source)
+        self.assertIn("def import_fba_stock_rows", import_source)
+        self.assertIn("raw_lingxing_fba_stock", import_source)
+
+    def test_erp_logistics_schema_exposes_fba_and_age_views(self) -> None:
+        schema = (
+            REPO / "metabase_schema" / "schema" / "merino-shopify" / "erp_logistics" / "erp_logistics.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS raw_lingxing_fba_stock", schema)
+        self.assertIn("CREATE OR REPLACE VIEW v_fba_stock_latest_by_seller_sku", schema)
+        self.assertIn("CREATE OR REPLACE VIEW v_local_inventory_age_by_sku_warehouse", schema)
+        self.assertIn("fba_total_inventory", schema)
+        self.assertIn("age_0_15_days", schema)
+

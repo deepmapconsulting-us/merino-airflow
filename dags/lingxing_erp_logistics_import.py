@@ -284,6 +284,8 @@ def fetch_lingxing_rows(
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
+    list[dict[str, Any]],
+    str | None,
     str | None,
     str | None,
     str | None,
@@ -306,7 +308,11 @@ def fetch_lingxing_rows(
     stock_rows = inventory_rows_for_warehouses(client, conf, warehouses, page_size=size)
     store_names = seller_names(client, size)
     store_ids = selected_store_ids(conf, store_names)
-    stock_rows = stock_rows_with_spu(stock_rows, stock_spu_rows(client, conf, store_ids, page_size=size))
+    stock_list_endpoint = config_value(
+        conf, "stock_list_endpoint", STOCK_LIST_ENDPOINT_VARIABLE, DEFAULT_STOCK_LIST_ENDPOINT
+    )
+    fba_stock_rows = stock_spu_rows(client, conf, store_ids, page_size=size)
+    stock_rows = stock_rows_with_spu(stock_rows, fba_stock_rows)
 
     listing_endpoint = config_value(conf, "listing_endpoint", LISTING_ENDPOINT_VARIABLE, "")
     listing_rows: list[dict[str, Any]] = []
@@ -324,9 +330,11 @@ def fetch_lingxing_rows(
     return (
         warehouse_rows,
         stock_rows,
+        fba_stock_rows,
         listing_rows,
         f"lingxing-api:{warehouse_endpoint}",
         f"lingxing-api:{stock_endpoint}",
+        f"lingxing-api:{stock_list_endpoint}" if stock_list_endpoint else None,
         f"lingxing-api:{listing_endpoint}" if listing_endpoint else None,
     )
 
@@ -349,14 +357,16 @@ def lingxing_erp_logistics_import():
     @task
     def import_lingxing_logistics() -> dict[str, int]:
         conf = current_dag_conf()
-        warehouse_rows, stock_rows, listing_rows, warehouse_source, stock_source, listing_source = fetch_lingxing_rows(conf)
+        warehouse_rows, stock_rows, fba_stock_rows, listing_rows, warehouse_source, stock_source, fba_stock_source, listing_source = fetch_lingxing_rows(conf)
         return import_lingxing_rows(
             database_url=postgres_database_url(POSTGRES_CONN_ID, ERP_LOGISTICS_DB),
             warehouse_rows=warehouse_rows,
             stock_rows=stock_rows,
+            fba_stock_rows=fba_stock_rows,
             listing_rows=listing_rows,
             warehouse_source=warehouse_source,
             stock_source=stock_source,
+            fba_stock_source=fba_stock_source,
             listing_source=listing_source,
         )
 
