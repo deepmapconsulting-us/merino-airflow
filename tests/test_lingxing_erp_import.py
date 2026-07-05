@@ -392,16 +392,37 @@ class LingXingDagTest(unittest.TestCase):
         self.assertIn("fba_stock_rows=fba_stock_rows", dag_source)
         self.assertIn("fba_stock_source=fba_stock_source", dag_source)
         self.assertIn("def import_fba_stock_rows", import_source)
+        self.assertIn('source_object="fbm_stock"', import_source)
+        self.assertIn('source_object="fba_stock"', import_source)
+        self.assertIn("def mark_current_import_batch", import_source)
+        self.assertIn("current_import_batch", import_source)
         self.assertIn("raw_lingxing_fba_stock", import_source)
 
     def test_erp_logistics_schema_exposes_fba_and_age_views(self) -> None:
         schema = (
             REPO / "metabase_schema" / "schema" / "merino-shopify" / "erp_logistics" / "erp_logistics.sql"
         ).read_text(encoding="utf-8")
+        local_age_view = schema.split("CREATE OR REPLACE VIEW v_local_inventory_age_by_sku_warehouse", 1)[1].split(
+            "CREATE OR REPLACE VIEW v_fba_stock_latest_by_seller_sku", 1
+        )[0]
+        fba_stock_view = schema.split("CREATE OR REPLACE VIEW v_fba_stock_latest_by_seller_sku", 1)[1].split(
+            "CREATE OR REPLACE VIEW v_inventory_latest_by_warehouse_summary", 1
+        )[0]
 
+        self.assertIn("CREATE TABLE IF NOT EXISTS current_import_batch", schema)
         self.assertIn("CREATE TABLE IF NOT EXISTS raw_lingxing_fba_stock", schema)
+        self.assertIn("idx_raw_lingxing_fbm_stock_import_run", schema)
+        self.assertIn("idx_raw_lingxing_fba_stock_import_run", schema)
         self.assertIn("CREATE OR REPLACE VIEW v_fba_stock_latest_by_seller_sku", schema)
         self.assertIn("CREATE OR REPLACE VIEW v_local_inventory_age_by_sku_warehouse", schema)
         self.assertIn("fba_total_inventory", schema)
         self.assertIn("age_0_15_days", schema)
+        self.assertIn("JOIN current_import_batch", local_age_view)
+        self.assertIn("b.source_object = 'fbm_stock'", local_age_view)
+        self.assertIn("b.import_run_id = r.import_run_id", local_age_view)
+        self.assertIn("JOIN current_import_batch", fba_stock_view)
+        self.assertIn("b.source_object = 'fba_stock'", fba_stock_view)
+        self.assertIn("b.import_run_id = r.import_run_id", fba_stock_view)
+        self.assertNotIn("MAX(snapshot_at)", local_age_view)
+        self.assertNotIn("MAX(snapshot_at)", fba_stock_view)
 

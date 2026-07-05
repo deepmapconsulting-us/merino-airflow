@@ -89,6 +89,7 @@ def import_stock_rows(
 
     for index, row in enumerate(rows, start=1):
         raw_stock_id = insert_raw_stock(conn, import_run_id, snapshot_at, row)
+        imported = index
         store_id = upsert_store(conn, row)
         warehouse_id = upsert_warehouse(conn, row)
         product_id = upsert_product_from_stock(conn, row)
@@ -189,8 +190,14 @@ def import_stock_rows(
             source_raw_id=raw_stock_id,
             raw_snapshot=raw_snapshot,
         )
-        imported = index
 
+    mark_current_import_batch(
+        conn,
+        source_object="fbm_stock",
+        import_run_id=import_run_id,
+        snapshot_at=snapshot_at,
+        row_count=imported,
+    )
     finish_import_run(conn, import_run_id, imported)
     return imported
 
@@ -332,6 +339,13 @@ def import_fba_stock_rows(
         upsert_store(conn, row)
         imported = index
 
+    mark_current_import_batch(
+        conn,
+        source_object="fba_stock",
+        import_run_id=import_run_id,
+        snapshot_at=snapshot_at,
+        row_count=imported,
+    )
     finish_import_run(conn, import_run_id, imported)
     return imported
 
@@ -430,6 +444,32 @@ def finish_import_run(
         where import_run_id = %s
         """,
         (f"imported_rows={imported_count}", import_run_id),
+    )
+
+
+def mark_current_import_batch(
+    conn: Connection[dict[str, Any]],
+    *,
+    source_object: str,
+    import_run_id: int,
+    snapshot_at: Any,
+    row_count: int,
+) -> None:
+    conn.execute(
+        """
+        insert into current_import_batch (
+            source_system, source_object, import_run_id, snapshot_at, row_count, updated_at
+        )
+        values (%s, %s, %s, %s, %s, now())
+        on conflict (source_system, source_object)
+        do update set
+            import_run_id = excluded.import_run_id,
+            snapshot_at = excluded.snapshot_at,
+            row_count = excluded.row_count,
+            updated_at = now()
+        where current_import_batch.snapshot_at < excluded.snapshot_at
+        """,
+        (SOURCE_SYSTEM, source_object, import_run_id, snapshot_at, row_count),
     )
 
 
