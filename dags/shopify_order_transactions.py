@@ -65,6 +65,7 @@ def transaction_order_query(
     schedule="0 */6 * * *",
     start_date=pendulum.datetime(2026, 7, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["shopify", "postgres", "transactions", "fees"],
     default_args={
         "owner": "data-platform",

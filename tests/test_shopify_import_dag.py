@@ -58,3 +58,4 @@ class ShopifyImportDagTest(unittest.TestCase):
         dag_path = REPO / "airflow" / "dags" / "shopify_import.py"
         source = dag_path.read_text(encoding="utf-8")
         self.assertIn('schedule="0 */12 * * *"', source)
+        self.assertIn("max_active_runs=1", source)

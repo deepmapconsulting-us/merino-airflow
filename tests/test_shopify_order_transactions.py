@@ -49,3 +49,8 @@ class ShopifyOrderTransactionsDagTest(unittest.TestCase):
         self.assertIn("python3 shopify/import_order_transactions.py", module.SHOPIFY_TRANSACTION_COMMAND)
         self.assertIn("--date-field updated_at", module.SHOPIFY_TRANSACTION_COMMAND)
         self.assertNotIn("financial_status:paid", module.SHOPIFY_TRANSACTION_COMMAND)
+
+    def test_dag_allows_only_one_active_run(self) -> None:
+        dag_path = REPO / "airflow" / "dags" / "shopify_order_transactions.py"
+        source = dag_path.read_text(encoding="utf-8")
+        self.assertIn("max_active_runs=1", source)

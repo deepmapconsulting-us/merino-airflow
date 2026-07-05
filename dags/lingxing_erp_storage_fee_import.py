@@ -168,6 +168,7 @@ def previous_month() -> str:
     schedule="0 6 3 * *",
     start_date=pendulum.datetime(2026, 6, 23, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["lingxing", "erp", "postgres", "storage-fee"],
     default_args={
         "owner": "data-platform",

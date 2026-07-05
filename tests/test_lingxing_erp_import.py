@@ -7,6 +7,7 @@ import types
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str((REPO / "airflow" / "dags").resolve()))
@@ -18,6 +19,7 @@ from merino_erp_jobs.lingxing import (  # noqa: E402  # type: ignore[import-not-
     canonical_params,
     lingxing_sign,
     parse_store_ids,
+    post_form,
 )
 from merino_erp_jobs.logistics_import import warehouse_code  # noqa: E402  # type: ignore[import-not-found]
 
@@ -143,6 +145,38 @@ class LingXingClientTest(unittest.TestCase):
         self.assertEqual(manager.access_token(), "access-from-secret")
         self.assertEqual(len(seen_urls), 2)
 
+    def test_post_form_sends_oauth_params_in_request_body(self) -> None:
+        seen: dict[str, Any] = {}
+
+        class FakeResponse:
+            def __enter__(self) -> "FakeResponse":
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"code":200,"data":{"access_token":"a","refresh_token":"r","expires_in":7200}}'
+
+        def fake_urlopen(request: Any, timeout: int) -> FakeResponse:
+            seen["url"] = request.full_url
+            seen["data"] = request.data
+            seen["content_type"] = request.get_header("Content-type")
+            seen["timeout"] = timeout
+            return FakeResponse()
+
+        with patch("merino_erp_jobs.lingxing.urlopen", fake_urlopen):
+            post_form(
+                "https://openapi.lingxing.com/api/auth-server/oauth/access-token",
+                {"appId": "app", "appSecret": "secret"},
+                None,
+            )
+
+        self.assertEqual(seen["url"], "https://openapi.lingxing.com/api/auth-server/oauth/access-token")
+        self.assertEqual(seen["data"], b"appId=app&appSecret=secret")
+        self.assertEqual(seen["content_type"], "application/x-www-form-urlencoded")
+        self.assertEqual(seen["timeout"], 60)
+
     def test_client_pages_until_short_page_when_total_missing(self) -> None:
         calls: list[dict[str, Any]] = []
 
@@ -248,8 +282,9 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(module.POSTGRES_CONN_ID, "merino_analytics")
         self.assertEqual(module.ERP_LOGISTICS_DB, "merino-shopify")
         self.assertIn('schedule="30 */4 * * *"', source)
+        self.assertIn("max_active_runs=1", source)
         self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
-        self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站")
+        self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站,SH-Blue")
 
     def test_page_size_uses_default_for_bad_values(self) -> None:
         module = load_dag_module()
@@ -307,6 +342,38 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(enriched[0]["seller_sku"], "MT10004")
         self.assertEqual(enriched[1].get("spu"), None)
         self.assertNotIn("spu", stock_rows[0])
+
+    def test_lingxing_dags_allow_only_one_active_run(self) -> None:
+        for dag_file in (
+            "lingxing_erp_logistics_import.py",
+            "lingxing_erp_amazon_sales_import.py",
+            "lingxing_erp_storage_fee_import.py",
+        ):
+            source = (REPO / "airflow" / "dags" / dag_file).read_text(encoding="utf-8")
+            self.assertIn("max_active_runs=1", source, dag_file)
+
+    def test_stock_warehouses_match_all_warehouse_types(self) -> None:
+        module = load_dag_module()
+        calls: list[int] = []
+
+        class FakeClient:
+            def fetch_all(self, endpoint: str, params: dict[str, Any], *, page_size: int) -> list[dict[str, Any]]:
+                del endpoint, page_size
+                calls.append(int(params["type"]))
+                if params["type"] == 1:
+                    return [{"wid": 13345, "name": "梦迪仓库", "type": 1}]
+                if params["type"] == 3:
+                    return [{"wid": 99999, "name": "SH-Blue", "type": 3}]
+                return []
+
+        warehouses = module.stock_warehouses(
+            FakeClient(),
+            {"warehouse_names": "梦迪仓库,SH-Blue"},
+            page_size=500,
+        )
+
+        self.assertEqual(sorted(row["name"] for row in warehouses), ["SH-Blue", "梦迪仓库"])
+        self.assertEqual(calls, [1, 3, 4, 6])
 
     def test_existing_stock_spu_is_not_overwritten(self) -> None:
         module = load_dag_module()

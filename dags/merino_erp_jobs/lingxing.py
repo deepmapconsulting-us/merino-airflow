@@ -14,6 +14,7 @@ from urllib.request import Request, urlopen
 from Crypto.Cipher import AES  # type: ignore[import-not-found]
 
 LINGXING_HOST = "https://openapi.lingxing.com"
+DEFAULT_INVENTORY_WAREHOUSE_NAMES = "梦迪仓库,独立站,SH-Blue"
 ACCESS_TOKEN_ENDPOINT = "/api/auth-server/oauth/access-token"
 REFRESH_TOKEN_ENDPOINT = "/api/auth-server/oauth/refresh"
 DEFAULT_TOKEN_TTL_SECONDS = 7200
@@ -242,10 +243,12 @@ class LingXingOpenApi:
 
 def post_form(url: str, params: dict[str, Any], body: dict[str, Any] | None) -> dict[str, Any]:
     del body
+    data = urlencode(params).encode()
     request = Request(
-        f"{url}?{urlencode(params)}",
-        data=b"",
+        url,
+        data=data,
         method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
     )
     with urlopen(request, timeout=60) as response:
         return json.loads(response.read().decode())

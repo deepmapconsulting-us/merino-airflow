@@ -201,6 +201,7 @@ def next_month(value: date) -> date:
     schedule="0 9 * * *",
     start_date=pendulum.datetime(2026, 6, 26, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["lingxing", "erp", "postgres", "amazon-sales"],
     default_args={
         "owner": "data-platform",

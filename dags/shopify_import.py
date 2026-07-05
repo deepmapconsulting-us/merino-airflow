@@ -84,6 +84,7 @@ def shopify_incremental_queries(
     schedule="0 */12 * * *",
     start_date=pendulum.datetime(2026, 1, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["shopify", "postgres", "inventory"],
     default_args={
         "owner": "data-platform",

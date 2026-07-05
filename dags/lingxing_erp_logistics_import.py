@@ -31,6 +31,7 @@ if str(MODULE_PATH) not in sys.path:
     sys.path.insert(0, str(MODULE_PATH))
 
 from merino_erp_jobs.lingxing import (  # noqa: E402
+    DEFAULT_INVENTORY_WAREHOUSE_NAMES,
     LINGXING_HOST,
     LingXingCredentials,
     LingXingOpenApi,
@@ -56,7 +57,7 @@ DEFAULT_STOCK_ENDPOINT = "/erp/sc/routing/data/local_inventory/inventoryDetails"
 DEFAULT_STOCK_LIST_ENDPOINT = "/erp/sc/routing/fba/fbaStock/fbaList"
 SELLER_LIST_ENDPOINT = "/erp/sc/data/seller/lists"
 DEFAULT_WAREHOUSE_ENDPOINT = "/erp/sc/data/local_inventory/warehouse"
-DEFAULT_WAREHOUSE_NAMES = "梦迪仓库,独立站"
+DEFAULT_WAREHOUSE_NAMES = DEFAULT_INVENTORY_WAREHOUSE_NAMES
 DEFAULT_PAGE_SIZE = 500
 MAX_PAGE_SIZE = 800
 WAREHOUSE_LIST_TYPES = (1, 3, 4, 6)
@@ -157,7 +158,7 @@ def stock_warehouses(client: LingXingOpenApi, conf: dict[str, Any], *, page_size
     names = wanted_warehouse_names(conf)
     warehouses = [
         warehouse
-        for warehouse in local_warehouses(client, conf, page_size=page_size)
+        for warehouse in all_warehouses(client, conf, page_size=page_size)
         if str(warehouse.get("name") or "").strip() in names
     ]
     if not warehouses:
@@ -335,6 +336,7 @@ def fetch_lingxing_rows(
     schedule="30 */4 * * *",
     start_date=pendulum.datetime(2026, 6, 23, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["lingxing", "erp", "postgres", "logistics"],
     default_args={
         "owner": "data-platform",
