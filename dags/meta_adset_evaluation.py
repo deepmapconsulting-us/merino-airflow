@@ -349,23 +349,12 @@ def build_active_adset_worker_plan(
     source: str = "facebook",
     report_date: str = "",
 ) -> list[dict[str, Any]]:
-    batches_per_campaign: dict[str, int] = {}
-    for group in groups:
-        campaign_id = str(group["campaign_id"])
-        batches_per_campaign[campaign_id] = batches_per_campaign.get(campaign_id, 0) + 1
-
-    batch_number: dict[str, int] = {}
     plan: list[dict[str, Any]] = []
     for group in groups:
         campaign_id = str(group["campaign_id"])
-        batch_number[campaign_id] = batch_number.get(campaign_id, 0) + 1
-        if batches_per_campaign[campaign_id] > 1:
-            campaign_label = f"{campaign_id}_{batch_number[campaign_id]}"
-        else:
-            campaign_label = campaign_id
         plan.append(
             {
-                "campaign_label": campaign_label,
+                "name": campaign_id,
                 "arguments": [
                     evaluate_campaign_adsets_command(
                         campaign_id,
@@ -460,7 +449,7 @@ def meta_adset_evaluation():
     workers = meta_adset_evaluation_pod_partial(
         task_id="evaluate_campaign_adsets",
         cmds=["bash", "-lc"],
-        map_index_template="{{ campaign_label }}",
+        map_index_template="{{ name }}",
     ).expand_kwargs(worker_plan)
     apply_budget_increases = meta_adset_evaluation_pod(
         task_id="apply_budget_increases",
