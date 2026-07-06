@@ -31,11 +31,13 @@ if str(MODULE_PATH) not in sys.path:
     sys.path.insert(0, str(MODULE_PATH))
 
 from merino_erp_jobs.lingxing import (  # noqa: E402
+    DEFAULT_FBA_STORE_IDS,
     DEFAULT_INVENTORY_WAREHOUSE_NAMES,
     LINGXING_HOST,
     LingXingCredentials,
     LingXingOpenApi,
     LingXingTokenManager,
+    fba_store_ids,
 )
 from merino_erp_jobs.logistics_import import import_lingxing_rows  # noqa: E402
 
@@ -202,9 +204,10 @@ def seller_names(client: LingXingOpenApi, page_size: int) -> dict[int, str]:
 
 
 def selected_store_ids(conf: dict[str, Any], store_names: dict[int, str]) -> list[int]:
-    raw = config_value(conf, "store_ids", STORE_IDS_VARIABLE, "")
-    if raw:
-        return [int(part.strip()) for part in raw.split(",") if part.strip()]
+    raw = config_value(conf, "store_ids", STORE_IDS_VARIABLE, DEFAULT_FBA_STORE_IDS)
+    store_ids = fba_store_ids(raw)
+    if store_ids:
+        return store_ids
     return sorted(store_names)
 
 

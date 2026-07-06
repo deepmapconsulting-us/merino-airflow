@@ -13,10 +13,12 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str((REPO / "airflow" / "dags").resolve()))
 
 from merino_erp_jobs.lingxing import (  # noqa: E402  # type: ignore[import-not-found]
+    DEFAULT_FBA_STORE_IDS,
     LingXingCredentials,
     LingXingOpenApi,
     LingXingTokenManager,
     canonical_params,
+    fba_store_ids,
     lingxing_sign,
     parse_store_ids,
     post_form,
@@ -222,6 +224,14 @@ class LingXingClientTest(unittest.TestCase):
     def test_parse_store_ids_accepts_comma_separated_values(self) -> None:
         self.assertEqual(parse_store_ids(["1, 2", "3"]), ["1", "2", "3"])
 
+    def test_fba_store_ids_default_includes_all_configured_marketplaces(self) -> None:
+        store_ids = fba_store_ids("")
+        self.assertEqual(len(store_ids), 22)
+        self.assertEqual(store_ids[0], 8793)
+        self.assertEqual(store_ids[-1], 14482)
+        self.assertIn("8803", DEFAULT_FBA_STORE_IDS)
+        self.assertIn("11986", DEFAULT_FBA_STORE_IDS)
+
     def test_warehouse_code_maps_key_local_warehouses(self) -> None:
         self.assertEqual(warehouse_code("梦迪仓库"), "mengdi")
         self.assertEqual(warehouse_code("独立站"), "independent_site_fbm")
@@ -285,6 +295,15 @@ class LingXingDagTest(unittest.TestCase):
         self.assertIn("max_active_runs=1", source)
         self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
         self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站,SH-Blue")
+        self.assertEqual(module.DEFAULT_FBA_STORE_IDS.count(","), 21)
+
+    def test_selected_store_ids_defaults_to_configured_fba_stores(self) -> None:
+        module = load_dag_module()
+
+        self.assertEqual(
+            module.selected_store_ids({}, {9999: "Other Store"}),
+            fba_store_ids(module.DEFAULT_FBA_STORE_IDS),
+        )
 
     def test_page_size_uses_default_for_bad_values(self) -> None:
         module = load_dag_module()

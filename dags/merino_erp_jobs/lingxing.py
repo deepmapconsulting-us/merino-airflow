@@ -15,6 +15,31 @@ from Crypto.Cipher import AES  # type: ignore[import-not-found]
 
 LINGXING_HOST = "https://openapi.lingxing.com"
 DEFAULT_INVENTORY_WAREHOUSE_NAMES = "梦迪仓库,独立站,SH-Blue"
+DEFAULT_FBA_STORES: tuple[tuple[int, str], ...] = (
+    (8793, "FX-UK"),
+    (8794, "FX-IT"),
+    (8795, "FX-DE"),
+    (8796, "FX-FR"),
+    (8797, "FX-ES"),
+    (8798, "FX-NL"),
+    (8799, "FX-SE"),
+    (8800, "FX-TR"),
+    (8801, "FX-PL"),
+    (8802, "FX-BE"),
+    (8803, "FX-US"),
+    (8804, "FX-CA"),
+    (8805, "FX-MX"),
+    (8807, "FX-AU"),
+    (8811, "DY-US"),
+    (8812, "DY-CA"),
+    (8813, "DY-MX"),
+    (11986, "纱罗曼-US"),
+    (11987, "纱罗曼-CA"),
+    (11988, "纱罗曼-MX"),
+    (13982, "沙罗曼-AU"),
+    (14482, "纱罗曼-BR"),
+)
+DEFAULT_FBA_STORE_IDS = ",".join(str(sid) for sid, _ in DEFAULT_FBA_STORES)
 ACCESS_TOKEN_ENDPOINT = "/api/auth-server/oauth/access-token"
 REFRESH_TOKEN_ENDPOINT = "/api/auth-server/oauth/refresh"
 DEFAULT_TOKEN_TTL_SECONDS = 7200
@@ -316,6 +341,11 @@ def parse_store_ids(raw: str | list[str]) -> list[str]:
     for value in values:
         store_ids.extend(part.strip() for part in str(value).split(",") if part.strip())
     return store_ids
+
+
+def fba_store_ids(raw: str = "") -> list[int]:
+    source = raw.strip() or DEFAULT_FBA_STORE_IDS
+    return [int(part) for part in parse_store_ids(source)]
 
 
 def integer(value: Any) -> int | None:
