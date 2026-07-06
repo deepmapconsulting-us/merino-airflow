@@ -21,6 +21,10 @@ and uses `set-budget` mode with the previous seven days plus today.
 
 Manual runs can pass `campaign_id` and `adset_ids` in DAG conf to override
 snapshot discovery.
+
+Scheduled runs only evaluate campaigns listed in the Airflow Variable
+`meta_adset_evaluation_campaign_ids` (comma-separated). Default:
+`52535307578056`.
 """
 
 from __future__ import annotations
@@ -58,6 +62,8 @@ DAG_ID = "meta_adset_evaluation"
 CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
 MAX_ADSETS_PER_CAMPAIGN_WORKER = 10
+ALLOWED_CAMPAIGN_IDS_VARIABLE = "meta_adset_evaluation_campaign_ids"
+DEFAULT_ALLOWED_CAMPAIGN_IDS = "52535307578056"
 
 
 PRELOAD_CAMPAIGN_COMMAND = """\
@@ -191,6 +197,29 @@ def split_campaign_adset_groups(
     return split
 
 
+def allowed_campaign_ids() -> set[str]:
+    try:
+        from airflow.models import Variable  # type: ignore[import-not-found]
+
+        raw = Variable.get(ALLOWED_CAMPAIGN_IDS_VARIABLE, default_var=DEFAULT_ALLOWED_CAMPAIGN_IDS)
+    except Exception:
+        raw = DEFAULT_ALLOWED_CAMPAIGN_IDS
+    return set(adset_ids_from_text(str(raw)))
+
+
+def filter_campaign_adset_groups(
+    groups: list[dict[str, Any]],
+    allowed_campaign_ids: set[str],
+) -> list[dict[str, Any]]:
+    if not allowed_campaign_ids:
+        return []
+    return [
+        group
+        for group in groups
+        if str(group["campaign_id"]) in allowed_campaign_ids
+    ]
+
+
 def manual_campaign_adset_groups(conf: dict[str, Any]) -> list[dict[str, Any]]:
     campaign_id = str(conf.get("campaign_id") or "").strip()
     raw_adset_ids = str(conf.get("adset_ids") or conf.get("adset_id") or "").strip()
@@ -200,7 +229,11 @@ def manual_campaign_adset_groups(conf: dict[str, Any]) -> list[dict[str, Any]]:
     return split_campaign_adset_groups([{"campaign_id": campaign_id, "adset_ids": adset_ids}])
 
 
-def active_campaign_adset_groups(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+def active_campaign_adset_groups(
+    snapshot: dict[str, Any],
+    *,
+    allowed_campaign_ids: set[str] | None = None,
+) -> list[dict[str, Any]]:
     flat = flatten_config_snapshot(snapshot)
     grouped: dict[str, list[str]] = {}
     for adset in active_adsets_from_flat(flat):
@@ -215,7 +248,10 @@ def active_campaign_adset_groups(snapshot: dict[str, Any]) -> list[dict[str, Any
         {"campaign_id": campaign_id, "adset_ids": adset_ids}
         for campaign_id, adset_ids in sorted(grouped.items())
     ]
-    return split_campaign_adset_groups(groups)
+    groups = split_campaign_adset_groups(groups)
+    if allowed_campaign_ids is not None:
+        groups = filter_campaign_adset_groups(groups, allowed_campaign_ids)
+    return groups
 
 
 def latest_config_snapshot() -> dict[str, Any]:
@@ -251,7 +287,10 @@ def active_adset_worker_arguments() -> list[list[str]]:
     conf = getattr(dag_run, "conf", None) or {}
     groups = manual_campaign_adset_groups(conf)
     if not groups:
-        groups = active_campaign_adset_groups(latest_config_snapshot())
+        groups = active_campaign_adset_groups(
+            latest_config_snapshot(),
+            allowed_campaign_ids=allowed_campaign_ids(),
+        )
     return [
         [evaluate_campaign_adsets_command(group["campaign_id"], group["adset_ids"])]
         for group in groups

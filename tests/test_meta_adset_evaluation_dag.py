@@ -170,6 +170,42 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
             [{"campaign_id": "camp_1", "adset_ids": ["adset_1"]}],
         )
 
+    def test_active_campaign_groups_respect_allowed_campaign_ids(self) -> None:
+        module = load_dag_module()
+
+        snapshot = {
+            "accounts": {
+                "act_1": {
+                    "campaigns": [
+                        {
+                            "id": "52535307578056",
+                            "status": "ACTIVE",
+                            "adsets": [
+                                {"id": "adset_1", "campaign_id": "52535307578056", "status": "ACTIVE"},
+                            ],
+                        },
+                        {
+                            "id": "other_campaign",
+                            "status": "ACTIVE",
+                            "adsets": [
+                                {"id": "adset_2", "campaign_id": "other_campaign", "status": "ACTIVE"},
+                            ],
+                        },
+                    ]
+                }
+            }
+        }
+
+        groups = module.active_campaign_adset_groups(
+            snapshot,
+            allowed_campaign_ids={"52535307578056"},
+        )
+
+        self.assertEqual(
+            groups,
+            [{"campaign_id": "52535307578056", "adset_ids": ["adset_1"]}],
+        )
+
     def test_manual_conf_campaign_group_overrides_snapshot_discovery(self) -> None:
         module = load_dag_module()
 
@@ -260,6 +296,8 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
         self.assertIn('task_id="apply_budget_increases"', source)
+        self.assertIn('ALLOWED_CAMPAIGN_IDS_VARIABLE = "meta_adset_evaluation_campaign_ids"', source)
+        self.assertIn('DEFAULT_ALLOWED_CAMPAIGN_IDS = "52535307578056"', source)
         self.assertIn(".expand(", source)
         self.assertIn("wait_for_campaign_config >> workers >> apply_budget_increases", source)
 
