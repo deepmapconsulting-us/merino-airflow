@@ -266,32 +266,32 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
             ],
         )
 
-    def test_worker_plan_uses_campaign_id_pod_name_for_single_batch(self) -> None:
+    def test_worker_arguments_include_campaign_id_command(self) -> None:
         module = load_dag_module()
 
-        plan = module.build_active_adset_worker_plan(
+        worker_args = module.build_active_adset_worker_arguments(
             [{"campaign_id": "52535307578056", "adset_ids": ["adset_1", "adset_2"]}],
             source="facebook",
         )
 
-        self.assertEqual(plan[0]["name"], "52535307578056")
-        self.assertNotIn("campaign_label", plan[0])
-        self.assertIn("52535307578056", plan[0]["arguments"][0])
-        self.assertIn("adset_1,adset_2", plan[0]["arguments"][0])
-        self.assertIn("SOURCE=facebook", plan[0]["arguments"][0])
-        self.assertNotIn("dag_run.conf", plan[0]["arguments"][0])
+        command = worker_args[0][0]
+        self.assertEqual(module.campaign_id_from_worker_command(command), "52535307578056")
+        self.assertIn("adset_1,adset_2", command)
+        self.assertIn("SOURCE=facebook", command)
+        self.assertNotIn("dag_run.conf", command)
 
-    def test_worker_plan_uses_campaign_id_for_split_batches(self) -> None:
+    def test_worker_arguments_split_batches_keep_campaign_id(self) -> None:
         module = load_dag_module()
 
         adset_ids = [f"adset_{index}" for index in range(1, 12)]
         groups = module.manual_campaign_adset_groups(
             {"campaign_id": "52535307578056", "adset_ids": ",".join(adset_ids)}
         )
-        plan = module.build_active_adset_worker_plan(groups)
+        worker_args = module.build_active_adset_worker_arguments(groups)
 
+        self.assertEqual(len(worker_args), 2)
         self.assertEqual(
-            [entry["name"] for entry in plan],
+            [module.campaign_id_from_worker_command(args[0]) for args in worker_args],
             ["52535307578056", "52535307578056"],
         )
 
@@ -335,8 +335,8 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
         self.assertIn('task_id="apply_budget_increases"', source)
-        self.assertIn('map_index_template="{{ task.name }}"', source)
-        self.assertIn(".expand_kwargs(", source)
+        self.assertIn("EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE", source)
+        self.assertIn('.expand(arguments=worker_args)', source)
         self.assertIn("wait_for_campaign_config >> workers >> apply_budget_increases", source)
 
     def test_pod_env_passes_inference_core_and_langfuse_settings(self) -> None:
@@ -361,12 +361,12 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         partial = module.meta_adset_evaluation_pod_partial(
             task_id="evaluate_adset",
             cmds=["bash", "-lc"],
-            map_index_template="{{ task.name }}",
+            map_index_template='{{ task.arguments[0] }}',
         )
 
         self.assertTrue(partial["get_logs"])
         self.assertEqual(partial["task_id"], "evaluate_adset")
-        self.assertEqual(partial["map_index_template"], "{{ task.name }}")
+        self.assertEqual(partial["map_index_template"], "{{ task.arguments[0] }}")
 
 
 if __name__ == "__main__":

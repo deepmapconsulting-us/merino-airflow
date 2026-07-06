@@ -64,6 +64,9 @@ CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
 MAX_ADSETS_PER_CAMPAIGN_WORKER = 10
 ALLOWED_CAMPAIGN_IDS_VARIABLE = "meta_adset_evaluation_campaign_ids"
 DEFAULT_ALLOWED_CAMPAIGN_IDS = "52535307578056"
+EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE = (
+    '{{ task.arguments[0].split("CAMPAIGN_ID=")[1].splitlines()[0].strip().strip("\'").strip(\'"\') }}'
+)
 
 
 PRELOAD_CAMPAIGN_COMMAND = """\
@@ -343,29 +346,30 @@ def adset_evaluation_conf_example() -> dict[str, str]:
     }
 
 
-def build_active_adset_worker_plan(
+def campaign_id_from_worker_command(command: str) -> str:
+    for line in command.splitlines():
+        if line.startswith("CAMPAIGN_ID="):
+            return line.split("=", 1)[1].strip().strip("'").strip('"')
+    return ""
+
+
+def build_active_adset_worker_arguments(
     groups: list[dict[str, Any]],
     *,
     source: str = "facebook",
     report_date: str = "",
-) -> list[dict[str, Any]]:
-    plan: list[dict[str, Any]] = []
-    for group in groups:
-        campaign_id = str(group["campaign_id"])
-        plan.append(
-            {
-                "name": campaign_id,
-                "arguments": [
-                    evaluate_campaign_adsets_command(
-                        campaign_id,
-                        list(group["adset_ids"]),
-                        source=source,
-                        report_date=report_date,
-                    )
-                ],
-            }
-        )
-    return plan
+) -> list[list[str]]:
+    return [
+        [
+            evaluate_campaign_adsets_command(
+                str(group["campaign_id"]),
+                list(group["adset_ids"]),
+                source=source,
+                report_date=report_date,
+            )
+        ]
+        for group in groups
+    ]
 
 
 @task
@@ -374,7 +378,7 @@ def adset_worker_arguments() -> list[list[str]]:
 
 
 @task
-def active_adset_worker_plan() -> list[dict[str, Any]]:
+def active_adset_worker_arguments() -> list[list[str]]:
     context = get_current_context()
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
@@ -385,7 +389,7 @@ def active_adset_worker_plan() -> list[dict[str, Any]]:
             latest_config_snapshot(),
             allowed_campaign_ids=allowed_campaign_ids(),
         )
-    return build_active_adset_worker_plan(groups, source=source, report_date=report_date)
+    return build_active_adset_worker_arguments(groups, source=source, report_date=report_date)
 
 
 @task
@@ -445,12 +449,12 @@ def meta_adset_evaluation():
         poke_interval=60,
         timeout=3 * 60 * 60,
     )
-    worker_plan = active_adset_worker_plan()
+    worker_args = active_adset_worker_arguments()
     workers = meta_adset_evaluation_pod_partial(
         task_id="evaluate_campaign_adsets",
         cmds=["bash", "-lc"],
-        map_index_template="{{ task.name }}",
-    ).expand_kwargs(worker_plan)
+        map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
+    ).expand(arguments=worker_args)
     apply_budget_increases = meta_adset_evaluation_pod(
         task_id="apply_budget_increases",
         cmds=["python", "-m", "meta_adset_evaluation_agent.apply_budget_changes"],
