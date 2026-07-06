@@ -85,30 +85,82 @@ if [[ -n "$REPORT_DATE" ]]; then
   ARGS+=(--date "$REPORT_DATE")
 fi
 
-exec python -m meta_adset_evaluation_agent "${{ARGS[@]}}"
+exec python -m meta_adset_evaluation_agent "${ARGS[@]}"
 """
 
 
-def evaluate_adset_command(adset_id: str) -> str:
-    return budget_adset_command(adset_id, mode="increase-budget")
+def dag_conf_values(conf: dict[str, Any]) -> tuple[str, str, str]:
+    source = str(conf.get("source") or "facebook").strip() or "facebook"
+    campaign_id = str(conf.get("campaign_id") or "").strip()
+    report_date = str(conf.get("date") or "").strip()
+    return source, campaign_id, report_date
 
 
-def set_budget_adset_command(adset_id: str) -> str:
-    return budget_adset_command(adset_id, mode="set-budget")
+def evaluate_adset_command(
+    adset_id: str,
+    *,
+    source: str = "facebook",
+    campaign_id: str = "",
+    report_date: str = "",
+) -> str:
+    return budget_adset_command(
+        adset_id,
+        mode="increase-budget",
+        source=source,
+        campaign_id=campaign_id,
+        report_date=report_date,
+    )
 
 
-def evaluate_campaign_adsets_command(campaign_id: str, adset_ids: list[str]) -> str:
-    return budget_campaign_command(campaign_id, adset_ids, mode="increase-budget")
+def set_budget_adset_command(
+    adset_id: str,
+    *,
+    source: str = "facebook",
+    campaign_id: str = "",
+    report_date: str = "",
+) -> str:
+    return budget_adset_command(
+        adset_id,
+        mode="set-budget",
+        source=source,
+        campaign_id=campaign_id,
+        report_date=report_date,
+    )
 
 
-def budget_campaign_command(campaign_id: str, adset_ids: list[str], *, mode: str) -> str:
+def evaluate_campaign_adsets_command(
+    campaign_id: str,
+    adset_ids: list[str],
+    *,
+    source: str = "facebook",
+    report_date: str = "",
+) -> str:
+    return budget_campaign_command(
+        campaign_id,
+        adset_ids,
+        mode="increase-budget",
+        source=source,
+        report_date=report_date,
+    )
+
+
+def budget_campaign_command(
+    campaign_id: str,
+    adset_ids: list[str],
+    *,
+    mode: str,
+    source: str = "facebook",
+    report_date: str = "",
+) -> str:
     quoted_campaign_id = shlex.quote(campaign_id)
     quoted_adset_ids = shlex.quote(",".join(adset_ids))
     quoted_mode = shlex.quote(mode)
+    quoted_source = shlex.quote(source)
+    quoted_report_date = shlex.quote(report_date)
     return f"""\
 set -euo pipefail
-SOURCE='{{{{ dag_run.conf.get("source", "facebook") }}}}'
-REPORT_DATE='{{{{ dag_run.conf.get("date", "") }}}}'
+SOURCE={quoted_source}
+REPORT_DATE={quoted_report_date}
 CAMPAIGN_ID={quoted_campaign_id}
 ADSET_IDS={quoted_adset_ids}
 MODE={quoted_mode}
@@ -131,22 +183,38 @@ exec python -m meta_adset_evaluation_agent "${{ARGS[@]}}"
 """
 
 
-def budget_adset_command(adset_id: str, *, mode: str) -> str:
+def budget_adset_command(
+    adset_id: str,
+    *,
+    mode: str,
+    source: str = "facebook",
+    campaign_id: str = "",
+    report_date: str = "",
+) -> str:
     quoted_adset_id = shlex.quote(adset_id)
     quoted_mode = shlex.quote(mode)
+    quoted_source = shlex.quote(source)
+    quoted_report_date = shlex.quote(report_date)
+    if campaign_id:
+        campaign_id_line = f"CAMPAIGN_ID={shlex.quote(campaign_id)}"
+        campaign_id_fallback = ""
+    else:
+        campaign_id_line = 'CAMPAIGN_ID=""'
+        campaign_id_fallback = """\
+if [[ -z "$CAMPAIGN_ID" ]]; then
+  CAMPAIGN_ID="${META_ADSET_EVALUATION_DEFAULT_CAMPAIGN_ID:-}"
+fi
+
+"""
     return f"""\
 set -euo pipefail
-SOURCE='{{{{ dag_run.conf.get("source", "facebook") }}}}'
-CAMPAIGN_ID='{{{{ dag_run.conf.get("campaign_id", "") }}}}'
-REPORT_DATE='{{{{ dag_run.conf.get("date", "") }}}}'
+SOURCE={quoted_source}
+{campaign_id_line}
+REPORT_DATE={quoted_report_date}
 ADSET_ID={quoted_adset_id}
 MODE={quoted_mode}
 
-if [[ -z "$CAMPAIGN_ID" ]]; then
-  CAMPAIGN_ID="${{META_ADSET_EVALUATION_DEFAULT_CAMPAIGN_ID:-}}"
-fi
-
-if [[ -z "$CAMPAIGN_ID" ]]; then
+{campaign_id_fallback}if [[ -z "$CAMPAIGN_ID" ]]; then
   echo "no campaign_id configured; skipping adset evaluation"
   exit 0
 fi
@@ -275,26 +343,60 @@ def adset_evaluation_conf_example() -> dict[str, str]:
     }
 
 
+def build_active_adset_worker_plan(
+    groups: list[dict[str, Any]],
+    *,
+    source: str = "facebook",
+    report_date: str = "",
+) -> list[dict[str, Any]]:
+    batches_per_campaign: dict[str, int] = {}
+    for group in groups:
+        campaign_id = str(group["campaign_id"])
+        batches_per_campaign[campaign_id] = batches_per_campaign.get(campaign_id, 0) + 1
+
+    batch_number: dict[str, int] = {}
+    plan: list[dict[str, Any]] = []
+    for group in groups:
+        campaign_id = str(group["campaign_id"])
+        batch_number[campaign_id] = batch_number.get(campaign_id, 0) + 1
+        if batches_per_campaign[campaign_id] > 1:
+            campaign_label = f"{campaign_id}_{batch_number[campaign_id]}"
+        else:
+            campaign_label = campaign_id
+        plan.append(
+            {
+                "campaign_label": campaign_label,
+                "arguments": [
+                    evaluate_campaign_adsets_command(
+                        campaign_id,
+                        list(group["adset_ids"]),
+                        source=source,
+                        report_date=report_date,
+                    )
+                ],
+            }
+        )
+    return plan
+
+
 @task
 def adset_worker_arguments() -> list[list[str]]:
     return budget_worker_arguments("increase-budget")
 
 
 @task
-def active_adset_worker_arguments() -> list[list[str]]:
+def active_adset_worker_plan() -> list[dict[str, Any]]:
     context = get_current_context()
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
+    source, _campaign_id, report_date = dag_conf_values(conf)
     groups = manual_campaign_adset_groups(conf)
     if not groups:
         groups = active_campaign_adset_groups(
             latest_config_snapshot(),
             allowed_campaign_ids=allowed_campaign_ids(),
         )
-    return [
-        [evaluate_campaign_adsets_command(group["campaign_id"], group["adset_ids"])]
-        for group in groups
-    ]
+    return build_active_adset_worker_plan(groups, source=source, report_date=report_date)
 
 
 @task
@@ -306,6 +408,7 @@ def budget_worker_arguments(mode: str) -> list[list[str]]:
     context = get_current_context()
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
+    source, campaign_id, report_date = dag_conf_values(conf)
     raw_adset_ids = str(conf.get("adset_ids") or conf.get("adset_id") or "")
     if not raw_adset_ids:
         try:
@@ -314,7 +417,18 @@ def budget_worker_arguments(mode: str) -> list[list[str]]:
             raw_adset_ids = Variable.get("meta_adset_evaluation_adset_id", default_var="")
         except Exception:
             raw_adset_ids = ""
-    return [[budget_adset_command(adset_id, mode=mode)] for adset_id in adset_ids_from_text(raw_adset_ids)]
+    return [
+        [
+            budget_adset_command(
+                adset_id,
+                mode=mode,
+                source=source,
+                campaign_id=campaign_id,
+                report_date=report_date,
+            )
+        ]
+        for adset_id in adset_ids_from_text(raw_adset_ids)
+    ]
 
 
 @dag(
@@ -342,10 +456,12 @@ def meta_adset_evaluation():
         poke_interval=60,
         timeout=3 * 60 * 60,
     )
-    worker_args = active_adset_worker_arguments()
-    workers = meta_adset_evaluation_pod_partial(task_id="evaluate_campaign_adsets", cmds=["bash", "-lc"]).expand(
-        arguments=worker_args
-    )
+    worker_plan = active_adset_worker_plan()
+    workers = meta_adset_evaluation_pod_partial(
+        task_id="evaluate_campaign_adsets",
+        cmds=["bash", "-lc"],
+        map_index_template="{{ campaign_label }}",
+    ).expand_kwargs(worker_plan)
     apply_budget_increases = meta_adset_evaluation_pod(
         task_id="apply_budget_increases",
         cmds=["python", "-m", "meta_adset_evaluation_agent.apply_budget_changes"],

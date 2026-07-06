@@ -108,8 +108,12 @@ def meta_adset_evaluation_pod_partial(
     *,
     task_id: str,
     cmds: list[str] | None = None,
+    map_index_template: str | None = None,
 ) -> object:
-    return KubernetesPodOperator.partial(**meta_adset_evaluation_pod_kwargs(task_id=task_id, cmds=cmds, arguments=None))
+    kwargs = meta_adset_evaluation_pod_kwargs(task_id=task_id, cmds=cmds, arguments=None)
+    if map_index_template is not None:
+        kwargs["map_index_template"] = map_index_template
+    return KubernetesPodOperator.partial(**kwargs)
 
 
 def meta_adset_evaluation_pod_kwargs(
