@@ -32,6 +32,9 @@ def load_dag_module():
 
     mock_meta_gcs = types.ModuleType("meta_gcs")
     mock_meta_gcs.REPORT_TIMEZONE = "America/Los_Angeles"
+    mock_meta_gcs.campaign_config_logical_date = lambda *_args, **_kwargs: None
+    mock_meta_gcs.read_json_from_gcs = lambda *_args, **_kwargs: {}
+    mock_meta_gcs.read_latest_snapshot_pointer = lambda *_args, **_kwargs: ("", {"final_output": "gs://bucket/snapshot.json"})
     sys.modules["meta_gcs"] = mock_meta_gcs
 
     mock_airflow = types.ModuleType("airflow")
@@ -41,6 +44,18 @@ def load_dag_module():
     mock_airflow_sdk.get_current_context = lambda: {"dag_run": types.SimpleNamespace(conf={})}
     sys.modules.setdefault("airflow", mock_airflow)
     sys.modules["airflow.sdk"] = mock_airflow_sdk
+
+    mock_sensor_module = types.ModuleType("airflow.providers.standard.sensors.external_task")
+
+    class FakeExternalTaskSensor:
+        def __init__(self, **kwargs: object) -> None:
+            self.kwargs = kwargs
+
+        def __rshift__(self, other: object) -> object:
+            return other
+
+    mock_sensor_module.ExternalTaskSensor = FakeExternalTaskSensor
+    sys.modules["airflow.providers.standard.sensors.external_task"] = mock_sensor_module
 
     spec = importlib.util.spec_from_file_location(
         "meta_adset_evaluation_dag_for_test",
@@ -109,7 +124,111 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         command = module.evaluate_adset_command("987")
 
         self.assertIn("ADSET_ID=987", command)
-        self.assertIn('ARGS=(--mode evaluate --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-id "$ADSET_ID")', command)
+        self.assertIn("MODE=increase-budget", command)
+        self.assertIn('ARGS=(--mode "$MODE" --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-id "$ADSET_ID")', command)
+        self.assertIn('ARGS+=(--date "$REPORT_DATE")', command)
+
+    def test_campaign_worker_command_uses_comma_separated_adsets(self) -> None:
+        module = load_dag_module()
+
+        command = module.evaluate_campaign_adsets_command("2381", ["987", "654"])
+
+        self.assertIn("CAMPAIGN_ID=2381", command)
+        self.assertIn("ADSET_IDS=987,654", command)
+        self.assertIn("MODE=increase-budget", command)
+        self.assertIn('ARGS=(--mode "$MODE" --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-ids "$ADSET_IDS")', command)
+
+    def test_active_campaign_groups_filter_active_campaign_and_adsets(self) -> None:
+        module = load_dag_module()
+
+        snapshot = {
+            "accounts": {
+                "act_1": {
+                    "campaigns": [
+                        {
+                            "id": "camp_1",
+                            "status": "ACTIVE",
+                            "adsets": [
+                                {"id": "adset_1", "campaign_id": "camp_1", "status": "ACTIVE"},
+                                {"id": "adset_2", "campaign_id": "camp_1", "status": "PAUSED"},
+                            ],
+                        },
+                        {
+                            "id": "camp_2",
+                            "status": "PAUSED",
+                            "adsets": [
+                                {"id": "adset_3", "campaign_id": "camp_2", "status": "ACTIVE"},
+                            ],
+                        },
+                    ]
+                }
+            }
+        }
+
+        self.assertEqual(
+            module.active_campaign_adset_groups(snapshot),
+            [{"campaign_id": "camp_1", "adset_ids": ["adset_1"]}],
+        )
+
+    def test_manual_conf_campaign_group_overrides_snapshot_discovery(self) -> None:
+        module = load_dag_module()
+
+        groups = module.manual_campaign_adset_groups({"campaign_id": "camp_1", "adset_ids": "a,b,a"})
+
+        self.assertEqual(groups, [{"campaign_id": "camp_1", "adset_ids": ["a", "b"]}])
+
+    def test_campaign_groups_split_when_more_than_ten_adsets(self) -> None:
+        module = load_dag_module()
+
+        adset_ids = [f"adset_{index}" for index in range(1, 24)]
+        snapshot = {
+            "accounts": {
+                "act_1": {
+                    "campaigns": [
+                        {
+                            "id": "camp_1",
+                            "status": "ACTIVE",
+                            "adsets": [
+                                {"id": adset_id, "campaign_id": "camp_1", "status": "ACTIVE"}
+                                for adset_id in adset_ids
+                            ],
+                        }
+                    ]
+                }
+            }
+        }
+
+        groups = module.active_campaign_adset_groups(snapshot)
+
+        self.assertEqual(len(groups), 3)
+        self.assertEqual(groups[0]["adset_ids"], adset_ids[:10])
+        self.assertEqual(groups[1]["adset_ids"], adset_ids[10:20])
+        self.assertEqual(groups[2]["adset_ids"], adset_ids[20:])
+        self.assertTrue(all(group["campaign_id"] == "camp_1" for group in groups))
+
+    def test_manual_conf_splits_large_adset_list(self) -> None:
+        module = load_dag_module()
+
+        adset_ids = [f"adset_{index}" for index in range(1, 12)]
+        groups = module.manual_campaign_adset_groups(
+            {"campaign_id": "camp_1", "adset_ids": ",".join(adset_ids)}
+        )
+
+        self.assertEqual(
+            groups,
+            [
+                {"campaign_id": "camp_1", "adset_ids": adset_ids[:10]},
+                {"campaign_id": "camp_1", "adset_ids": adset_ids[10:]},
+            ],
+        )
+
+    def test_set_budget_worker_command_uses_set_budget_mode(self) -> None:
+        module = load_dag_module()
+
+        command = module.set_budget_adset_command("987")
+
+        self.assertIn("ADSET_ID=987", command)
+        self.assertIn("MODE=set-budget", command)
         self.assertIn('ARGS+=(--date "$REPORT_DATE")', command)
 
     def test_conf_example_documents_multi_adset_trigger(self) -> None:
@@ -130,15 +249,19 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         source = dag_path.read_text(encoding="utf-8")
 
         self.assertIn('schedule="0 * * * *"', source)
+        self.assertIn('dag_id="meta_adset_set_budget_evaluation"', source)
+        self.assertIn('schedule="0 0 * * *"', source)
 
     def test_dag_splits_preload_and_mapped_workers(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
         self.assertIn('task_id="preload_campaign"', source)
-        self.assertIn('task_id="evaluate_adset"', source)
+        self.assertIn('task_id="evaluate_campaign_adsets"', source)
+        self.assertIn('task_id="set_budget_adset"', source)
+        self.assertIn('task_id="apply_budget_increases"', source)
         self.assertIn(".expand(", source)
-        self.assertIn("preload >> workers", source)
+        self.assertIn("wait_for_campaign_config >> workers >> apply_budget_increases", source)
 
     def test_pod_env_passes_inference_core_and_langfuse_settings(self) -> None:
         module = load_k8s_module()
@@ -151,6 +274,10 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn("adset_budget_langfuse_public_key", env_by_name["LANGFUSE_CONFIG__LANGFUSE_PUBLIC_KEY"])
         self.assertIn("adset_budget_langfuse_secret_key", env_by_name["LANGFUSE_CONFIG__LANGFUSE_SECRET_KEY"])
         self.assertEqual(env_by_name["GLOBAL_ADSET_BUDGET_MAX"], "{{ var.value.get('global_adset_budget_max', '') }}")
+        self.assertEqual(
+            env_by_name["META_ADSET_EVALUATION_BUDGET_SPEND_THRESHOLD"],
+            "{{ var.value.get('meta_adset_evaluation_budget_spend_threshold', '0.85') }}",
+        )
 
     def test_pod_partial_preserves_log_settings_for_mapping(self) -> None:
         module = load_k8s_module()

@@ -78,6 +78,10 @@ def meta_adset_evaluation_env() -> list[k8s.V1EnvVar]:
             name="GLOBAL_ADSET_BUDGET_MAX",
             value="{{ var.value.get('global_adset_budget_max', '') }}",
         ),
+        k8s.V1EnvVar(
+            name="META_ADSET_EVALUATION_BUDGET_SPEND_THRESHOLD",
+            value="{{ var.value.get('meta_adset_evaluation_budget_spend_threshold', '0.85') }}",
+        ),
         k8s.V1EnvVar(name="MCP_REDIS_HOST", value=f"{{{{ conn.{REDIS_CONN_ID}.host }}}}"),
         k8s.V1EnvVar(name="MCP_REDIS_PORT", value=f"{{{{ conn.{REDIS_CONN_ID}.port or 6379 }}}}"),
         k8s.V1EnvVar(name="MCP_REDIS_PASSWORD", value=f"{{{{ conn.{REDIS_CONN_ID}.password or '' }}}}"),
