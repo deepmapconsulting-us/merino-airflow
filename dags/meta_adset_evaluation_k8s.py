@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - older provider layout
 PROJECT_ID = "merino-agent"
 REGION = "us-west2"
 META_ADSET_EVALUATION_IMAGE = (
-    f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-meta-adset-evaluation-agent:0.1.2"
+    f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-meta-adset-evaluation-agent:0.1.5"
 )
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
@@ -55,18 +55,6 @@ def meta_adset_evaluation_env() -> list[k8s.V1EnvVar]:
             value="{{ var.value.get('adset_budget_langfuse_base_url', 'https://langfuse.merino-aiagent.com') }}",
         ),
         k8s.V1EnvVar(
-            name="LANGFUSE_CONFIG__LANGFUSE_PUBLIC_KEY",
-            value="{{ var.value.get('adset_budget_langfuse_public_key', '') }}",
-        ),
-        k8s.V1EnvVar(
-            name="LANGFUSE_CONFIG__LANGFUSE_SECRET_KEY",
-            value="{{ var.value.get('adset_budget_langfuse_secret_key', '') }}",
-        ),
-        k8s.V1EnvVar(
-            name="LANGFUSE_CONFIG__LANGFUSE_BASE_URL",
-            value="{{ var.value.get('adset_budget_langfuse_base_url', 'https://langfuse.merino-aiagent.com') }}",
-        ),
-        k8s.V1EnvVar(
             name="META_ADSET_EVALUATION_DEFAULT_CAMPAIGN_ID",
             value="{{ var.value.get('meta_adset_evaluation_campaign_id', '') }}",
         ),
@@ -100,8 +88,16 @@ def meta_adset_evaluation_pod(
     task_id: str,
     cmds: list[str] | None = None,
     arguments: list[str] | None = None,
+    trigger_rule: str | None = None,
 ) -> KubernetesPodOperator:
-    return KubernetesPodOperator(**meta_adset_evaluation_pod_kwargs(task_id=task_id, cmds=cmds, arguments=arguments))
+    return KubernetesPodOperator(
+        **meta_adset_evaluation_pod_kwargs(
+            task_id=task_id,
+            cmds=cmds,
+            arguments=arguments,
+            trigger_rule=trigger_rule,
+        )
+    )
 
 
 def meta_adset_evaluation_pod_partial(
@@ -121,6 +117,7 @@ def meta_adset_evaluation_pod_kwargs(
     task_id: str,
     cmds: list[str] | None = None,
     arguments: list[str] | None = None,
+    trigger_rule: str | None = None,
 ) -> dict[str, object]:
     kwargs: dict[str, object] = dict(
         task_id=task_id,
@@ -143,4 +140,6 @@ def meta_adset_evaluation_pod_kwargs(
     )
     if arguments is not None:
         kwargs["arguments"] = arguments
+    if trigger_rule is not None:
+        kwargs["trigger_rule"] = trigger_rule
     return kwargs

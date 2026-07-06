@@ -319,25 +319,32 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
             },
         )
 
-    def test_dag_runs_hourly(self) -> None:
+    def test_dag_runs_daytime_hours(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
-        self.assertIn('schedule="0 * * * *"', source)
-        self.assertIn('dag_id="meta_adset_set_budget_evaluation"', source)
-        self.assertIn('schedule="0 0 * * *"', source)
+        self.assertIn('schedule="0 3-22 * * *"', source)
+        self.assertNotIn('dag_id="meta_adset_set_budget_evaluation"', source)
+        self.assertNotIn('schedule="0 0 * * *"', source)
 
     def test_dag_splits_preload_and_mapped_workers(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
-        self.assertIn('task_id="preload_campaign"', source)
+        self.assertIn('task_id="preload_set_budget_campaign"', source)
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
-        self.assertIn('task_id="apply_budget_increases"', source)
+        self.assertIn('task_id="apply_budget_changes"', source)
         self.assertIn("EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE", source)
-        self.assertIn('.expand(arguments=worker_args)', source)
-        self.assertIn("wait_for_campaign_config >> workers >> apply_budget_increases", source)
+        self.assertIn('.expand(arguments=increase_worker_args)', source)
+        self.assertIn("arguments=set_budget_worker_args", source)
+        self.assertIn("wait_for_campaign_config >> increase_workers >> apply_budget_changes", source)
+        self.assertIn(
+            "wait_for_campaign_config >> preload_set_budget >> set_budget_workers >> apply_budget_changes",
+            source,
+        )
+        self.assertIn('arguments=["--budget-change-type", "all"]', source)
+        self.assertIn('trigger_rule="none_failed_min_one_success"', source)
 
     def test_pod_env_passes_inference_core_and_langfuse_settings(self) -> None:
         module = load_k8s_module()
@@ -347,8 +354,8 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn("{{ var.value.get('openai_api_key', '') }}", env_by_name["INFERENCE_CONFIG__OPENAI_API_KEY"])
         self.assertEqual(env_by_name["INFERENCE_CONFIG__INFERENCE_PROJECT_NAME"], "meta_adset_evaluation_agent")
         self.assertEqual(env_by_name["PROMPT_LABEL_CONFIG__PROMPT_BACKEND"], "langfuse")
-        self.assertIn("adset_budget_langfuse_public_key", env_by_name["LANGFUSE_CONFIG__LANGFUSE_PUBLIC_KEY"])
-        self.assertIn("adset_budget_langfuse_secret_key", env_by_name["LANGFUSE_CONFIG__LANGFUSE_SECRET_KEY"])
+        self.assertIn("adset_budget_langfuse_public_key", env_by_name["LANGFUSE_PUBLIC_KEY"])
+        self.assertIn("adset_budget_langfuse_secret_key", env_by_name["LANGFUSE_SECRET_KEY"])
         self.assertEqual(env_by_name["GLOBAL_ADSET_BUDGET_MAX"], "{{ var.value.get('global_adset_budget_max', '') }}")
         self.assertEqual(
             env_by_name["META_ADSET_EVALUATION_BUDGET_SPEND_THRESHOLD"],
