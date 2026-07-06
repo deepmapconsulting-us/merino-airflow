@@ -449,7 +449,7 @@ def meta_adset_evaluation():
     workers = meta_adset_evaluation_pod_partial(
         task_id="evaluate_campaign_adsets",
         cmds=["bash", "-lc"],
-        map_index_template="{{ name }}",
+        map_index_template="{{ task.name }}",
     ).expand_kwargs(worker_plan)
     apply_budget_increases = meta_adset_evaluation_pod(
         task_id="apply_budget_increases",

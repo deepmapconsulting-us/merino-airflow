@@ -335,7 +335,7 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
         self.assertIn('task_id="apply_budget_increases"', source)
-        self.assertIn('map_index_template="{{ name }}"', source)
+        self.assertIn('map_index_template="{{ task.name }}"', source)
         self.assertIn(".expand_kwargs(", source)
         self.assertIn("wait_for_campaign_config >> workers >> apply_budget_increases", source)
 
@@ -361,12 +361,12 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         partial = module.meta_adset_evaluation_pod_partial(
             task_id="evaluate_adset",
             cmds=["bash", "-lc"],
-            map_index_template="{{ name }}",
+            map_index_template="{{ task.name }}",
         )
 
         self.assertTrue(partial["get_logs"])
         self.assertEqual(partial["task_id"], "evaluate_adset")
-        self.assertEqual(partial["map_index_template"], "{{ name }}")
+        self.assertEqual(partial["map_index_template"], "{{ task.name }}")
 
 
 if __name__ == "__main__":
