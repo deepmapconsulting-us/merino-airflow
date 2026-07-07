@@ -14,13 +14,14 @@ except ImportError:  # pragma: no cover - older provider layout
 PROJECT_ID = "merino-agent"
 REGION = "us-west2"
 META_ADSET_EVALUATION_IMAGE = (
-    f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-meta-adset-evaluation-agent:0.1.5"
+    f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-meta-adset-evaluation-agent:0.1.6"
 )
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
 REDIS_CONN_ID = "merino_redis"
 POSTGRES_CONN_ID = "merino_analytics"
 DEFAULT_META_ADS_MCP_URL = "http://meta-ads-mcp.merino-mcp.svc.cluster.local:8080/mcp/"
+DEFAULT_LANGFUSE_BASE_URL = "http://merino-langfuse-web.langfuse.svc.cluster.local:3000"
 
 
 def meta_adset_evaluation_env() -> list[k8s.V1EnvVar]:
@@ -52,7 +53,7 @@ def meta_adset_evaluation_env() -> list[k8s.V1EnvVar]:
         ),
         k8s.V1EnvVar(
             name="LANGFUSE_BASE_URL",
-            value="{{ var.value.get('adset_budget_langfuse_base_url', 'https://langfuse.merino-aiagent.com') }}",
+            value=f"{{{{ var.value.get('adset_budget_langfuse_base_url', '{DEFAULT_LANGFUSE_BASE_URL}') }}}}",
         ),
         k8s.V1EnvVar(
             name="META_ADSET_EVALUATION_DEFAULT_CAMPAIGN_ID",
