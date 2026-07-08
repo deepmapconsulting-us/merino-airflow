@@ -18,7 +18,7 @@ Campaigns with more than 10 active adsets are split into multiple pods.
 `meta_adset_evaluation` runs hourly from 3am through 10pm and evaluates
 increase-budget campaign batches before applying queued increase changes.
 
-`meta_adset_set_budget_evaluation` runs daily at midnight, evaluates starting
+`meta_adset_set_budget_evaluation` runs daily at 1am PT, evaluates starting
 budgets from the prior day's adset performance plus earlier history, then
 applies queued set-budget changes. After the set-budget apply step succeeds, it
 runs schedule-parameter generation for adsets whose persisted set-budget output
@@ -583,7 +583,7 @@ meta_adset_evaluation()
 
 @dag(
     dag_id=SET_BUDGET_DAG_ID,
-    schedule="0 0 * * *",
+    schedule="0 1 * * *",
     start_date=pendulum.datetime(2026, 7, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["meta", "adset", "set-budget", "agent"],

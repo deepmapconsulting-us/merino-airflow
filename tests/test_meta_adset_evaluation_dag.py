@@ -353,13 +353,13 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
             },
         )
 
-    def test_dag_schedules_increase_and_midnight_set_budget(self) -> None:
+    def test_dag_schedules_increase_and_early_morning_set_budget(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
         self.assertIn('schedule="0 3-22 * * *"', source)
         self.assertIn('dag_id=SET_BUDGET_DAG_ID', source)
-        self.assertIn('schedule="0 0 * * *"', source)
+        self.assertIn('schedule="0 1 * * *"', source)
 
     def test_dag_splits_increase_and_set_budget_flows(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
