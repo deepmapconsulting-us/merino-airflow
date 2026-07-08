@@ -306,6 +306,40 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn('ARGS+=(--date "$REPORT_DATE")', command)
         self.assertNotIn("dag_run.conf", command)
 
+    def test_set_budget_campaign_worker_command_uses_campaign_batch(self) -> None:
+        module = load_dag_module()
+
+        worker_args = module.build_campaign_budget_worker_arguments(
+            [{"campaign_id": "52535307578056", "adset_ids": ["111", "222"]}],
+            mode="set-budget",
+            source="facebook",
+            report_date="2026-07-08",
+        )
+        command = worker_args[0][0]
+
+        self.assertIn("CAMPAIGN_ID=52535307578056", command)
+        self.assertIn("ADSET_IDS=111,222", command)
+        self.assertIn("MODE=set-budget", command)
+        self.assertIn("REPORT_DATE=2026-07-08", command)
+
+    def test_preload_campaign_worker_arguments_deduplicates_campaigns(self) -> None:
+        module = load_dag_module()
+
+        worker_args = module.preload_campaign_worker_arguments(
+            [
+                {"campaign_id": "52535307578056", "adset_ids": ["111"]},
+                {"campaign_id": "52535307578056", "adset_ids": ["222"]},
+            ],
+            source="facebook",
+            report_date="2026-07-08",
+        )
+
+        self.assertEqual(len(worker_args), 1)
+        command = worker_args[0][0]
+        self.assertIn("CAMPAIGN_ID=52535307578056", command)
+        self.assertIn("ARGS=(--mode preload-campaign", command)
+        self.assertIn("REPORT_DATE=2026-07-08", command)
+
     def test_conf_example_documents_multi_adset_trigger(self) -> None:
         module = load_dag_module()
 
@@ -319,15 +353,15 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
             },
         )
 
-    def test_dag_runs_daytime_hours(self) -> None:
+    def test_dag_schedules_increase_and_midnight_set_budget(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
         self.assertIn('schedule="0 3-22 * * *"', source)
-        self.assertNotIn('dag_id="meta_adset_set_budget_evaluation"', source)
-        self.assertNotIn('schedule="0 0 * * *"', source)
+        self.assertIn('dag_id=SET_BUDGET_DAG_ID', source)
+        self.assertIn('schedule="0 0 * * *"', source)
 
-    def test_dag_splits_preload_and_mapped_workers(self) -> None:
+    def test_dag_splits_increase_and_set_budget_flows(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
@@ -335,15 +369,17 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
         self.assertIn('task_id="apply_budget_changes"', source)
+        self.assertIn('task_id="generate_ad_status_schedule"', source)
         self.assertIn("EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE", source)
         self.assertIn('.expand(arguments=increase_worker_args)', source)
+        self.assertIn(".expand(arguments=preload_args)", source)
         self.assertIn("arguments=set_budget_worker_args", source)
+        self.assertIn("arguments=schedule_worker_args", source)
+        self.assertIn('mode="schedule-parameter"', source)
         self.assertIn("wait_for_campaign_config >> increase_workers >> apply_budget_changes", source)
-        self.assertIn(
-            "wait_for_campaign_config >> preload_set_budget >> set_budget_workers >> apply_budget_changes",
-            source,
-        )
-        self.assertIn('arguments=["--budget-change-type", "all"]', source)
+        self.assertIn(">> set_budget_workers\n            >> apply_budget_changes\n            >> generate_ad_status_schedule", source)
+        self.assertIn('arguments=["--budget-change-type", "increase_budget"]', source)
+        self.assertIn('arguments=["--budget-change-type", "set_budget"]', source)
         self.assertIn('trigger_rule="none_failed_min_one_success"', source)
 
     def test_pod_env_passes_inference_core_and_langfuse_settings(self) -> None:
