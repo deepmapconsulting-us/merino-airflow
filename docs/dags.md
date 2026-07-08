@@ -356,7 +356,7 @@ gantt
 | | |
 | --- | --- |
 | **Schedule** | `0 */12 * * *` (every 12 hours, UTC) |
-| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.3` |
+| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.4` |
 | **Executor** | `KubernetesPodOperator` in namespace `airflow` (KSA `merino-airflow-task-runner`) |
 
 ### Tasks
@@ -392,7 +392,7 @@ gantt
 | | |
 | --- | --- |
 | **Schedule** | `0 */6 * * *` (every 6 hours, UTC) |
-| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.3` |
+| **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.4` |
 | **Executor** | `KubernetesPodOperator` in namespace `airflow` (KSA `merino-airflow-task-runner`) |
 
 ### Tasks
