@@ -14,7 +14,7 @@ except ImportError:  # pragma: no cover - older provider layout
 PROJECT_ID = "merino-agent"
 REGION = "us-west2"
 META_ADSET_EVALUATION_IMAGE = (
-    f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-meta-adset-evaluation-agent:0.1.11"
+    f"{REGION}-docker.pkg.dev/{PROJECT_ID}/merino/merino-meta-adset-evaluation-agent:0.1.12"
 )
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
