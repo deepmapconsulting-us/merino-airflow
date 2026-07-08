@@ -367,7 +367,7 @@ gantt
 
 ### Secrets and connections
 
-- Postgres: Airflow connection `merino_analytics` → `POSTGRES_*` env (database `merino-shopify`)
+- Postgres: Airflow connection `merino_analytics` → `POSTGRES_*` env (database `merino-analytics`)
 - Geocoding: Kubernetes secret `merino-airflow-google-geocoding-api-key` key `api-key`, synced from
   GSM secret `airflow-variables-google_geocoding_api_key`.
   Required for the **customers** step only (Google Geocoding API → lat/lng → H3). Not used by inventory

@@ -290,7 +290,7 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(module.DAG_ID, "lingxing_erp_logistics_import")
         self.assertEqual(module.TOKEN_CACHE_VARIABLE, "erp_lingxing_oauth_cache")
         self.assertEqual(module.POSTGRES_CONN_ID, "merino_analytics")
-        self.assertEqual(module.ERP_LOGISTICS_DB, "merino-shopify")
+        self.assertEqual(module.ERP_LOGISTICS_DB, "merino-analytics")
         self.assertIn('schedule="30 */4 * * *"', source)
         self.assertIn("max_active_runs=1", source)
         self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
@@ -419,7 +419,7 @@ class LingXingDagTest(unittest.TestCase):
 
     def test_erp_logistics_schema_exposes_fba_and_age_views(self) -> None:
         schema = (
-            REPO / "metabase_schema" / "schema" / "merino-shopify" / "erp_logistics" / "erp_logistics.sql"
+            REPO / "metabase_schema" / "schema" / "merino-analytics" / "erp_logistics" / "erp_logistics.sql"
         ).read_text(encoding="utf-8")
         local_age_view = schema.split("CREATE OR REPLACE VIEW v_local_inventory_age_by_sku_warehouse", 1)[1].split(
             "CREATE OR REPLACE VIEW v_fba_stock_latest_by_seller_sku", 1

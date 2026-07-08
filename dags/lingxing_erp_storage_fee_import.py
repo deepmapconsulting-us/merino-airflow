@@ -30,7 +30,7 @@ from merino_erp_jobs.storage_fee_import import import_storage_fee_rows  # noqa: 
 DAG_ID = "lingxing_erp_storage_fee_import"
 REPORT_TIMEZONE = "UTC"
 POSTGRES_CONN_ID = "merino_analytics"
-ERP_LOGISTICS_DB = "merino-shopify"
+ERP_LOGISTICS_DB = "merino-analytics"
 
 TOKEN_CACHE_VARIABLE = "erp_lingxing_oauth_cache"
 PAGE_SIZE_VARIABLE = "erp_lingxing_page_size"

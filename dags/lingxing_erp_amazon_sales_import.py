@@ -31,7 +31,7 @@ from merino_erp_jobs.sales_report_import import import_sales_report_rows  # noqa
 DAG_ID = "lingxing_erp_amazon_sales_import"
 REPORT_TIMEZONE = "UTC"
 POSTGRES_CONN_ID = "merino_analytics"
-ERP_LOGISTICS_DB = "merino-shopify"
+ERP_LOGISTICS_DB = "merino-analytics"
 
 TOKEN_CACHE_VARIABLE = "erp_lingxing_oauth_cache"
 PAGE_SIZE_VARIABLE = "erp_lingxing_sales_report_page_size"
