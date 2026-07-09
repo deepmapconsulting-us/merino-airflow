@@ -363,7 +363,7 @@ gantt
 
 | Task | Description |
 | --- | --- |
-| `import_shopify` | Runs `scripts/run_shopify_all.sh`: customers → orders → inventory. Default customer/order query uses `updated_at` over the Airflow 12h interval with a 30-minute overlap (incremental, not 2-day rescan); inventory uses the current run date as `partition_date`. Skips rows already in Postgres unless `--overwrite`. |
+| `import_shopify` | Runs `scripts/run_shopify_all.sh`: orders (customers upserted from each order) → inventory. Skips the full customer-catalog scan by default. Default order query uses `updated_at` over the Airflow 12h interval with a 30-minute overlap; inventory uses the current run date as `partition_date`. Skips rows already in Postgres unless `--overwrite`. |
 
 ### Secrets and connections
 

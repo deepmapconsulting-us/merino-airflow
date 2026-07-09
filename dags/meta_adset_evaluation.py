@@ -11,21 +11,22 @@ Manual trigger config:
 }
 ```
 
-Scheduled daytime increase-budget runs read the latest campaign config snapshot, group
-ACTIVE adsets by ACTIVE campaign, then evaluate up to 10 adsets per worker pod.
-Campaigns with more than 10 active adsets are split into multiple pods.
+Scheduled runs read the latest campaign config snapshot, group ACTIVE adsets by
+ACTIVE campaign, then evaluate up to 10 adsets per worker pod. Campaigns with
+more than 10 active adsets are split into multiple pods.
 
-`meta_adset_evaluation` runs hourly from 3am through 10pm and evaluates
-increase-budget campaign batches before applying queued increase changes.
+`meta_adset_evaluation` uses one America/Los_Angeles cron schedule:
 
-`meta_adset_set_budget_evaluation` runs daily at 1am PT, evaluates starting
-budgets from the prior day's adset performance plus earlier history, then
-applies queued set-budget changes. After the set-budget apply step succeeds, it
-runs schedule-parameter generation for adsets whose persisted set-budget output
-has `generate_schedule_parameter=true`.
+- `0 0,3-22 * * *` — midnight PT runs set-budget + schedule generation; 3am–10pm
+  PT runs increase-budget hourly.
 
 Manual runs can pass `campaign_id` and `adset_ids` in DAG conf to override
-snapshot discovery.
+snapshot discovery, or `mode` to force a branch:
+
+```json
+{"mode": "set_budget"}
+{"mode": "increase_budget"}
+```
 
 Scheduled runs only evaluate campaigns listed in the Airflow Variable
 `meta_adset_evaluation_campaign_ids` (comma-separated). Default:
@@ -64,7 +65,8 @@ from merino_meta_jobs.adset_config import active_adsets_from_flat  # noqa: E402 
 from merino_meta_jobs.object_property import flatten_config_snapshot  # noqa: E402  # type: ignore[import-not-found]
 
 DAG_ID = "meta_adset_evaluation"
-SET_BUDGET_DAG_ID = "meta_adset_set_budget_evaluation"
+DAG_SCHEDULE = "0 0,3-22 * * *"
+SET_BUDGET_PT_HOUR = 0
 CAMPAIGN_CONFIG_DAG_ID = "facebook_campaign_config_update"
 CONFIG_GCS_PREFIX = "facebook_campaign_config_update"
 MAX_ADSETS_PER_CAMPAIGN_WORKER = 10
@@ -436,6 +438,20 @@ def preload_campaign_worker_arguments(
     ]
 
 
+def evaluation_mode(conf: dict[str, Any], logical_date: Any) -> str:
+    mode = str(conf.get("mode") or "").strip().lower().replace("-", "_")
+    if mode in {"set_budget", "setbudget"}:
+        return "set_budget"
+    if mode in {"increase_budget", "increasebudget"}:
+        return "increase_budget"
+    if logical_date is None:
+        return "increase_budget"
+    pt_hour = pendulum.instance(logical_date).in_timezone(REPORT_TIMEZONE).hour
+    if pt_hour == SET_BUDGET_PT_HOUR:
+        return "set_budget"
+    return "increase_budget"
+
+
 def active_adset_run_config(conf: dict[str, Any]) -> dict[str, Any]:
     source, _campaign_id, report_date = dag_conf_values(conf)
     groups = manual_campaign_adset_groups(conf)
@@ -449,6 +465,17 @@ def active_adset_run_config(conf: dict[str, Any]) -> dict[str, Any]:
         "report_date": report_date,
         "groups": groups,
     }
+
+
+@task.branch
+def choose_evaluation_flow() -> str:
+    context = get_current_context()
+    dag_run = context.get("dag_run")
+    conf = getattr(dag_run, "conf", None) or {}
+    logical_date = context.get("logical_date") or context.get("data_interval_start")
+    if evaluation_mode(conf, logical_date) == "set_budget":
+        return "set_budget_run_config"
+    return "active_adset_worker_arguments"
 
 
 @task
@@ -540,7 +567,7 @@ def budget_worker_arguments(mode: str) -> list[list[str]]:
 
 @dag(
     dag_id=DAG_ID,
-    schedule="0 3-22 * * *",
+    schedule=DAG_SCHEDULE,
     start_date=pendulum.datetime(2026, 7, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
     tags=["meta", "adset", "evaluation", "agent"],
@@ -563,49 +590,21 @@ def meta_adset_evaluation():
         poke_interval=60,
         timeout=3 * 60 * 60,
     )
+    branch = choose_evaluation_flow()
+
     increase_worker_args = active_adset_worker_arguments()
     increase_workers = meta_adset_evaluation_pod_partial(
         task_id="evaluate_campaign_adsets",
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
     ).expand(arguments=increase_worker_args)
-    apply_budget_changes = meta_adset_evaluation_pod(
-        task_id="apply_budget_changes",
+    apply_increase_budget_changes = meta_adset_evaluation_pod(
+        task_id="apply_increase_budget_changes",
         cmds=["python", "-m", "meta_adset_evaluation_agent.apply_budget_changes"],
         arguments=["--budget-change-type", "increase_budget"],
         trigger_rule="none_failed_min_one_success",
     )
-    wait_for_campaign_config >> increase_workers >> apply_budget_changes
 
-
-meta_adset_evaluation()
-
-
-@dag(
-    dag_id=SET_BUDGET_DAG_ID,
-    schedule="0 1 * * *",
-    start_date=pendulum.datetime(2026, 7, 1, 0, 0, tz=REPORT_TIMEZONE),
-    catchup=False,
-    tags=["meta", "adset", "set-budget", "agent"],
-    default_args={
-        "owner": "data-platform",
-        "retries": 1,
-        "retry_delay": timedelta(minutes=5),
-    },
-    doc_md=__doc__,
-)
-def meta_adset_set_budget_evaluation():
-    wait_for_campaign_config = ExternalTaskSensor(
-        task_id="wait_for_facebook_campaign_config_update",
-        external_dag_id=CAMPAIGN_CONFIG_DAG_ID,
-        external_task_id=None,
-        execution_date_fn=campaign_config_logical_date,
-        allowed_states=["success"],
-        failed_states=["failed"],
-        mode="reschedule",
-        poke_interval=60,
-        timeout=3 * 60 * 60,
-    )
     run_config = set_budget_run_config()
     preload_args = set_budget_preload_campaign_arguments(run_config)
     preload_set_budget = meta_adset_evaluation_pod_partial(
@@ -619,8 +618,8 @@ def meta_adset_set_budget_evaluation():
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
     ).expand(arguments=set_budget_worker_args)
-    apply_budget_changes = meta_adset_evaluation_pod(
-        task_id="apply_budget_changes",
+    apply_set_budget_changes = meta_adset_evaluation_pod(
+        task_id="apply_set_budget_changes",
         cmds=["python", "-m", "meta_adset_evaluation_agent.apply_budget_changes"],
         arguments=["--budget-change-type", "set_budget"],
         trigger_rule="none_failed_min_one_success",
@@ -631,18 +630,21 @@ def meta_adset_set_budget_evaluation():
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
     ).expand(arguments=schedule_worker_args)
+
+    wait_for_campaign_config >> branch
+    branch >> increase_worker_args >> increase_workers >> apply_increase_budget_changes
     if hasattr(run_config, "operator"):
         (
-            wait_for_campaign_config
+            branch
             >> run_config
             >> preload_args
             >> preload_set_budget
             >> set_budget_workers
-            >> apply_budget_changes
+            >> apply_set_budget_changes
             >> generate_ad_status_schedule
         )
         run_config >> set_budget_worker_args >> set_budget_workers
         run_config >> schedule_worker_args >> generate_ad_status_schedule
 
 
-meta_adset_set_budget_evaluation()
+meta_adset_evaluation()

@@ -6,6 +6,8 @@ import types
 import unittest
 from pathlib import Path
 
+import pendulum
+
 REPO = Path(__file__).resolve().parents[2]
 
 
@@ -43,7 +45,27 @@ def load_dag_module():
     mock_airflow = types.ModuleType("airflow")
     mock_airflow_sdk = types.ModuleType("airflow.sdk")
     mock_airflow_sdk.dag = lambda **_kwargs: (lambda fn: fn)
-    mock_airflow_sdk.task = lambda fn: fn
+
+    class FakeTask:
+        def __init__(self, name: str) -> None:
+            self.task_id = name
+            self.operator = True
+
+        def __rshift__(self, other: object) -> object:
+            return other
+
+    def task_decorator(fn=None, **_kwargs: object):
+        def task_factory(*_args: object, **_factory_kwargs: object) -> FakeTask:
+            assert fn is not None
+            return FakeTask(fn.__name__)
+
+        if fn is not None:
+            task_factory.__name__ = fn.__name__
+            return task_factory
+        return lambda inner: task_decorator(inner)
+
+    task_decorator.branch = lambda fn: task_decorator(fn)
+    mock_airflow_sdk.task = task_decorator
     mock_airflow_sdk.get_current_context = lambda: {"dag_run": types.SimpleNamespace(conf={})}
     sys.modules.setdefault("airflow", mock_airflow)
     sys.modules["airflow.sdk"] = mock_airflow_sdk
@@ -353,22 +375,34 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
             },
         )
 
-    def test_dag_schedules_increase_and_early_morning_set_budget(self) -> None:
+    def test_evaluation_mode_uses_pt_hour_for_scheduled_runs(self) -> None:
+        module = load_dag_module()
+        midnight = pendulum.datetime(2026, 7, 8, 0, 0, tz=module.REPORT_TIMEZONE)
+        morning = pendulum.datetime(2026, 7, 8, 3, 0, tz=module.REPORT_TIMEZONE)
+
+        self.assertEqual(module.evaluation_mode({}, midnight), "set_budget")
+        self.assertEqual(module.evaluation_mode({}, morning), "increase_budget")
+        self.assertEqual(module.evaluation_mode({"mode": "set_budget"}, morning), "set_budget")
+        self.assertEqual(module.evaluation_mode({"mode": "increase_budget"}, midnight), "increase_budget")
+
+    def test_dag_schedule_covers_midnight_and_daytime_pt(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
-        self.assertIn('schedule="0 3-22 * * *"', source)
-        self.assertIn('dag_id=SET_BUDGET_DAG_ID', source)
-        self.assertIn('schedule="0 1 * * *"', source)
+        self.assertIn('DAG_SCHEDULE = "0 0,3-22 * * *"', source)
+        self.assertIn("schedule=DAG_SCHEDULE", source)
+        self.assertNotIn("meta_adset_set_budget_evaluation()", source)
 
-    def test_dag_splits_increase_and_set_budget_flows(self) -> None:
+    def test_dag_branches_increase_and_set_budget_flows(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "meta_adset_evaluation.py"
         source = dag_path.read_text(encoding="utf-8")
 
+        self.assertIn("choose_evaluation_flow", source)
         self.assertIn('task_id="preload_set_budget_campaign"', source)
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
-        self.assertIn('task_id="apply_budget_changes"', source)
+        self.assertIn('task_id="apply_increase_budget_changes"', source)
+        self.assertIn('task_id="apply_set_budget_changes"', source)
         self.assertIn('task_id="generate_ad_status_schedule"', source)
         self.assertIn("EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE", source)
         self.assertIn('.expand(arguments=increase_worker_args)', source)
@@ -376,8 +410,8 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn("arguments=set_budget_worker_args", source)
         self.assertIn("arguments=schedule_worker_args", source)
         self.assertIn('mode="schedule-parameter"', source)
-        self.assertIn("wait_for_campaign_config >> increase_workers >> apply_budget_changes", source)
-        self.assertIn(">> set_budget_workers\n            >> apply_budget_changes\n            >> generate_ad_status_schedule", source)
+        self.assertIn("branch >> increase_worker_args >> increase_workers >> apply_increase_budget_changes", source)
+        self.assertIn(">> apply_set_budget_changes\n            >> generate_ad_status_schedule", source)
         self.assertIn('arguments=["--budget-change-type", "increase_budget"]', source)
         self.assertIn('arguments=["--budget-change-type", "set_budget"]', source)
         self.assertIn('trigger_rule="none_failed_min_one_success"', source)

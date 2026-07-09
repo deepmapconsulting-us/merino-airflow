@@ -28,10 +28,10 @@ def load_dag_module():
 
 
 class ShopifyImportDagTest(unittest.TestCase):
-    def test_incremental_queries_use_interval_with_overlap(self) -> None:
+    def test_incremental_queries_use_six_hour_order_window_and_transaction_overlap(self) -> None:
         module = load_dag_module()
-        interval_start = pendulum.datetime(2026, 6, 14, 12, 0, tz="UTC")
-        interval_end = pendulum.datetime(2026, 6, 15, 0, 0, tz="UTC")
+        interval_start = pendulum.datetime(2026, 7, 2, 6, 0, tz="UTC")
+        interval_end = pendulum.datetime(2026, 7, 2, 12, 0, tz="UTC")
 
         queries = module.shopify_incremental_queries(
             data_interval_start=interval_start,
@@ -39,23 +39,26 @@ class ShopifyImportDagTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            queries["customer_query"],
-            "updated_at:>=2026-06-14T11:30:00Z updated_at:<2026-06-15T00:00:00Z",
+            queries["order_query"],
+            "updated_at:>=2026-07-02T05:30:00Z updated_at:<2026-07-02T12:00:00Z financial_status:paid",
         )
         self.assertEqual(
-            queries["order_query"],
-            "updated_at:>=2026-06-14T11:30:00Z updated_at:<2026-06-15T00:00:00Z financial_status:paid",
+            queries["transaction_query"],
+            "updated_at:>=2026-06-30T06:00:00Z updated_at:<2026-07-02T12:00:00Z",
         )
 
-    def test_import_command_uses_query_overrides_and_legacy_dates(self) -> None:
+    def test_import_command_runs_orders_transactions_and_inventory(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "shopify_import.py"
         source = dag_path.read_text(encoding="utf-8")
         self.assertIn('FROM_DATE=\'{{ dag_run.conf.get("from_date", "") }}\'', source)
-        self.assertIn('ARGS+=(--customer-query "$CUSTOMER_QUERY" --order-query "$ORDER_QUERY")', source)
+        self.assertIn('ARGS+=(--order-query "$ORDER_QUERY" --transaction-query "$TRANSACTION_QUERY")', source)
+        self.assertNotIn('ARGS+=(--customer-query "$CUSTOMER_QUERY" --order-query "$ORDER_QUERY")', source)
         self.assertIn('ARGS+=(--from-date "$FROM_DATE" --to-date "$TO_DATE")', source)
+        self.assertIn('ARGS+=(--include-customers)', source)
+        self.assertIn("run_shopify_all.sh", source)
 
-    def test_dag_schedule_is_every_twelve_hours(self) -> None:
+    def test_dag_schedule_is_every_six_hours(self) -> None:
         dag_path = REPO / "airflow" / "dags" / "shopify_import.py"
         source = dag_path.read_text(encoding="utf-8")
-        self.assertIn('schedule="0 */12 * * *"', source)
+        self.assertIn('schedule="0 */6 * * *"', source)
         self.assertIn("max_active_runs=1", source)
