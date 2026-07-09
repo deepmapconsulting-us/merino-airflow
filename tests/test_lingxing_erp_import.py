@@ -367,6 +367,7 @@ class LingXingDagTest(unittest.TestCase):
             "lingxing_erp_logistics_import.py",
             "lingxing_erp_amazon_sales_import.py",
             "lingxing_erp_storage_fee_import.py",
+            "lingxing_erp_order_profit_import.py",
         ):
             source = (REPO / "airflow" / "dags" / dag_file).read_text(encoding="utf-8")
             self.assertIn("max_active_runs=1", source, dag_file)
@@ -444,4 +445,77 @@ class LingXingDagTest(unittest.TestCase):
         self.assertIn("b.import_run_id = r.import_run_id", fba_stock_view)
         self.assertNotIn("MAX(snapshot_at)", local_age_view)
         self.assertNotIn("MAX(snapshot_at)", fba_stock_view)
+
+    def test_order_profit_parser_maps_platform_order_name_and_costs(self) -> None:
+        from merino_erp_jobs.order_profit_import import parse_mp_order_profit_records  # noqa: E402
+
+        row = {
+            "global_order_no": "103714945552109279",
+            "store_id": "110494657014485504",
+            "store_name": "MT shopify",
+            "amount_currency": "USD",
+            "global_purchase_time": 1782249652,
+            "platform_info": [
+                {
+                    "platform_order_no": "7204044439863",
+                    "platform_order_name": "#9732",
+                    "purchase_time": 1782249652,
+                }
+            ],
+            "item_info": [
+                {
+                    "platform_order_no": "7204044439863",
+                    "cg_price_amount": "690.700000",
+                    "transaction_fee_amount": "12.340000",
+                }
+            ],
+            "transaction_info": [
+                {
+                    "cg_price_amount": "-￥690.700000",
+                    "transaction_fee_amount": "$0.000000",
+                }
+            ],
+        }
+
+        records = parse_mp_order_profit_records(row)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0].platform_order_name, "#9732")
+        self.assertEqual(records[0].platform_order_no, "7204044439863")
+        self.assertEqual(str(records[0].purchase_cost), "690.700000")
+        self.assertEqual(str(records[0].platform_fee), "12.340000")
+        self.assertEqual(records[0].currency_code, "USD")
+
+    def test_order_profit_money_amount_strips_currency_symbols(self) -> None:
+        from merino_erp_jobs.order_profit_import import money_amount  # noqa: E402
+
+        self.assertEqual(str(money_amount("-￥690.700000")), "-690.700000")
+        self.assertEqual(str(money_amount("$12.340000")), "12.340000")
+        self.assertEqual(str(money_amount(None)), "0")
+
+    def test_order_profit_dag_uses_mp_order_list_endpoint(self) -> None:
+        source = (REPO / "airflow" / "dags" / "lingxing_erp_order_profit_import.py").read_text(encoding="utf-8")
+        import_source = (REPO / "airflow" / "dags" / "merino_erp_jobs" / "order_profit_import.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("lingxing_erp_order_profit_import", source)
+        self.assertIn("/pb/mp/order/list", source)
+        self.assertIn("max_active_runs=1", source)
+        self.assertIn("erp_purchase_cost", import_source)
+        self.assertIn("raw_lingxing_order_profit", import_source)
+        self.assertIn('source_object="order_profit"', import_source)
+
+    def test_erp_logistics_schema_exposes_order_profit_raw_table(self) -> None:
+        schema = (
+            REPO / "metabase_schema" / "schema" / "merino-analytics" / "erp_logistics" / "erp_logistics.sql"
+        ).read_text(encoding="utf-8")
+        shopify_schema = (
+            REPO / "metabase_schema" / "schema" / "merino-analytics" / "shopify" / "shopify_order.sql"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("CREATE TABLE IF NOT EXISTS raw_lingxing_order_profit", schema)
+        self.assertIn("platform_order_name", schema)
+        self.assertIn("erp_purchase_cost", shopify_schema)
+        self.assertIn("erp_platform_fee", shopify_schema)
 

@@ -15,7 +15,9 @@ Scheduled runs read the latest campaign config snapshot, group ACTIVE adsets by
 ACTIVE campaign, then evaluate up to 10 adsets per worker pod. Campaigns with
 more than 10 active adsets are split into multiple pods.
 
-`meta_adset_evaluation` uses one America/Los_Angeles cron schedule:
+`meta_adset_evaluation` uses one America/Los_Angeles cron schedule and only
+writes recommendation/queue rows. Meta-side writes are handled by
+`meta_adset_creation_trigger`.
 
 - `0 0,3-22 * * *` — midnight PT runs set-budget + schedule generation; 3am–10pm
   PT runs increase-budget hourly.
@@ -534,6 +536,16 @@ def ad_status_schedule_worker_arguments(run_config: dict[str, Any]) -> list[list
 
 
 @task
+def ad_split_worker_arguments(run_config: dict[str, Any]) -> list[list[str]]:
+    return build_campaign_budget_worker_arguments(
+        run_config["groups"],
+        mode="ad-split",
+        source=run_config["source"],
+        report_date=run_config["report_date"],
+    )
+
+
+@task
 def set_budget_worker_arguments() -> list[list[str]]:
     return budget_worker_arguments("set-budget")
 
@@ -598,12 +610,6 @@ def meta_adset_evaluation():
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
     ).expand(arguments=increase_worker_args)
-    apply_increase_budget_changes = meta_adset_evaluation_pod(
-        task_id="apply_increase_budget_changes",
-        cmds=["python", "-m", "meta_adset_evaluation_agent.apply_budget_changes"],
-        arguments=["--budget-change-type", "increase_budget"],
-        trigger_rule="none_failed_min_one_success",
-    )
 
     run_config = set_budget_run_config()
     preload_args = set_budget_preload_campaign_arguments(run_config)
@@ -618,21 +624,21 @@ def meta_adset_evaluation():
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
     ).expand(arguments=set_budget_worker_args)
-    apply_set_budget_changes = meta_adset_evaluation_pod(
-        task_id="apply_set_budget_changes",
-        cmds=["python", "-m", "meta_adset_evaluation_agent.apply_budget_changes"],
-        arguments=["--budget-change-type", "set_budget"],
-        trigger_rule="none_failed_min_one_success",
-    )
     schedule_worker_args = ad_status_schedule_worker_arguments(run_config)
     generate_ad_status_schedule = meta_adset_evaluation_pod_partial(
         task_id="generate_ad_status_schedule",
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
     ).expand(arguments=schedule_worker_args)
+    ad_split_args = ad_split_worker_arguments(run_config)
+    generate_ad_split = meta_adset_evaluation_pod_partial(
+        task_id="generate_ad_split",
+        cmds=["bash", "-lc"],
+        map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
+    ).expand(arguments=ad_split_args)
 
     wait_for_campaign_config >> branch
-    branch >> increase_worker_args >> increase_workers >> apply_increase_budget_changes
+    branch >> increase_worker_args >> increase_workers
     if hasattr(run_config, "operator"):
         (
             branch
@@ -640,11 +646,12 @@ def meta_adset_evaluation():
             >> preload_args
             >> preload_set_budget
             >> set_budget_workers
-            >> apply_set_budget_changes
             >> generate_ad_status_schedule
         )
         run_config >> set_budget_worker_args >> set_budget_workers
         run_config >> schedule_worker_args >> generate_ad_status_schedule
+        run_config >> ad_split_args >> generate_ad_split
+        set_budget_workers >> generate_ad_split
 
 
 meta_adset_evaluation()

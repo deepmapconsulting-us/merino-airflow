@@ -344,6 +344,22 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn("MODE=set-budget", command)
         self.assertIn("REPORT_DATE=2026-07-08", command)
 
+    def test_ad_split_campaign_worker_command_uses_ad_split_mode(self) -> None:
+        module = load_dag_module()
+
+        worker_args = module.build_campaign_budget_worker_arguments(
+            [{"campaign_id": "52535307578056", "adset_ids": ["111", "222"]}],
+            mode="ad-split",
+            source="facebook",
+            report_date="2026-07-08",
+        )
+        command = worker_args[0][0]
+
+        self.assertIn("CAMPAIGN_ID=52535307578056", command)
+        self.assertIn("ADSET_IDS=111,222", command)
+        self.assertIn("MODE=ad-split", command)
+        self.assertIn("REPORT_DATE=2026-07-08", command)
+
     def test_preload_campaign_worker_arguments_deduplicates_campaigns(self) -> None:
         module = load_dag_module()
 
@@ -401,20 +417,22 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn('task_id="preload_set_budget_campaign"', source)
         self.assertIn('task_id="evaluate_campaign_adsets"', source)
         self.assertIn('task_id="set_budget_adset"', source)
-        self.assertIn('task_id="apply_increase_budget_changes"', source)
-        self.assertIn('task_id="apply_set_budget_changes"', source)
         self.assertIn('task_id="generate_ad_status_schedule"', source)
+        self.assertIn('task_id="generate_ad_split"', source)
+        self.assertNotIn('task_id="apply_increase_budget_changes"', source)
+        self.assertNotIn('task_id="apply_set_budget_changes"', source)
         self.assertIn("EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE", source)
         self.assertIn('.expand(arguments=increase_worker_args)', source)
         self.assertIn(".expand(arguments=preload_args)", source)
         self.assertIn("arguments=set_budget_worker_args", source)
         self.assertIn("arguments=schedule_worker_args", source)
+        self.assertIn("arguments=ad_split_args", source)
         self.assertIn('mode="schedule-parameter"', source)
-        self.assertIn("branch >> increase_worker_args >> increase_workers >> apply_increase_budget_changes", source)
-        self.assertIn(">> apply_set_budget_changes\n            >> generate_ad_status_schedule", source)
-        self.assertIn('arguments=["--budget-change-type", "increase_budget"]', source)
-        self.assertIn('arguments=["--budget-change-type", "set_budget"]', source)
-        self.assertIn('trigger_rule="none_failed_min_one_success"', source)
+        self.assertIn('mode="ad-split"', source)
+        self.assertIn("branch >> increase_worker_args >> increase_workers", source)
+        self.assertIn("set_budget_workers\n            >> generate_ad_status_schedule", source)
+        self.assertIn("set_budget_workers >> generate_ad_split", source)
+        self.assertNotIn("meta_adset_evaluation_agent.apply_budget_changes", source)
 
     def test_pod_env_passes_inference_core_and_langfuse_settings(self) -> None:
         module = load_k8s_module()
