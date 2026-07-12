@@ -106,10 +106,13 @@ def meta_adset_evaluation_pod_partial(
     task_id: str,
     cmds: list[str] | None = None,
     map_index_template: str | None = None,
+    max_active_tis_per_dag: int | None = None,
 ) -> object:
     kwargs = meta_adset_evaluation_pod_kwargs(task_id=task_id, cmds=cmds, arguments=None)
     if map_index_template is not None:
         kwargs["map_index_template"] = map_index_template
+    if max_active_tis_per_dag is not None:
+        kwargs["max_active_tis_per_dag"] = max_active_tis_per_dag
     return KubernetesPodOperator.partial(**kwargs)
 
 

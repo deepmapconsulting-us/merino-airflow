@@ -690,6 +690,7 @@ def meta_adset_evaluation():
         task_id="generate_ad_split",
         cmds=["bash", "-lc"],
         map_index_template=EVALUATE_CAMPAIGN_MAP_INDEX_TEMPLATE,
+        max_active_tis_per_dag=3,
     ).expand(arguments=ad_split_args)
 
     wait_for_campaign_config >> branch
