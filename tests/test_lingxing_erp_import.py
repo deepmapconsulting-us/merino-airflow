@@ -367,7 +367,6 @@ class LingXingDagTest(unittest.TestCase):
             "lingxing_erp_logistics_import.py",
             "lingxing_erp_amazon_sales_import.py",
             "lingxing_erp_storage_fee_import.py",
-            "lingxing_erp_order_profit_import.py",
         ):
             source = (REPO / "airflow" / "dags" / dag_file).read_text(encoding="utf-8")
             self.assertIn("max_active_runs=1", source, dag_file)
@@ -493,14 +492,23 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(str(money_amount("$12.340000")), "12.340000")
         self.assertEqual(str(money_amount(None)), "0")
 
+    def test_order_profit_period_chunks_split_by_calendar_month(self) -> None:
+        from datetime import date
+
+        from merino_erp_jobs.order_profit_import import period_chunks  # noqa: E402
+
+        chunks = period_chunks(date(2026, 6, 1), date(2026, 7, 9))
+        self.assertEqual(chunks, [(date(2026, 6, 1), date(2026, 7, 1)), (date(2026, 7, 1), date(2026, 7, 9))])
+
     def test_order_profit_dag_uses_mp_order_list_endpoint(self) -> None:
-        source = (REPO / "airflow" / "dags" / "lingxing_erp_order_profit_import.py").read_text(encoding="utf-8")
+        source = (REPO / "airflow" / "dags" / "lingxing_erp_logistics_import.py").read_text(encoding="utf-8")
         import_source = (REPO / "airflow" / "dags" / "merino_erp_jobs" / "order_profit_import.py").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn("lingxing_erp_order_profit_import", source)
+        self.assertIn("import_lingxing_order_profit", source)
         self.assertIn("/pb/mp/order/list", source)
+        self.assertIn("should_run_order_profit", source)
         self.assertIn("max_active_runs=1", source)
         self.assertIn("erp_purchase_cost", import_source)
         self.assertIn("raw_lingxing_order_profit", import_source)

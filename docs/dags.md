@@ -355,7 +355,7 @@ gantt
 
 | | |
 | --- | --- |
-| **Schedule** | `0 */12 * * *` (every 12 hours, UTC) |
+| **Schedule** | `0 */6 * * *` (every 6 hours, UTC) |
 | **Image** | `us-west2-docker.pkg.dev/merino-agent/merino/merino-shopify-cli:0.1.4` |
 | **Executor** | `KubernetesPodOperator` in namespace `airflow` (KSA `merino-airflow-task-runner`) |
 
@@ -363,7 +363,7 @@ gantt
 
 | Task | Description |
 | --- | --- |
-| `import_shopify` | Runs `scripts/run_shopify_all.sh`: orders (customers upserted from each order) → inventory. Skips the full customer-catalog scan by default. Default order query uses `updated_at` over the Airflow 12h interval with a 30-minute overlap; inventory uses the current run date as `partition_date`. Skips rows already in Postgres unless `--overwrite`. |
+| `import_shopify` | Runs `scripts/run_shopify_all.sh`: orders (customers upserted from each order) → transactions/fees → inventory. Skips the full customer-catalog scan by default. Default order query uses `updated_at` over the last 24 hours so the 4x/day schedule catches late Shopify updates; inventory uses the current run date as `partition_date`. Skips rows already in Postgres before geocoding unless `--overwrite`. |
 
 ### Secrets and connections
 

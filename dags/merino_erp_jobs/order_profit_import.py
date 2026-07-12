@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
-from typing import Any, Iterable
+from typing import Any, Iterable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from merino_erp_jobs.lingxing import LingXingOpenApi
 
 import psycopg  # type: ignore[import-not-found]
 from psycopg import Connection  # type: ignore[import-not-found]
@@ -290,6 +294,77 @@ def parse_mp_order_profit_records(row: dict[str, Any]) -> list[OrderProfitRecord
 
 def shopify_order_name(value: str | None) -> bool:
     return bool(value and value.startswith("#"))
+
+
+def period_chunks(period_start: date, period_end: date) -> list[tuple[date, date]]:
+    """Split [start, end) into calendar-month chunks (LingXing max range is 1 month)."""
+    if period_end <= period_start:
+        return []
+
+    chunks: list[tuple[date, date]] = []
+    current = period_start
+    while current < period_end:
+        if current.month == 12:
+            month_end = date(current.year + 1, 1, 1)
+        else:
+            month_end = date(current.year, current.month + 1, 1)
+        chunk_end = min(month_end, period_end)
+        chunks.append((current, chunk_end))
+        current = chunk_end
+    return chunks
+
+
+def extract_mp_order_list(response: dict[str, Any]) -> list[dict[str, Any]]:
+    data = response.get("data") if isinstance(response, dict) else {}
+    if isinstance(data, dict) and isinstance(data.get("data"), dict):
+        data = data["data"]
+    if isinstance(data, dict):
+        page = data.get("list")
+        return page if isinstance(page, list) else []
+    return data if isinstance(data, list) else []
+
+
+def fetch_mp_order_rows(
+    client: LingXingOpenApi,
+    *,
+    store_ids: list[int],
+    period_start: date,
+    period_end: date,
+    page_size: int,
+    page_delay_seconds: float = 1.05,
+) -> list[dict[str, Any]]:
+    page_size = max(page_size, MIN_PAGE_LENGTH)
+    rows: list[dict[str, Any]] = []
+    for chunk_start, chunk_end in period_chunks(period_start, period_end):
+        start_time = int(datetime.combine(chunk_start, datetime.min.time(), tzinfo=timezone.utc).timestamp())
+        end_time = int(datetime.combine(chunk_end, datetime.min.time(), tzinfo=timezone.utc).timestamp())
+        for sid in store_ids:
+            offset = 1
+            while True:
+                response = client.post(
+                    MP_ORDER_LIST_ENDPOINT,
+                    {
+                        "sid": sid,
+                        "offset": offset,
+                        "length": page_size,
+                        "start_time": start_time,
+                        "end_time": end_time,
+                        "date_type": "global_purchase_time",
+                    },
+                )
+                page = extract_mp_order_list(response)
+                if not page:
+                    break
+                for row in page:
+                    enriched = dict(row)
+                    enriched.setdefault("sid", sid)
+                    rows.append(enriched)
+                if len(page) < page_size:
+                    break
+                offset += page_size
+                if page_delay_seconds > 0:
+                    time.sleep(page_delay_seconds)
+    return rows
 
 
 def sum_amount(rows: Iterable[dict[str, Any]], field: str) -> Decimal:

@@ -1,4 +1,10 @@
-"""Import LingXing FBM logistics data into Cloud SQL every 4 hours.
+"""Import LingXing ERP data into Cloud SQL every 4 hours.
+
+Runs two imports from the same LingXing OAuth session:
+
+1. **Logistics** (every run): FBM/FBA inventory, warehouses, listings → `erp_logistics`
+2. **Order profit** (once daily on the 12:30 UTC run): multi-platform orders
+   `/pb/mp/order/list` → `shopify.orders` (`erp_purchase_cost`, `erp_platform_fee`)
 
 Stable LingXing credentials are read from GSM-backed Airflow Variables:
 
@@ -9,16 +15,12 @@ Stable LingXing credentials are read from GSM-backed Airflow Variables:
 The rotating OAuth token pair is cached in Airflow Variable
 `erp_lingxing_oauth_cache`; refreshed tokens are not written back to GKE
 Secrets.
-
-Each run upserts the latest ERP product/store/warehouse relationships and appends
-an inventory snapshot. Reporting views read the newest snapshot per SKU and
-warehouse.
 """
 
 from __future__ import annotations
 
 import sys
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -40,6 +42,13 @@ from merino_erp_jobs.lingxing import (  # noqa: E402
     fba_store_ids,
 )
 from merino_erp_jobs.logistics_import import import_lingxing_rows  # noqa: E402
+from merino_erp_jobs.order_profit_import import (  # noqa: E402
+    DEFAULT_PAGE_LENGTH,
+    MIN_PAGE_LENGTH,
+    MP_ORDER_LIST_ENDPOINT,
+    fetch_mp_order_rows,
+    import_order_profit_rows,
+)
 
 DAG_ID = "lingxing_erp_logistics_import"
 REPORT_TIMEZONE = "UTC"
@@ -54,6 +63,9 @@ LISTING_ENDPOINT_VARIABLE = "erp_lingxing_listing_endpoint"
 PAGE_SIZE_VARIABLE = "erp_lingxing_page_size"
 WAREHOUSE_ENDPOINT_VARIABLE = "erp_lingxing_warehouse_endpoint"
 WAREHOUSE_NAMES_VARIABLE = "erp_lingxing_warehouse_names"
+ORDER_PROFIT_PAGE_SIZE_VARIABLE = "erp_lingxing_order_profit_page_size"
+ORDER_PROFIT_WINDOW_DAYS_VARIABLE = "erp_lingxing_order_profit_window_days"
+ORDER_PROFIT_STORE_IDS_VARIABLE = "erp_lingxing_order_profit_store_ids"
 
 DEFAULT_STOCK_ENDPOINT = "/erp/sc/routing/data/local_inventory/inventoryDetails"
 DEFAULT_STOCK_LIST_ENDPOINT = "/erp/sc/routing/fba/fbaStock/fbaList"
@@ -62,6 +74,9 @@ DEFAULT_WAREHOUSE_ENDPOINT = "/erp/sc/data/local_inventory/warehouse"
 DEFAULT_WAREHOUSE_NAMES = DEFAULT_INVENTORY_WAREHOUSE_NAMES
 DEFAULT_PAGE_SIZE = 500
 MAX_PAGE_SIZE = 800
+DEFAULT_ORDER_PROFIT_WINDOW_DAYS = 30
+MAX_ORDER_PROFIT_PAGE_SIZE = 200
+ORDER_PROFIT_DAILY_RUN_HOUR = 12
 WAREHOUSE_LIST_TYPES = (1, 3, 4, 6)
 STOCK_LIST_PAGE_SIZES = (20, 50, 100, 200, 500)
 
@@ -101,6 +116,22 @@ def page_size(conf: dict[str, Any]) -> int:
         return DEFAULT_PAGE_SIZE
 
 
+def order_profit_page_size(conf: dict[str, Any]) -> int:
+    raw = config_value(conf, "order_profit_page_size", ORDER_PROFIT_PAGE_SIZE_VARIABLE, str(DEFAULT_PAGE_LENGTH))
+    try:
+        return min(max(int(raw), MIN_PAGE_LENGTH), MAX_ORDER_PROFIT_PAGE_SIZE)
+    except ValueError:
+        return DEFAULT_PAGE_LENGTH
+
+
+def order_profit_window_days(conf: dict[str, Any]) -> int:
+    raw = config_value(conf, "order_profit_window_days", ORDER_PROFIT_WINDOW_DAYS_VARIABLE, str(DEFAULT_ORDER_PROFIT_WINDOW_DAYS))
+    try:
+        return max(int(raw), 1)
+    except ValueError:
+        return DEFAULT_ORDER_PROFIT_WINDOW_DAYS
+
+
 def postgres_database_url(postgres_conn_id: str, database: str) -> str:
     from airflow.providers.postgres.hooks.postgres import PostgresHook  # type: ignore[import-not-found]
 
@@ -130,6 +161,45 @@ def lingxing_credentials() -> LingXingCredentials:
     if not app_id or not app_secret:
         raise RuntimeError("Set Airflow Variables `erp_app_id` and `erp_app_secret`.")
     return LingXingCredentials(app_id=app_id, app_secret=app_secret, app_key=app_key)
+
+
+def lingxing_client(conf: dict[str, Any]) -> LingXingOpenApi:
+    credentials = lingxing_credentials()
+    host = config_value(conf, "host", "erp_lingxing_host", LINGXING_HOST)
+    access_token = LingXingTokenManager(
+        host=host,
+        credentials=credentials,
+        variable_store=AirflowVariableStore(),
+        cache_key=TOKEN_CACHE_VARIABLE,
+    ).access_token()
+    return LingXingOpenApi(host=host, app_key=credentials.app_key, access_token=access_token)
+
+
+def should_run_order_profit(conf: dict[str, Any]) -> bool:
+    forced = str(conf.get("include_order_profit", "")).lower()
+    if forced in {"1", "true", "yes"}:
+        return True
+    if str(conf.get("skip_order_profit", "")).lower() in {"1", "true", "yes"}:
+        return False
+    try:
+        from airflow.sdk import get_current_context  # type: ignore[import-not-found]
+
+        logical = get_current_context()["logical_date"]
+        return int(logical.hour) == ORDER_PROFIT_DAILY_RUN_HOUR
+    except Exception:
+        return False
+
+
+def order_profit_store_ids(conf: dict[str, Any], store_names: dict[int, str]) -> list[int]:
+    raw = config_value(conf, "order_profit_store_ids", ORDER_PROFIT_STORE_IDS_VARIABLE, "")
+    if raw:
+        return [int(part.strip()) for part in raw.split(",") if part.strip()]
+    return sorted(store_names)
+
+
+def rolling_order_profit_period(days: int) -> tuple[date, date]:
+    today = date.today()
+    return today - timedelta(days=days), today + timedelta(days=1)
 
 
 def wanted_warehouse_names(conf: dict[str, Any]) -> set[str]:
@@ -293,17 +363,8 @@ def fetch_lingxing_rows(
     str | None,
     str | None,
 ]:
-    credentials = lingxing_credentials()
-    host = config_value(conf, "host", "erp_lingxing_host", LINGXING_HOST)
-    access_token = LingXingTokenManager(
-        host=host,
-        credentials=credentials,
-        variable_store=AirflowVariableStore(),
-        cache_key=TOKEN_CACHE_VARIABLE,
-    ).access_token()
-    client = LingXingOpenApi(host=host, app_key=credentials.app_key, access_token=access_token)
+    client = lingxing_client(conf)
     size = page_size(conf)
-
     warehouse_endpoint = config_value(conf, "warehouse_endpoint", WAREHOUSE_ENDPOINT_VARIABLE, DEFAULT_WAREHOUSE_ENDPOINT)
     warehouse_rows = all_warehouses(client, conf, page_size=size)
     stock_endpoint = config_value(conf, "stock_endpoint", STOCK_ENDPOINT_VARIABLE, DEFAULT_STOCK_ENDPOINT)
@@ -348,7 +409,7 @@ def fetch_lingxing_rows(
     start_date=pendulum.datetime(2026, 6, 23, tz=REPORT_TIMEZONE),
     catchup=False,
     max_active_runs=1,
-    tags=["lingxing", "erp", "postgres", "logistics"],
+    tags=["lingxing", "erp", "postgres", "logistics", "shopify", "order-profit"],
     default_args={
         "owner": "data-platform",
         "retries": 1,
@@ -373,7 +434,34 @@ def lingxing_erp_logistics_import():
             listing_source=listing_source,
         )
 
+    @task
+    def import_lingxing_order_profit() -> dict[str, int]:
+        conf = current_dag_conf()
+        if not should_run_order_profit(conf):
+            return {"order_profit_rows": 0, "shopify_orders_updated": 0, "skipped": 1}
+
+        client = lingxing_client(conf)
+        size = order_profit_page_size(conf)
+        store_names = seller_names(client, size)
+        store_ids = order_profit_store_ids(conf, store_names)
+        period_start, period_end = rolling_order_profit_period(order_profit_window_days(conf))
+        rows = fetch_mp_order_rows(
+            client,
+            store_ids=store_ids,
+            period_start=period_start,
+            period_end=period_end,
+            page_size=size,
+        )
+        return import_order_profit_rows(
+            database_url=postgres_database_url(POSTGRES_CONN_ID, ERP_LOGISTICS_DB),
+            rows=rows,
+            source=f"lingxing-api:{MP_ORDER_LIST_ENDPOINT}",
+            period_start=period_start,
+            period_end=period_end,
+        )
+
     import_lingxing_logistics()
+    import_lingxing_order_profit()
 
 
 lingxing_erp_logistics_import()
