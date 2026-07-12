@@ -84,6 +84,7 @@ set -euo pipefail
 SOURCE='{{ dag_run.conf.get("source", "facebook") }}'
 CAMPAIGN_ID='{{ dag_run.conf.get("campaign_id", "") }}'
 REPORT_DATE='{{ dag_run.conf.get("date", "") }}'
+AS_OF='{{ dag_run.conf.get("as_of", dag_run.run_after.in_timezone("America/Los_Angeles").isoformat()) }}'
 
 if [[ -z "$CAMPAIGN_ID" ]]; then
   CAMPAIGN_ID="${META_ADSET_EVALUATION_DEFAULT_CAMPAIGN_ID:-}"
@@ -97,6 +98,9 @@ ARGS=(--mode preload-campaign --source "$SOURCE" --campaign-id "$CAMPAIGN_ID")
 if [[ -n "$REPORT_DATE" ]]; then
   ARGS+=(--date "$REPORT_DATE")
 fi
+if [[ -n "$AS_OF" ]]; then
+  ARGS+=(--as-of "$AS_OF")
+fi
 
 exec python -m meta_adset_evaluation_agent "${ARGS[@]}"
 """
@@ -109,12 +113,26 @@ def dag_conf_values(conf: dict[str, Any]) -> tuple[str, str, str]:
     return source, campaign_id, report_date
 
 
+def run_as_of_from_context(context: dict[str, Any], conf: dict[str, Any]) -> str:
+    if raw_as_of := str(conf.get("as_of") or "").strip():
+        return raw_as_of
+    dag_run = context.get("dag_run")
+    value = (
+        getattr(dag_run, "run_after", None)
+        or context.get("logical_date")
+        or context.get("data_interval_start")
+        or pendulum.now(REPORT_TIMEZONE)
+    )
+    return pendulum.instance(value).in_timezone(REPORT_TIMEZONE).isoformat()
+
+
 def evaluate_adset_command(
     adset_id: str,
     *,
     source: str = "facebook",
     campaign_id: str = "",
     report_date: str = "",
+    as_of: str = "",
 ) -> str:
     return budget_adset_command(
         adset_id,
@@ -122,6 +140,7 @@ def evaluate_adset_command(
         source=source,
         campaign_id=campaign_id,
         report_date=report_date,
+        as_of=as_of,
     )
 
 
@@ -131,6 +150,7 @@ def set_budget_adset_command(
     source: str = "facebook",
     campaign_id: str = "",
     report_date: str = "",
+    as_of: str = "",
 ) -> str:
     return budget_adset_command(
         adset_id,
@@ -138,6 +158,7 @@ def set_budget_adset_command(
         source=source,
         campaign_id=campaign_id,
         report_date=report_date,
+        as_of=as_of,
     )
 
 
@@ -147,6 +168,7 @@ def evaluate_campaign_adsets_command(
     *,
     source: str = "facebook",
     report_date: str = "",
+    as_of: str = "",
 ) -> str:
     return budget_campaign_command(
         campaign_id,
@@ -154,6 +176,7 @@ def evaluate_campaign_adsets_command(
         mode="increase-budget",
         source=source,
         report_date=report_date,
+        as_of=as_of,
     )
 
 
@@ -164,16 +187,19 @@ def budget_campaign_command(
     mode: str,
     source: str = "facebook",
     report_date: str = "",
+    as_of: str = "",
 ) -> str:
     quoted_campaign_id = shlex.quote(campaign_id)
     quoted_adset_ids = shlex.quote(",".join(adset_ids))
     quoted_mode = shlex.quote(mode)
     quoted_source = shlex.quote(source)
     quoted_report_date = shlex.quote(report_date)
+    quoted_as_of = shlex.quote(as_of)
     return f"""\
 set -euo pipefail
 SOURCE={quoted_source}
 REPORT_DATE={quoted_report_date}
+AS_OF={quoted_as_of}
 CAMPAIGN_ID={quoted_campaign_id}
 ADSET_IDS={quoted_adset_ids}
 MODE={quoted_mode}
@@ -191,6 +217,9 @@ ARGS=(--mode "$MODE" --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-ids
 if [[ -n "$REPORT_DATE" ]]; then
   ARGS+=(--date "$REPORT_DATE")
 fi
+if [[ -n "$AS_OF" ]]; then
+  ARGS+=(--as-of "$AS_OF")
+fi
 
 exec python -m meta_adset_evaluation_agent "${{ARGS[@]}}"
 """
@@ -203,11 +232,13 @@ def budget_adset_command(
     source: str = "facebook",
     campaign_id: str = "",
     report_date: str = "",
+    as_of: str = "",
 ) -> str:
     quoted_adset_id = shlex.quote(adset_id)
     quoted_mode = shlex.quote(mode)
     quoted_source = shlex.quote(source)
     quoted_report_date = shlex.quote(report_date)
+    quoted_as_of = shlex.quote(as_of)
     if campaign_id:
         campaign_id_line = f"CAMPAIGN_ID={shlex.quote(campaign_id)}"
         campaign_id_fallback = ""
@@ -224,6 +255,7 @@ set -euo pipefail
 SOURCE={quoted_source}
 {campaign_id_line}
 REPORT_DATE={quoted_report_date}
+AS_OF={quoted_as_of}
 ADSET_ID={quoted_adset_id}
 MODE={quoted_mode}
 
@@ -239,6 +271,9 @@ fi
 ARGS=(--mode "$MODE" --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-id "$ADSET_ID")
 if [[ -n "$REPORT_DATE" ]]; then
   ARGS+=(--date "$REPORT_DATE")
+fi
+if [[ -n "$AS_OF" ]]; then
+  ARGS+=(--as-of "$AS_OF")
 fi
 
 exec python -m meta_adset_evaluation_agent "${{ARGS[@]}}"
@@ -258,14 +293,17 @@ def preload_campaign_command_for_campaign(
     *,
     source: str = "facebook",
     report_date: str = "",
+    as_of: str = "",
 ) -> str:
     quoted_campaign_id = shlex.quote(campaign_id)
     quoted_source = shlex.quote(source)
     quoted_report_date = shlex.quote(report_date)
+    quoted_as_of = shlex.quote(as_of)
     return f"""\
 set -euo pipefail
 SOURCE={quoted_source}
 REPORT_DATE={quoted_report_date}
+AS_OF={quoted_as_of}
 CAMPAIGN_ID={quoted_campaign_id}
 
 if [[ -z "$CAMPAIGN_ID" ]]; then
@@ -276,6 +314,9 @@ fi
 ARGS=(--mode preload-campaign --source "$SOURCE" --campaign-id "$CAMPAIGN_ID")
 if [[ -n "$REPORT_DATE" ]]; then
   ARGS+=(--date "$REPORT_DATE")
+fi
+if [[ -n "$AS_OF" ]]; then
+  ARGS+=(--as-of "$AS_OF")
 fi
 
 exec python -m meta_adset_evaluation_agent "${{ARGS[@]}}"
@@ -397,12 +438,14 @@ def build_active_adset_worker_arguments(
     *,
     source: str = "facebook",
     report_date: str = "",
+    as_of: str = "",
 ) -> list[list[str]]:
     return build_campaign_budget_worker_arguments(
         groups,
         mode="increase-budget",
         source=source,
         report_date=report_date,
+        as_of=as_of,
     )
 
 
@@ -412,6 +455,7 @@ def build_campaign_budget_worker_arguments(
     mode: str,
     source: str = "facebook",
     report_date: str = "",
+    as_of: str = "",
 ) -> list[list[str]]:
     return [
         [
@@ -421,6 +465,7 @@ def build_campaign_budget_worker_arguments(
                 mode=mode,
                 source=source,
                 report_date=report_date,
+                as_of=as_of,
             )
         ]
         for group in groups
@@ -432,10 +477,11 @@ def preload_campaign_worker_arguments(
     *,
     source: str = "facebook",
     report_date: str = "",
+    as_of: str = "",
 ) -> list[list[str]]:
     campaign_ids = dict.fromkeys(str(group["campaign_id"]) for group in groups)
     return [
-        [preload_campaign_command_for_campaign(campaign_id, source=source, report_date=report_date)]
+        [preload_campaign_command_for_campaign(campaign_id, source=source, report_date=report_date, as_of=as_of)]
         for campaign_id in campaign_ids
     ]
 
@@ -454,8 +500,9 @@ def evaluation_mode(conf: dict[str, Any], logical_date: Any) -> str:
     return "increase_budget"
 
 
-def active_adset_run_config(conf: dict[str, Any]) -> dict[str, Any]:
+def active_adset_run_config(conf: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
     source, _campaign_id, report_date = dag_conf_values(conf)
+    as_of = run_as_of_from_context(context, conf)
     groups = manual_campaign_adset_groups(conf)
     if not groups:
         groups = active_campaign_adset_groups(
@@ -465,6 +512,7 @@ def active_adset_run_config(conf: dict[str, Any]) -> dict[str, Any]:
     return {
         "source": source,
         "report_date": report_date,
+        "as_of": as_of,
         "groups": groups,
     }
 
@@ -490,11 +538,12 @@ def active_adset_worker_arguments() -> list[list[str]]:
     context = get_current_context()
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
-    run_config = active_adset_run_config(conf)
+    run_config = active_adset_run_config(conf, context)
     return build_active_adset_worker_arguments(
         run_config["groups"],
         source=run_config["source"],
         report_date=run_config["report_date"],
+        as_of=run_config["as_of"],
     )
 
 
@@ -503,7 +552,7 @@ def set_budget_run_config() -> dict[str, Any]:
     context = get_current_context()
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
-    return active_adset_run_config(conf)
+    return active_adset_run_config(conf, context)
 
 
 @task
@@ -512,6 +561,7 @@ def set_budget_preload_campaign_arguments(run_config: dict[str, Any]) -> list[li
         run_config["groups"],
         source=run_config["source"],
         report_date=run_config["report_date"],
+        as_of=run_config["as_of"],
     )
 
 
@@ -522,6 +572,7 @@ def set_budget_campaign_worker_arguments(run_config: dict[str, Any]) -> list[lis
         mode="set-budget",
         source=run_config["source"],
         report_date=run_config["report_date"],
+        as_of=run_config["as_of"],
     )
 
 
@@ -532,6 +583,7 @@ def ad_status_schedule_worker_arguments(run_config: dict[str, Any]) -> list[list
         mode="schedule-parameter",
         source=run_config["source"],
         report_date=run_config["report_date"],
+        as_of=run_config["as_of"],
     )
 
 
@@ -542,6 +594,7 @@ def ad_split_worker_arguments(run_config: dict[str, Any]) -> list[list[str]]:
         mode="ad-split",
         source=run_config["source"],
         report_date=run_config["report_date"],
+        as_of=run_config["as_of"],
     )
 
 
@@ -555,6 +608,7 @@ def budget_worker_arguments(mode: str) -> list[list[str]]:
     dag_run = context.get("dag_run")
     conf = getattr(dag_run, "conf", None) or {}
     source, campaign_id, report_date = dag_conf_values(conf)
+    as_of = run_as_of_from_context(context, conf)
     raw_adset_ids = str(conf.get("adset_ids") or conf.get("adset_id") or "")
     if not raw_adset_ids:
         try:
@@ -571,6 +625,7 @@ def budget_worker_arguments(mode: str) -> list[list[str]]:
                 source=source,
                 campaign_id=campaign_id,
                 report_date=report_date,
+                as_of=as_of,
             )
         ]
         for adset_id in adset_ids_from_text(raw_adset_ids)

@@ -42,6 +42,10 @@ INSERT_COLUMNS = (
     "genders",
     "advantage_audience",
     "geo_countries",
+    "audience_region",
+    "audience_timezone",
+    "audience_timezone_offset_hours",
+    "audience_region_weights",
     "config_snapshot_uri",
 )
 
@@ -61,6 +65,10 @@ TARGETING_DAILY_COLUMNS = (
     "genders",
     "advantage_audience",
     "geo_countries",
+    "audience_region",
+    "audience_timezone",
+    "audience_timezone_offset_hours",
+    "audience_region_weights",
     "flexible_spec",
     "interests",
     "behaviors",
@@ -68,6 +76,86 @@ TARGETING_DAILY_COLUMNS = (
     "excluded_custom_audiences",
     "config_snapshot_uri",
 )
+
+REGION_TIMEZONES: dict[str, tuple[str, int]] = {
+    "us_pacific": ("America/Los_Angeles", 0),
+    "us_mountain": ("America/Denver", 1),
+    "us_central": ("America/Chicago", 2),
+    "us_eastern": ("America/New_York", 3),
+    "au_western": ("Australia/Perth", 15),
+    "au_central": ("Australia/Adelaide", 16),
+    "au_eastern": ("Australia/Sydney", 17),
+}
+
+US_STATE_REGIONS: dict[str, str] = {
+    "alaska": "us_pacific",
+    "california": "us_pacific",
+    "hawaii": "us_pacific",
+    "nevada": "us_pacific",
+    "oregon": "us_pacific",
+    "washington": "us_pacific",
+    "arizona": "us_mountain",
+    "colorado": "us_mountain",
+    "idaho": "us_mountain",
+    "montana": "us_mountain",
+    "new mexico": "us_mountain",
+    "utah": "us_mountain",
+    "wyoming": "us_mountain",
+    "alabama": "us_central",
+    "arkansas": "us_central",
+    "illinois": "us_central",
+    "iowa": "us_central",
+    "kansas": "us_central",
+    "louisiana": "us_central",
+    "minnesota": "us_central",
+    "mississippi": "us_central",
+    "missouri": "us_central",
+    "nebraska": "us_central",
+    "north dakota": "us_central",
+    "oklahoma": "us_central",
+    "south dakota": "us_central",
+    "tennessee": "us_central",
+    "texas": "us_central",
+    "wisconsin": "us_central",
+    "connecticut": "us_eastern",
+    "delaware": "us_eastern",
+    "district of columbia": "us_eastern",
+    "florida": "us_eastern",
+    "georgia": "us_eastern",
+    "indiana": "us_eastern",
+    "kentucky": "us_eastern",
+    "maine": "us_eastern",
+    "maryland": "us_eastern",
+    "massachusetts": "us_eastern",
+    "michigan": "us_eastern",
+    "new hampshire": "us_eastern",
+    "new jersey": "us_eastern",
+    "new york": "us_eastern",
+    "north carolina": "us_eastern",
+    "ohio": "us_eastern",
+    "pennsylvania": "us_eastern",
+    "rhode island": "us_eastern",
+    "south carolina": "us_eastern",
+    "vermont": "us_eastern",
+    "virginia": "us_eastern",
+    "west virginia": "us_eastern",
+}
+
+AU_STATE_REGIONS: dict[str, str] = {
+    "new south wales": "au_eastern",
+    "queensland": "au_eastern",
+    "tasmania": "au_eastern",
+    "victoria": "au_eastern",
+    "australian capital territory": "au_eastern",
+    "northern territory": "au_central",
+    "south australia": "au_central",
+    "western australia": "au_western",
+}
+
+COUNTRY_REGION_FALLBACKS = {
+    "US": "us_pacific",
+    "AU": "au_eastern",
+}
 
 BUDGET_COLUMNS = (
     "adset_id",
@@ -160,17 +248,58 @@ def extract_targeting_columns(targeting: Any) -> dict[str, Any]:
     if genders is not None and not isinstance(genders, list):
         genders = None
 
+    audience = audience_region_from_targeting(targeting)
+
     return {
         "age_min": _int_or_none(targeting.get("age_min")),
         "age_max": _int_or_none(targeting.get("age_max")),
         "genders": genders,
         "advantage_audience": advantage_audience,
         "geo_countries": geo_countries,
+        **audience,
         "flexible_spec": _json_list_or_none(targeting.get("flexible_spec")),
         "interests": _targeting_items(targeting, "interests"),
         "behaviors": _targeting_items(targeting, "behaviors"),
         "custom_audiences": _json_list_or_none(targeting.get("custom_audiences")),
         "excluded_custom_audiences": _json_list_or_none(targeting.get("excluded_custom_audiences")),
+    }
+
+
+def audience_region_from_targeting(targeting: dict[str, Any]) -> dict[str, Any]:
+    geo = targeting.get("geo_locations") if isinstance(targeting.get("geo_locations"), dict) else {}
+    weights: dict[str, int] = {}
+    regions = geo.get("regions") if isinstance(geo.get("regions"), list) else []
+    for region in regions:
+        if not isinstance(region, dict):
+            continue
+        name = str(region.get("name") or "").strip().lower()
+        audience_region = US_STATE_REGIONS.get(name) or AU_STATE_REGIONS.get(name)
+        if not audience_region:
+            continue
+        weights[audience_region] = weights.get(audience_region, 0) + 1
+
+    if not weights:
+        countries = geo.get("countries") if isinstance(geo.get("countries"), list) else []
+        for country in countries:
+            audience_region = COUNTRY_REGION_FALLBACKS.get(str(country).strip().upper())
+            if audience_region:
+                weights[f"{audience_region}:country_fallback"] = weights.get(f"{audience_region}:country_fallback", 0) + 1
+
+    if not weights:
+        return {
+            "audience_region": None,
+            "audience_timezone": None,
+            "audience_timezone_offset_hours": None,
+            "audience_region_weights": {},
+        }
+
+    winner = sorted(weights.items(), key=lambda item: (-item[1], item[0]))[0][0].split(":", 1)[0]
+    timezone_name, offset_hours = REGION_TIMEZONES[winner]
+    return {
+        "audience_region": winner,
+        "audience_timezone": timezone_name,
+        "audience_timezone_offset_hours": offset_hours,
+        "audience_region_weights": weights,
     }
 
 

@@ -122,11 +122,54 @@ class ExtractTargetingColumnsTest(unittest.TestCase):
         self.assertEqual(extracted["genders"], [2])
         self.assertEqual(extracted["geo_countries"], ["US"])
         self.assertTrue(extracted["advantage_audience"])
+        self.assertEqual(extracted["audience_region"], "us_pacific")
+        self.assertEqual(extracted["audience_timezone"], "America/Los_Angeles")
+        self.assertEqual(extracted["audience_timezone_offset_hours"], 0)
+        self.assertEqual(extracted["audience_region_weights"], {"us_pacific:country_fallback": 1})
+
+    def test_extracts_weighted_region_from_geo_regions(self) -> None:
+        extracted = extract_targeting_columns(
+            {
+                "geo_locations": {
+                    "regions": [
+                        {"key": "3847", "name": "California", "country": "US"},
+                        {"key": "3848", "name": "Colorado", "country": "US"},
+                        {"key": "3855", "name": "Idaho", "country": "US"},
+                        {"key": "3887", "name": "Utah", "country": "US"},
+                    ]
+                }
+            }
+        )
+
+        self.assertEqual(extracted["audience_region"], "us_mountain")
+        self.assertEqual(extracted["audience_timezone"], "America/Denver")
+        self.assertEqual(extracted["audience_timezone_offset_hours"], 1)
+        self.assertEqual(extracted["audience_region_weights"], {"us_pacific": 1, "us_mountain": 3})
+
+    def test_extracts_australia_region_from_geo_regions(self) -> None:
+        extracted = extract_targeting_columns(
+            {
+                "geo_locations": {
+                    "regions": [
+                        {"key": "1000", "name": "New South Wales", "country": "AU"},
+                        {"key": "1001", "name": "Victoria", "country": "AU"},
+                        {"key": "1002", "name": "Western Australia", "country": "AU"},
+                    ]
+                }
+            }
+        )
+
+        self.assertEqual(extracted["audience_region"], "au_eastern")
+        self.assertEqual(extracted["audience_timezone"], "Australia/Sydney")
+        self.assertEqual(extracted["audience_timezone_offset_hours"], 17)
+        self.assertEqual(extracted["audience_region_weights"], {"au_eastern": 2, "au_western": 1})
 
     def test_extract_handles_missing_targeting(self) -> None:
         extracted = extract_targeting_columns(None)
         self.assertIsNone(extracted["age_min"])
         self.assertIsNone(extracted["advantage_audience"])
+        self.assertIsNone(extracted["audience_region"])
+        self.assertEqual(extracted["audience_region_weights"], {})
 
     def test_extracts_interest_and_audience_json(self) -> None:
         extracted = extract_targeting_columns(TARGETING_WITH_INTERESTS)
@@ -179,6 +222,8 @@ class AdsetConfigRowTest(unittest.TestCase):
         self.assertTrue(row["advantage_audience"])
         self.assertEqual(row["config_hash"], config_hash(TARGETING_A))
         self.assertEqual(row["targeting_hash"], config_hash(TARGETING_A))
+        self.assertEqual(row["audience_region"], "us_pacific")
+        self.assertEqual(row["audience_timezone"], "America/Los_Angeles")
         self.assertEqual(row["daily_budget"], 2500)
         self.assertEqual(row["lifetime_budget"], 10000)
         self.assertEqual(row["optimization_goal"], "OFFSITE_CONVERSIONS")

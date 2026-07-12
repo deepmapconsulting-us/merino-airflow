@@ -139,9 +139,11 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         command = module.preload_campaign_command()
 
         self.assertIn('CAMPAIGN_ID=\'{{ dag_run.conf.get("campaign_id", "") }}\'', command)
+        self.assertIn('AS_OF=\'{{ dag_run.conf.get("as_of", dag_run.run_after.in_timezone("America/Los_Angeles").isoformat()) }}\'', command)
         self.assertIn('CAMPAIGN_ID="${META_ADSET_EVALUATION_DEFAULT_CAMPAIGN_ID:-}"', command)
         self.assertIn('ARGS=(--mode preload-campaign --source "$SOURCE" --campaign-id "$CAMPAIGN_ID")', command)
         self.assertIn('ARGS+=(--date "$REPORT_DATE")', command)
+        self.assertIn('ARGS+=(--as-of "$AS_OF")', command)
         self.assertIn('exec python -m meta_adset_evaluation_agent "${ARGS[@]}"', command)
 
     def test_worker_command_uses_one_adset_id(self) -> None:
@@ -152,8 +154,10 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn("ADSET_ID=987", command)
         self.assertIn("SOURCE=facebook", command)
         self.assertIn("MODE=increase-budget", command)
+        self.assertIn("AS_OF=", command)
         self.assertIn('ARGS=(--mode "$MODE" --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-id "$ADSET_ID")', command)
         self.assertIn('ARGS+=(--date "$REPORT_DATE")', command)
+        self.assertIn('ARGS+=(--as-of "$AS_OF")', command)
         self.assertNotIn("dag_run.conf", command)
 
     def test_campaign_worker_command_uses_comma_separated_adsets(self) -> None:
@@ -165,7 +169,9 @@ class MetaAdsetEvaluationDagTest(unittest.TestCase):
         self.assertIn("ADSET_IDS=987,654", command)
         self.assertIn("SOURCE=facebook", command)
         self.assertIn("MODE=increase-budget", command)
+        self.assertIn("AS_OF=", command)
         self.assertIn('ARGS=(--mode "$MODE" --source "$SOURCE" --campaign-id "$CAMPAIGN_ID" --adset-ids "$ADSET_IDS")', command)
+        self.assertIn('ARGS+=(--as-of "$AS_OF")', command)
         self.assertNotIn("dag_run.conf", command)
 
     def test_active_campaign_groups_filter_active_campaign_and_adsets(self) -> None:
