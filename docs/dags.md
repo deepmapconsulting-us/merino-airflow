@@ -114,7 +114,8 @@ flowchart LR
 ### 2. `meta_object_property_sync`
 
 **Code:** [`dags/meta_object_property_sync.py`](../dags/meta_object_property_sync.py)  
-**Schedule:** `0 */2 * * *`  
+**Schedule:** `*/30 * * * *`  
+**Concurrency:** `max_active_runs=1`; `sync_object_properties` has `max_active_tis_per_dag=1`  
 **Modules:** [`object_property.py`](../module/meta/merino_meta_jobs/object_property.py), [`adset_config.py`](../module/meta/merino_meta_jobs/adset_config.py), [`ad_creative.py`](../module/meta/merino_meta_jobs/ad_creative.py)
 
 ```mermaid
