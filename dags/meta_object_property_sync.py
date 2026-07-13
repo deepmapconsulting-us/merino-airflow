@@ -83,6 +83,9 @@ DEFAULT_META_PAGE_LIMIT = 500
     schedule="*/30 * * * *",
     start_date=pendulum.datetime(2026, 1, 1, 0, 0, tz=REPORT_TIMEZONE),
     catchup=False,
+    # Only one run at a time so a slow/failed full-init or retry cannot overlap
+    # the next scheduled sync and double-write dimension tables.
+    max_active_runs=1,
     tags=["meta", "config", "dimension"],
     default_args={
         "owner": "data-platform",
@@ -107,7 +110,7 @@ def meta_object_property_sync():
                 f"adsets={len(flat['adsets'])} ads={len(flat['ads'])}"
             )
 
-    @task
+    @task(max_active_tis_per_dag=1)
     def sync_object_properties(source: dict[str, Any]) -> dict[str, Any]:
         if source.get("error"):
             raise RuntimeError(source["error"])
