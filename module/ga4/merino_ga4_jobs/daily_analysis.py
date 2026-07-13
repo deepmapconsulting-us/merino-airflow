@@ -47,6 +47,9 @@ DAILY_ANALYSIS_COLUMNS = (
 LANDING_PAGE_DAILY_ANALYSIS_COLUMNS = (
     "report_date",
     "landing_page",
+    "landing_page_path",
+    "raw_landing_page_count",
+    "example_raw_landing_page",
     "source_project_id",
     "source_dataset_id",
     "source_table",
@@ -56,6 +59,17 @@ LANDING_PAGE_DAILY_ANALYSIS_COLUMNS = (
     "user_count",
     "purchase_count",
     "purchaser_count",
+    "direct_session_count",
+    "paid_social_session_count",
+    "organic_social_session_count",
+    "paid_search_session_count",
+    "organic_search_session_count",
+    "email_session_count",
+    "referral_session_count",
+    "ai_assistant_session_count",
+    "other_channel_session_count",
+    "facebook_session_count",
+    "google_session_count",
     "avg_session_steps",
     "min_session_steps",
     "max_session_steps",
@@ -305,7 +319,12 @@ WITH session_events AS (
       SELECT value.string_value
       FROM UNNEST(event_params)
       WHERE key = 'page_location'
-    ) AS page_location
+    ) AS page_location,
+    session_traffic_source_last_click.cross_channel_campaign.default_channel_group AS session_channel_group,
+    session_traffic_source_last_click.cross_channel_campaign.source AS session_source,
+    session_traffic_source_last_click.cross_channel_campaign.medium AS session_medium,
+    collected_traffic_source.manual_source,
+    collected_traffic_source.manual_medium
   FROM `{resolved_source_table}`
   WHERE user_pseudo_id IS NOT NULL
 ),
@@ -334,7 +353,20 @@ sessions AS (
     COALESCE(
       ARRAY_AGG(page_location IGNORE NULLS ORDER BY event_step LIMIT 1)[SAFE_OFFSET(0)],
       '(not set)'
-    ) AS landing_page,
+    ) AS raw_landing_page,
+    COALESCE(
+      ARRAY_AGG(session_channel_group IGNORE NULLS ORDER BY event_step LIMIT 1)[SAFE_OFFSET(0)],
+      '(not set)'
+    ) AS traffic_channel_group,
+    LOWER(COALESCE(
+      ARRAY_AGG(session_source IGNORE NULLS ORDER BY event_step LIMIT 1)[SAFE_OFFSET(0)],
+      ARRAY_AGG(manual_source IGNORE NULLS ORDER BY event_step LIMIT 1)[SAFE_OFFSET(0)],
+      REGEXP_EXTRACT(
+        ARRAY_AGG(page_location IGNORE NULLS ORDER BY event_step LIMIT 1)[SAFE_OFFSET(0)],
+        r'[?&]utm_source=([^&]+)'
+      ),
+      '(not set)'
+    )) AS traffic_source,
     COUNT(*) AS event_count,
     MIN(event_timestamp) AS first_event_ts,
     MAX(event_timestamp) AS last_event_ts,
@@ -345,9 +377,24 @@ sessions AS (
   GROUP BY 1, 2, 3
 )
 
+, canonical_sessions AS (
+  SELECT
+    *,
+    COALESCE(REGEXP_EXTRACT(raw_landing_page, r'^[^?#]+'), raw_landing_page, '(not set)') AS landing_page,
+    COALESCE(
+      NULLIF(REGEXP_EXTRACT(raw_landing_page, r'^https?://[^/]+([^?#]*)'), ''),
+      '/'
+    ) AS landing_page_path
+  FROM sessions
+)
+
 SELECT
   report_date,
   landing_page,
+  landing_page_path,
+  CAST(COUNT(DISTINCT raw_landing_page) AS INT64) AS raw_landing_page_count,
+  ARRAY_AGG(raw_landing_page ORDER BY LENGTH(raw_landing_page) DESC LIMIT 1)[OFFSET(0)]
+    AS example_raw_landing_page,
   '{PROJECT_ID}' AS source_project_id,
   '{DATASET_ID}' AS source_dataset_id,
   '{resolved_source_table}' AS source_table,
@@ -357,6 +404,34 @@ SELECT
   CAST(COUNT(DISTINCT user_pseudo_id) AS INT64) AS user_count,
   CAST(SUM(purchase_count) AS INT64) AS purchase_count,
   CAST(COUNT(DISTINCT IF(purchase_count > 0, user_pseudo_id, NULL)) AS INT64) AS purchaser_count,
+  CAST(COUNTIF(traffic_channel_group = 'Direct') AS INT64) AS direct_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'Paid Social') AS INT64) AS paid_social_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'Organic Social') AS INT64) AS organic_social_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'Paid Search') AS INT64) AS paid_search_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'Organic Search') AS INT64) AS organic_search_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'Email') AS INT64) AS email_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'Referral') AS INT64) AS referral_session_count,
+  CAST(COUNTIF(traffic_channel_group = 'AI Assistant') AS INT64) AS ai_assistant_session_count,
+  CAST(COUNTIF(traffic_channel_group NOT IN (
+    'Direct',
+    'Paid Social',
+    'Organic Social',
+    'Paid Search',
+    'Organic Search',
+    'Email',
+    'Referral',
+    'AI Assistant'
+  )) AS INT64) AS other_channel_session_count,
+  CAST(COUNTIF(traffic_source IN (
+    'facebook',
+    'fb',
+    'l.facebook.com',
+    'm.facebook.com',
+    'facebook.com',
+    'lm.facebook.com',
+    'adsmanager.facebook.com'
+  )) AS INT64) AS facebook_session_count,
+  CAST(COUNTIF(traffic_source = 'google') AS INT64) AS google_session_count,
   ROUND(AVG(event_count), 6) AS avg_session_steps,
   CAST(MIN(event_count) AS NUMERIC) AS min_session_steps,
   CAST(MAX(event_count) AS NUMERIC) AS max_session_steps,
@@ -381,8 +456,8 @@ SELECT
     AS min_minutes_to_purchase,
   ROUND(MAX(IF(first_purchase_ts IS NULL, NULL, (first_purchase_ts - first_event_ts) / 1000000 / 60)), 6)
     AS max_minutes_to_purchase
-FROM sessions
-GROUP BY 1, 2, 3, 4, 5, 6, 7
+FROM canonical_sessions
+GROUP BY 1, 2, 3, 6, 7, 8, 9, 10
 ORDER BY session_count DESC, landing_page
 """.strip()
 

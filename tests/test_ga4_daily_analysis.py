@@ -67,6 +67,14 @@ class GA4DailyAnalysisTest(unittest.TestCase):
         query = daily_analysis.landing_page_daily_analysis_query("20260612")
 
         self.assertIn("ARRAY_AGG(page_location IGNORE NULLS ORDER BY event_step LIMIT 1)", query)
+        self.assertIn("REGEXP_EXTRACT(raw_landing_page, r'^[^?#]+')", query)
+        self.assertIn("AS landing_page_path", query)
+        self.assertIn("COUNT(DISTINCT raw_landing_page)", query)
+        self.assertIn("AS raw_landing_page_count", query)
+        self.assertIn("COUNTIF(traffic_channel_group = 'Paid Social')", query)
+        self.assertIn("AS paid_social_session_count", query)
+        self.assertIn("COUNTIF(traffic_source = 'google')", query)
+        self.assertIn("AS google_session_count", query)
         self.assertIn("'merino-agent' AS source_project_id", query)
         self.assertIn("'analytics_370932876' AS source_dataset_id", query)
         self.assertIn("'finalized' AS source_table_type", query)
@@ -75,7 +83,7 @@ class GA4DailyAnalysisTest(unittest.TestCase):
         self.assertIn("AS max_session_seconds", query)
         self.assertIn("AS min_purchase_step", query)
         self.assertIn("AS max_purchase_step", query)
-        self.assertIn("GROUP BY 1, 2, 3, 4, 5, 6, 7", query)
+        self.assertIn("GROUP BY 1, 2, 3, 6, 7, 8, 9, 10", query)
         self.assertIn("ORDER BY session_count DESC, landing_page", query)
 
     def test_rows_follow_postgres_column_order(self) -> None:
@@ -159,6 +167,9 @@ class GA4DailyAnalysisTest(unittest.TestCase):
         self.assertIn("ADD COLUMN IF NOT EXISTS source_project_id TEXT", schema_sql)
         self.assertEqual(daily_analysis.DAILY_ANALYSIS_CONFLICT_COLUMNS, ("report_date",))
         self.assertIn("ON ga4.landing_page_daily_analysis (report_date, landing_page)", schema_sql)
+        self.assertIn("ADD COLUMN IF NOT EXISTS landing_page_path TEXT", schema_sql)
+        self.assertIn("ADD COLUMN IF NOT EXISTS paid_social_session_count INTEGER", schema_sql)
+        self.assertIn("ADD COLUMN IF NOT EXISTS google_session_count INTEGER", schema_sql)
         self.assertEqual(
             daily_analysis.LANDING_PAGE_DAILY_ANALYSIS_CONFLICT_COLUMNS,
             ("report_date", "landing_page"),
