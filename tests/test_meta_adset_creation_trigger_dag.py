@@ -67,6 +67,7 @@ class MetaAdsetCreationTriggerDagTest(unittest.TestCase):
                 "apply_set_budget_changes",
                 "apply_ad_status_schedules",
                 "apply_adset_splits",
+                "queue_ad_retirements",
             },
         )
         self.assertEqual(
@@ -84,6 +85,10 @@ class MetaAdsetCreationTriggerDagTest(unittest.TestCase):
         self.assertEqual(
             calls_by_task_id["apply_adset_splits"]["cmds"],
             ["python", "-m", "meta_adset_evaluation_agent.apply_adset_splits"],
+        )
+        self.assertEqual(
+            calls_by_task_id["queue_ad_retirements"]["cmds"],
+            ["python", "-m", "meta_adset_evaluation_agent.queue_ad_retirements"],
         )
 
 

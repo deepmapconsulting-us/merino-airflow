@@ -40,6 +40,13 @@ def apply_adset_split_command_args() -> dict[str, object]:
     }
 
 
+def queue_ad_retirements_command_args() -> dict[str, object]:
+    return {
+        "cmds": ["python", "-m", "meta_adset_evaluation_agent.queue_ad_retirements"],
+        "arguments": ["--age-days", "30"],
+    }
+
+
 @dag(
     dag_id=DAG_ID,
     schedule=DAG_SCHEDULE,
@@ -69,6 +76,10 @@ def meta_adset_creation_trigger():
     meta_adset_evaluation_pod(
         task_id="apply_adset_splits",
         **apply_adset_split_command_args(),
+    )
+    meta_adset_evaluation_pod(
+        task_id="queue_ad_retirements",
+        **queue_ad_retirements_command_args(),
     )
 
 
