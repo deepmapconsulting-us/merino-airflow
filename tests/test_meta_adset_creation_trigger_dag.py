@@ -90,6 +90,10 @@ class MetaAdsetCreationTriggerDagTest(unittest.TestCase):
             calls_by_task_id["queue_ad_retirements"]["cmds"],
             ["python", "-m", "meta_adset_evaluation_agent.queue_ad_retirements"],
         )
+        self.assertEqual(
+            calls_by_task_id["queue_ad_retirements"]["arguments"],
+            ["--min-run-days", "10"],
+        )
 
 
 if __name__ == "__main__":

@@ -43,7 +43,7 @@ def apply_adset_split_command_args() -> dict[str, object]:
 def queue_ad_retirements_command_args() -> dict[str, object]:
     return {
         "cmds": ["python", "-m", "meta_adset_evaluation_agent.queue_ad_retirements"],
-        "arguments": ["--age-days", "30"],
+        "arguments": ["--min-run-days", "10"],
     }
 
 
