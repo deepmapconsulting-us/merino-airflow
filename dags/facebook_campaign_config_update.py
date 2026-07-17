@@ -61,6 +61,7 @@ def _account_timezone_cache() -> dict[str, str]:
     schedule="*/30 * * * *",
     start_date=pendulum.datetime(2026, 1, 1, tz=REPORT_TIMEZONE),
     catchup=False,
+    max_active_runs=1,
     tags=["facebook", "campaign", "config", "meta"],
     default_args={
         "owner": "data-platform",
