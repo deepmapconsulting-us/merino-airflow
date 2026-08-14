@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "merino-amazon-jobs"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "amzn-sp-api>=1.11.0",
+    "psycopg[binary]>=3.3.0",
+    "requests>=2.32.0",
+]
+
+[project.scripts]
+merino-amazon-jobs = "merino_amazon_jobs.cli:main"
+merino-amazon-listings = "merino_amazon_jobs.source_cli:listings_main"
+merino-amazon-fba-inventory = "merino_amazon_jobs.source_cli:inventory_main"
+merino-amazon-fba-inventory-age = "merino_amazon_jobs.source_cli:inventory_age_main"
+merino-amazon-orders = "merino_amazon_jobs.source_cli:orders_main"
+merino-amazon-brand-analytics = "merino_amazon_jobs.source_cli:brand_analytics_main"
+merino-amazon-ads = "merino_amazon_jobs.source_cli:ads_main"
+
+[tool.setuptools.packages.find]
+include = ["merino_amazon_jobs*"]

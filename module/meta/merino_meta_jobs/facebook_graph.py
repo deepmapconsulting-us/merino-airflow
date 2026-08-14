@@ -7,15 +7,26 @@ import hmac
 import json
 import logging
 import os
+import time
 from collections.abc import Iterator, Mapping
 from typing import Any
 
 import requests
+from merino_meta_rate_limit import (
+    is_meta_rate_limit,
+    meta_estimated_recovery_seconds,
+    meta_limit_seconds,
+    redis_client,
+    set_meta_limit,
+    wait_for_meta_limit,
+)
 
 GRAPH_API_VERSION = "v24.0"
 GRAPH_API_BASE = f"https://graph.facebook.com/{GRAPH_API_VERSION}"
 USER_AGENT = "merino-meta-jobs/1.0"
 DEFAULT_TIMEOUT_SECONDS = 30
+META_RATE_LIMIT_MAX_RETRIES = int(os.environ.get("META_GRAPH_RATE_LIMIT_MAX_RETRIES", "6"))
+_shared_redis = redis_client()
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +75,15 @@ class MetaGraphClient:
         self.session = session or requests.Session()
         self.timeout_seconds = timeout_seconds
 
-    def get(self, endpoint: str, params: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def get(
+        self,
+        endpoint: str,
+        params: Mapping[str, Any] | None = None,
+        *,
+        _rate_limit_attempt: int = 0,
+    ) -> dict[str, Any]:
         """Fetch one Graph API endpoint and return the decoded JSON response."""
+        wait_for_meta_limit(_shared_redis)
         response = self.session.get(
             f"{GRAPH_API_BASE}/{endpoint.lstrip('/')}",
             params=self._query_params(params),
@@ -73,12 +91,41 @@ class MetaGraphClient:
             timeout=self.timeout_seconds,
         )
         self._log_rate_limit_headers(endpoint, response.headers)
+        estimated_recovery = meta_estimated_recovery_seconds(response.headers)
+        if estimated_recovery > 0:
+            set_meta_limit(
+                _shared_redis,
+                ttl_seconds=estimated_recovery,
+                source="airflow-meta-jobs",
+                endpoint=endpoint,
+                details={"estimated_time_to_regain_access": estimated_recovery // 60},
+            )
 
         try:
             payload = response.json()
         except ValueError as exc:
             response.raise_for_status()
             raise MetaGraphError(endpoint, {"message": f"Non-JSON Graph response: {response.text[:200]}"}) from exc
+
+        if (
+            isinstance(payload, Mapping)
+            and is_meta_rate_limit(response.status_code, payload)
+            and _rate_limit_attempt < META_RATE_LIMIT_MAX_RETRIES
+        ):
+            sleep_for = set_meta_limit(
+                _shared_redis,
+                ttl_seconds=meta_limit_seconds(
+                    response.status_code,
+                    payload,
+                    response.headers,
+                    attempt=_rate_limit_attempt,
+                ),
+                source="airflow-meta-jobs",
+                endpoint=endpoint,
+                details=dict(payload.get("error") or {}),
+            )
+            time.sleep(sleep_for)
+            return self.get(endpoint, params, _rate_limit_attempt=_rate_limit_attempt + 1)
 
         if response.status_code >= 400 or "error" in payload:
             error = payload.get("error", payload)
@@ -88,8 +135,15 @@ class MetaGraphClient:
 
         return payload
 
-    def post(self, endpoint: str, data: Mapping[str, Any] | None = None) -> dict[str, Any]:
+    def post(
+        self,
+        endpoint: str,
+        data: Mapping[str, Any] | None = None,
+        *,
+        _rate_limit_attempt: int = 0,
+    ) -> dict[str, Any]:
         """Post one Graph API endpoint and return the decoded JSON response."""
+        wait_for_meta_limit(_shared_redis)
         response = self.session.post(
             f"{GRAPH_API_BASE}/{endpoint.lstrip('/')}",
             data=self._query_params(data),
@@ -97,12 +151,41 @@ class MetaGraphClient:
             timeout=self.timeout_seconds,
         )
         self._log_rate_limit_headers(endpoint, response.headers)
+        estimated_recovery = meta_estimated_recovery_seconds(response.headers)
+        if estimated_recovery > 0:
+            set_meta_limit(
+                _shared_redis,
+                ttl_seconds=estimated_recovery,
+                source="airflow-meta-jobs",
+                endpoint=endpoint,
+                details={"estimated_time_to_regain_access": estimated_recovery // 60},
+            )
 
         try:
             payload = response.json()
         except ValueError as exc:
             response.raise_for_status()
             raise MetaGraphError(endpoint, {"message": f"Non-JSON Graph response: {response.text[:200]}"}) from exc
+
+        if (
+            isinstance(payload, Mapping)
+            and is_meta_rate_limit(response.status_code, payload)
+            and _rate_limit_attempt < META_RATE_LIMIT_MAX_RETRIES
+        ):
+            sleep_for = set_meta_limit(
+                _shared_redis,
+                ttl_seconds=meta_limit_seconds(
+                    response.status_code,
+                    payload,
+                    response.headers,
+                    attempt=_rate_limit_attempt,
+                ),
+                source="airflow-meta-jobs",
+                endpoint=endpoint,
+                details=dict(payload.get("error") or {}),
+            )
+            time.sleep(sleep_for)
+            return self.post(endpoint, data, _rate_limit_attempt=_rate_limit_attempt + 1)
 
         if response.status_code >= 400 or "error" in payload:
             error = payload.get("error", payload)

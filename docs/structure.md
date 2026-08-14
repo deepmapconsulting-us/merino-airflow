@@ -23,8 +23,8 @@ module/meta/
   merino_meta_jobs package.
 
 module/amazon/
-  Future Amazon job image. This should follow the same pattern as module/meta/
-  when Amazon ingestion is added.
+  Amazon SP-API and Amazon Ads job image. Contains the vendor clients,
+  merino_amazon_jobs package, and source-specific console entrypoints.
 ```
 
 ## Main Idea
@@ -35,7 +35,7 @@ Airflow should not install every vendor SDK into the scheduler or worker image.
 Instead, each platform gets a slim image with only the dependencies it needs:
 
 - `module/meta` builds a Meta image, for example `merino-meta-jobs`.
-- `module/amazon` should build an Amazon image, for example `merino-amazon-jobs`.
+- `module/amazon` builds `merino-amazon-jobs`.
 - DAGs call those images with `KubernetesPodOperator` or the equivalent pod
   execution operator.
 
@@ -98,18 +98,25 @@ This keeps responsibilities clear:
 - Meta and Amazon can evolve independently without bloating one shared runtime.
 - Multiple DAGs can reuse the same platform image with different parameters.
 
-## Future Additions
+## Amazon Job Pattern
 
-When Amazon ingestion is added, create `module/amazon` with the same structure as
-`module/meta`:
+The Amazon image exposes source-specific entrypoints and is launched by five
+thin production DAGs:
 
 ```text
-module/amazon/
-  Dockerfile
-  requirements.txt
-  merino_amazon_jobs/
-    __init__.py
-    __main__.py
+amazon_sales_traffic    Daily three-day PARENT/CHILD/SKU refresh
+amazon_inventory        Daily listings -> FBA inventory -> inventory age
+amazon_orders           Daily Orders API 2026 overlap refresh
+amazon_brand_analytics  Weekly previous complete Sunday-Saturday
+amazon_ads              Daily attribution-window refresh
 ```
 
-Then add DAG tasks that call the Amazon image instead of the Meta image.
+Shared pod configuration is in `dags/amazon_k8s.py`. It injects the
+`merino_analytics` Airflow connection, SP-API Variables, seller identity, and
+optional Amazon Ads Variables into
+`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.0`.
+Seller identity Variables are required. Amazon Ads profile Variables are
+marketplace-scoped so a profile cannot be reused for another country.
+Credentials remain environment values and are not included in task commands.
+The inventory DAG records current observed snapshots against the
+`data_interval_end` calendar date.

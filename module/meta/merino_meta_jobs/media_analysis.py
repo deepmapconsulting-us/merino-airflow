@@ -736,6 +736,97 @@ def image_gcs_uri_from_download(
     return uris[0] if uris else None
 
 
+def upsert_creative_media_preview(
+    conn: Any,
+    *,
+    campaign_id: str,
+    adset_id: str,
+    ad_id: str,
+    creative_id: str,
+    media_type: str,
+    video_id: str,
+    image_asset_id: str,
+    gcs_uri: str,
+    preview_url: str,
+) -> int:
+    """Register media storage without replacing an existing analysis."""
+    video_gcs_uri = gcs_uri if media_type == "video" else None
+    video_preview_url = preview_url if media_type == "video" else None
+    image_gcs_uri = gcs_uri if media_type == "image" else None
+    image_preview_url = preview_url if media_type == "image" else None
+    sql = f"""
+        INSERT INTO {CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE} AS target (
+            campaign_id,
+            adset_id,
+            ad_id,
+            creative_id,
+            media_type,
+            video_id,
+            image_asset_id,
+            analysis,
+            video_gcs_uri,
+            video_preview_url,
+            image_gcs_uri,
+            image_preview_url
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, '{{}}'::jsonb, %s, %s, %s, %s)
+        ON CONFLICT (campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id) DO UPDATE
+        SET
+            creative_id = EXCLUDED.creative_id,
+            video_gcs_uri = COALESCE(EXCLUDED.video_gcs_uri, target.video_gcs_uri),
+            video_preview_url = COALESCE(EXCLUDED.video_preview_url, target.video_preview_url),
+            image_gcs_uri = COALESCE(EXCLUDED.image_gcs_uri, target.image_gcs_uri),
+            image_preview_url = COALESCE(EXCLUDED.image_preview_url, target.image_preview_url),
+            updated_at = now(),
+            update_count = target.update_count + 1
+        WHERE target.creative_id IS DISTINCT FROM EXCLUDED.creative_id
+           OR target.video_gcs_uri IS DISTINCT FROM COALESCE(EXCLUDED.video_gcs_uri, target.video_gcs_uri)
+           OR target.video_preview_url IS DISTINCT FROM COALESCE(EXCLUDED.video_preview_url, target.video_preview_url)
+           OR target.image_gcs_uri IS DISTINCT FROM COALESCE(EXCLUDED.image_gcs_uri, target.image_gcs_uri)
+           OR target.image_preview_url IS DISTINCT FROM COALESCE(EXCLUDED.image_preview_url, target.image_preview_url)
+        RETURNING id
+    """
+    with conn.cursor() as cursor:
+        cursor.execute(
+            sql,
+            (
+                campaign_id,
+                adset_id,
+                ad_id,
+                creative_id,
+                media_type,
+                video_id,
+                image_asset_id,
+                video_gcs_uri,
+                video_preview_url,
+                image_gcs_uri,
+                image_preview_url,
+            ),
+        )
+        row = cursor.fetchone()
+        if row is None:
+            cursor.execute(
+                f"""
+                SELECT id
+                FROM {CREATIVE_MEDIA_ANALYSIS_SNAPSHOT_TABLE}
+                WHERE campaign_id = %s
+                  AND adset_id = %s
+                  AND ad_id = %s
+                  AND media_type = %s
+                  AND video_id = %s
+                  AND image_asset_id = %s
+                """,
+                (campaign_id, adset_id, ad_id, media_type, video_id, image_asset_id),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise RuntimeError(
+                f"Could not resolve media preview row for ad_id={ad_id} "
+                f"media_type={media_type} video_id={video_id} image_asset_id={image_asset_id}"
+            )
+        return int(row[0])
+
+
 def upsert_creative_media_analysis(
     conn: Any,
     *,

@@ -31,6 +31,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     translate_creative_media_analysis_to_chinese,
     update_chinese_creative_media_analysis_snapshot,
     upsert_creative_media_analysis,
+    upsert_creative_media_preview,
     video_gcs_uri_from_download,
 )
 
@@ -720,6 +721,36 @@ class VideoGcsUriFromDownloadTest(unittest.TestCase):
 
 
 class CreativeMediaAnalysisPersistenceTest(unittest.TestCase):
+    def test_upsert_creative_media_preview_does_not_replace_analysis(self) -> None:
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = (41,)
+
+        snapshot_id = upsert_creative_media_preview(
+            conn,
+            campaign_id="camp_1",
+            adset_id="adset_1",
+            ad_id="ad_1",
+            creative_id="cr_1",
+            media_type="video",
+            video_id="video_1",
+            image_asset_id="",
+            gcs_uri="gs://meta_analysis/assets/videos/video_1/video_1.mp4",
+            preview_url="https://media-analysis-mcp.merino-aiagent.com/api/v1/media/preview?uri=video",
+        )
+
+        self.assertEqual(snapshot_id, 41)
+        sql, params = cursor.execute.call_args.args
+        self.assertIn("INSERT INTO marketing.creative_media_analysis_snapshot", sql)
+        self.assertIn("analysis", sql)
+        self.assertIn("'{}'::jsonb", sql)
+        self.assertNotIn("analysis = EXCLUDED.analysis", sql)
+        self.assertIn("video_gcs_uri = COALESCE(EXCLUDED.video_gcs_uri, target.video_gcs_uri)", sql)
+        self.assertEqual(params[3], "cr_1")
+        self.assertEqual(params[4], "video")
+        self.assertEqual(params[7], "gs://meta_analysis/assets/videos/video_1/video_1.mp4")
+        self.assertIsNone(params[9])
+
     def test_upsert_creative_media_analysis_writes_snapshot_and_traffic(self) -> None:
         conn = MagicMock()
         cursor = conn.cursor.return_value.__enter__.return_value
