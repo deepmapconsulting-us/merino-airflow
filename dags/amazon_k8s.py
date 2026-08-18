@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover - older provider layout
         KubernetesPodOperator,
     )
 
-AMAZON_IMAGE = "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.0"
+AMAZON_IMAGE = "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.1"
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
 POSTGRES_CONN_ID = "merino_analytics"

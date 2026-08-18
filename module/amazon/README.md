@@ -8,8 +8,20 @@ writes.
 Production image:
 
 ```text
-us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.0
+us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.1
 ```
+
+Build and push from the merino repo root. The tag defaults to
+`jobs/airflow/module/amazon/VERSION`.
+
+```bash
+bash scripts/deployment/docker-build-amazon-jobs.sh
+bash scripts/deployment/docker-build-amazon-jobs.sh --no-push
+bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.1
+```
+
+After a tag bump, point `AMAZON_IMAGE` in `jobs/airflow/dags/amazon_k8s.py` at
+the same version.
 
 ## Airflow configuration
 
