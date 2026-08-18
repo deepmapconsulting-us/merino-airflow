@@ -63,7 +63,8 @@ class Orders:
                 "created_after": created_after,
                 "created_before": created_before,
                 "fulfilled_by": ["AMAZON"],
-                "included_data": ["fulfillment", "proceeds"],
+                # searchOrders includedData is an uppercase enum.
+                "included_data": ["FULFILLMENT", "PROCEEDS"],
             }
             if token:
                 kwargs["pagination_token"] = token

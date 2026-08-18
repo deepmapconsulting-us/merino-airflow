@@ -8,7 +8,7 @@ writes.
 Production image:
 
 ```text
-us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.2
+us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.3
 ```
 
 Build and push from the merino repo root. The tag defaults to
@@ -17,7 +17,7 @@ Build and push from the merino repo root. The tag defaults to
 ```bash
 bash scripts/deployment/docker-build-amazon-jobs.sh
 bash scripts/deployment/docker-build-amazon-jobs.sh --no-push
-bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.2
+bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.3
 ```
 
 After a tag bump, point `AMAZON_IMAGE` in `jobs/airflow/dags/amazon_k8s.py` at
