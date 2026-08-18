@@ -294,7 +294,7 @@ class AmazonKubernetesTest(unittest.TestCase):
         )
         self.assertEqual(
             env["AMAZON_SELLER_ID"],
-            "{{ var.value.amazon_seller_id }}",
+            "{{ var.value.get('sp_api_seller_id', var.value.get('amazon_seller_id', '')) }}",
         )
         self.assertEqual(
             env["AMAZON_BRAND_KEY"],

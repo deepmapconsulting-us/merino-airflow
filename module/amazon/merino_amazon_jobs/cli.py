@@ -93,7 +93,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.database_url:
         raise RuntimeError("AMAZON_DATABASE_URL or DATABASE_URL is required")
     if not args.seller_id:
-        raise RuntimeError("--seller-id or AMAZON_SELLER_ID is required")
+        raise RuntimeError(
+            "AMAZON_SELLER_ID is required "
+            "(GSM airflow-variables-amazon_seller_id, --seller-id, or env). "
+            "Sellers.getAccount does not return sellerId — use Seller Central "
+            "Merchant Token / Selling Partner ID."
+        )
     if not args.seller_display_name:
         raise RuntimeError(
             "--seller-display-name or AMAZON_SELLER_DISPLAY_NAME is required"
@@ -102,21 +107,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise RuntimeError("--brand-key or AMAZON_BRAND_KEY is required")
     if not args.brand_name:
         raise RuntimeError("--brand-name or AMAZON_BRAND_NAME is required")
-    account_key = args.account_key or args.seller_id
-
-    import psycopg
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(message)s",
     )
+    seller_id = args.seller_id
+    account_key = args.account_key or seller_id
+
+    import psycopg
+
     total = 0
     with psycopg.connect(args.database_url) as connection:
         store = AmazonSalesTrafficStore(connection, account_key=account_key)
         store.bootstrap_account(
             brand_key=args.brand_key,
             brand_name=args.brand_name,
-            seller_id=args.seller_id,
+            seller_id=seller_id,
             display_name=args.seller_display_name,
             marketplaces=marketplaces,
         )

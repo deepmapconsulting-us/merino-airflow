@@ -33,6 +33,13 @@ Variables are required.
 Credentials are passed as pod environment variables. DAG commands do not echo
 them or enable shell tracing.
 
+Local Sales & Traffic backfill (`init_batch_job/scripts/load_amazon_sales_traffic_sample.sh`)
+loads SP-API credentials from GSM (`airflow-variables-sp_api_*`), falling back to
+`terraform/.secrets/amazon_giagio.env`, and builds `AMAZON_DATABASE_URL` via the
+Metabase Postgres port-forward. Giagio brand/account defaults are applied
+automatically. `AMAZON_SELLER_ID` is loaded from GSM
+(`airflow-variables-sp_api_seller_id`, with `amazon_seller_id` as alias).
+
 Each seller account belongs to one brand. Giagio uses `giagio` / `Giagio`.
 A second brand with separate Seller Central credentials must use a distinct
 account key, seller ID, brand key, and brand name.

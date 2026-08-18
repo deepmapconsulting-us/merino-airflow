@@ -50,6 +50,12 @@ def search_orders_api(region: str, environ: Mapping[str, str] | None = None) -> 
     return SearchOrdersApi(_api_client(region, environ))
 
 
+def sellers_api(region: str, environ: Mapping[str, str] | None = None) -> Any:
+    from spapi.api.sellers_v1.sellers_api import SellersApi
+
+    return SellersApi(_api_client(region, environ))
+
+
 def _credential(
     environ: Mapping[str, str],
     uppercase: str,

@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 
@@ -100,4 +100,19 @@ def _decimal(value: str | None) -> Decimal | None:
 def _datetime(value: str | None) -> datetime | None:
     if value is None:
         return None
+    timestamp, separator, abbreviation = value.rpartition(" ")
+    utc_offsets = {
+        "PST": -8,
+        "PDT": -7,
+        "MST": -7,
+        "MDT": -6,
+        "CST": -6,
+        "CDT": -5,
+        "EST": -5,
+        "EDT": -4,
+    }
+    if separator and abbreviation in utc_offsets:
+        return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(
+            tzinfo=timezone(timedelta(hours=utc_offsets[abbreviation]))
+        )
     return datetime.fromisoformat(value.replace("Z", "+00:00"))

@@ -40,7 +40,7 @@ def amazon_pod_env() -> list[k8s.V1EnvVar]:
         ),
         k8s.V1EnvVar(
             name="AMAZON_SELLER_ID",
-            value="{{ var.value.amazon_seller_id }}",
+            value="{{ var.value.get('sp_api_seller_id', var.value.get('amazon_seller_id', '')) }}",
         ),
         k8s.V1EnvVar(
             name="AMAZON_SELLER_DISPLAY_NAME",
