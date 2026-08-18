@@ -217,10 +217,24 @@ def load_k8s_module():
 
     class FakeEnvVar:
         def __init__(
-            self, name: str, value: str | None = None, **_kwargs: object
+            self,
+            name: str,
+            value: str | None = None,
+            value_from: object | None = None,
+            **_kwargs: object,
         ) -> None:
             self.name = name
             self.value = value
+            self.value_from = value_from
+
+    class FakeEnvVarSource:
+        def __init__(self, secret_key_ref: object | None = None, **_kwargs: object) -> None:
+            self.secret_key_ref = secret_key_ref
+
+    class FakeSecretKeySelector:
+        def __init__(self, name: str, key: str, **_kwargs: object) -> None:
+            self.name = name
+            self.key = key
 
     class FakeResources:
         def __init__(self, **kwargs: object) -> None:
@@ -228,6 +242,8 @@ def load_k8s_module():
 
     mock_client.models = SimpleNamespace(
         V1EnvVar=FakeEnvVar,
+        V1EnvVarSource=FakeEnvVarSource,
+        V1SecretKeySelector=FakeSecretKeySelector,
         V1ResourceRequirements=FakeResources,
     )
     mock_kubernetes.client = mock_client
@@ -260,12 +276,36 @@ class AmazonKubernetesTest(unittest.TestCase):
 
         self.assertEqual(
             pod["image"],
-            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.1",
+            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.2",
         )
         self.assertEqual(pod["namespace"], "airflow")
         self.assertEqual(pod["service_account_name"], "merino-airflow-task-runner")
+        self.assertEqual(pod["cmds"], ["merino-amazon-with-lock", "merino-amazon-jobs"])
+        self.assertEqual(pod["pool"], "amazon_sp_api")
+        self.assertEqual(pod["pool_slots"], 1)
         self.assertTrue(pod["get_logs"])
         self.assertNotIn("secrets", pod)
+
+    def test_ads_pod_skips_sp_api_lock_and_pool(self) -> None:
+        module = load_k8s_module()
+
+        pod = module.amazon_pod(task_id="refresh_ads", sp_api=False)
+
+        self.assertEqual(pod["cmds"], ["merino-amazon-jobs"])
+        self.assertNotIn("pool", pod)
+        self.assertNotIn("pool_slots", pod)
+
+    def test_sp_api_bash_pod_holds_lock_for_the_whole_command(self) -> None:
+        module = load_k8s_module()
+
+        pod = module.amazon_pod(
+            task_id="refresh_sales_traffic",
+            cmds=["bash", "-lc"],
+            arguments=["echo"],
+        )
+
+        self.assertEqual(pod["cmds"], ["merino-amazon-with-lock", "bash", "-lc"])
+        self.assertEqual(pod["pool"], "amazon_sp_api")
 
     def test_env_injects_postgres_sp_api_identity_and_optional_ads_variables(
         self,
@@ -329,6 +369,25 @@ class AmazonKubernetesTest(unittest.TestCase):
                 f"{marketplace.lower()}', '') }}}}",
             )
         self.assertNotIn("AMAZON_ADS_PROFILE_ID", env)
+
+    def test_env_injects_mcp_redis_for_sp_api_quota_lock(self) -> None:
+        module = load_k8s_module()
+
+        items = {item.name: item for item in module.amazon_pod_env()}
+
+        self.assertEqual(
+            items["MERINO_REDIS_HOST"].value,
+            "merino-mcp-redis.merino-mcp.svc.cluster.local",
+        )
+        self.assertEqual(items["MERINO_REDIS_PORT"].value, "6379")
+        self.assertEqual(items["MERINO_REDIS_DB"].value, "0")
+        secret = items["MERINO_REDIS_PASSWORD"].value_from.secret_key_ref
+        self.assertEqual(secret.name, "merino-mcp-redis-password")
+        self.assertEqual(secret.key, "password")
+
+    def test_ads_dag_disables_sp_api_lock(self) -> None:
+        source = (DAGS / "amazon_ads.py").read_text(encoding="utf-8")
+        self.assertIn("sp_api=False", source)
 
 
 if __name__ == "__main__":

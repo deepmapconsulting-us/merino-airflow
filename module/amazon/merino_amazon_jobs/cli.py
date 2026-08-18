@@ -9,6 +9,7 @@ from datetime import date, datetime, timedelta, timezone
 from merino_amazon_jobs.client import reports_api
 from merino_amazon_jobs.marketplaces import MARKETPLACES, date_windows
 from merino_amazon_jobs.postgres import AmazonSalesTrafficStore
+from merino_amazon_jobs.quota import sp_api_job_lock
 from merino_amazon_jobs.reports import SalesTrafficReports
 from merino_amazon_jobs.runtime import load_sales_traffic
 
@@ -118,31 +119,32 @@ def main(argv: Sequence[str] | None = None) -> int:
     import psycopg
 
     total = 0
-    with psycopg.connect(args.database_url) as connection:
-        store = AmazonSalesTrafficStore(connection, account_key=account_key)
-        store.bootstrap_account(
-            brand_key=args.brand_key,
-            brand_name=args.brand_name,
-            seller_id=seller_id,
-            display_name=args.seller_display_name,
-            marketplaces=marketplaces,
-        )
-        reports_by_region: dict[str, SalesTrafficReports] = {}
-        for marketplace in marketplaces:
-            reports = reports_by_region.get(marketplace.region)
-            if reports is None:
-                reports = SalesTrafficReports(reports_api(marketplace.region))
-                reports_by_region[marketplace.region] = reports
-            for granularity in granularities:
-                total += load_sales_traffic(
-                    reports,
-                    store,
-                    marketplace,
-                    start_date,
-                    end_date,
-                    granularity,
-                    overwrite=args.overwrite,
-                )
+    with sp_api_job_lock(owner="sales_traffic"):
+        with psycopg.connect(args.database_url) as connection:
+            store = AmazonSalesTrafficStore(connection, account_key=account_key)
+            store.bootstrap_account(
+                brand_key=args.brand_key,
+                brand_name=args.brand_name,
+                seller_id=seller_id,
+                display_name=args.seller_display_name,
+                marketplaces=marketplaces,
+            )
+            reports_by_region: dict[str, SalesTrafficReports] = {}
+            for marketplace in marketplaces:
+                reports = reports_by_region.get(marketplace.region)
+                if reports is None:
+                    reports = SalesTrafficReports(reports_api(marketplace.region))
+                    reports_by_region[marketplace.region] = reports
+                for granularity in granularities:
+                    total += load_sales_traffic(
+                        reports,
+                        store,
+                        marketplace,
+                        start_date,
+                        end_date,
+                        granularity,
+                        overwrite=args.overwrite,
+                    )
     logger.info("Amazon Sales & Traffic backfill completed rows=%s", total)
     return 0
 

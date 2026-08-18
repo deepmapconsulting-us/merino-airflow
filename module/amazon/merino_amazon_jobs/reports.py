@@ -13,6 +13,11 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from merino_amazon_jobs.marketplaces import Marketplace
+from merino_amazon_jobs.quota import (
+    mark_create_report_throttled,
+    retry_backoff_seconds,
+    wait_for_create_report,
+)
 
 REPORT_TYPE = "GET_SALES_AND_TRAFFIC_REPORT"
 FINISHED_STATUSES = {"DONE", "CANCELLED", "FATAL"}
@@ -128,6 +133,11 @@ class SalesTrafficReports:
 
     def _call(self, method: Callable[..., Any], *args: Any) -> Any:
         for attempt in range(self.api_attempts):
+            if self._is_create_report(method):
+                report_type = ""
+                if args:
+                    report_type = str(getattr(args[0], "report_type", "") or "")
+                wait_for_create_report(report_type, sleep=self.sleep)
             try:
                 return method(*args)
             except Exception as exc:
@@ -137,8 +147,16 @@ class SalesTrafficReports:
                     or attempt + 1 == self.api_attempts
                 ):
                     raise
-                self.sleep(2**attempt)
+                delay = retry_backoff_seconds(attempt, status)
+                if status == 429:
+                    mark_create_report_throttled(delay)
+                self.sleep(delay)
         raise AssertionError("unreachable")
+
+    def _is_create_report(self, method: Callable[..., Any]) -> bool:
+        if method is getattr(self.api, "create_report", None):
+            return True
+        return getattr(method, "__name__", "") == "create_report"
 
 
 class SpApiReports:

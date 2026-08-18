@@ -39,6 +39,7 @@ from merino_amazon_jobs.listings import parse_listing_tsv
 from merino_amazon_jobs.marketplaces import MARKETPLACES
 from merino_amazon_jobs.orders import Orders, parse_orders
 from merino_amazon_jobs.postgres import AmazonSalesTrafficStore
+from merino_amazon_jobs.quota import sp_api_job_lock
 from merino_amazon_jobs.reports import SpApiReports
 from merino_amazon_jobs.source_postgres import AmazonSourceStore
 
@@ -46,26 +47,33 @@ INVENTORY_AGE_REPORT_TYPE = "GET_FBA_INVENTORY_PLANNING_DATA"
 
 
 def listings_main(argv: Sequence[str] | None = None) -> int:
-    return _sp_report_main(
-        argv,
-        report_type=LISTING_REPORT_TYPE,
-        parser=parse_listing_tsv,
-        writer="write_listings",
-        description="Load daily Amazon listing snapshots.",
-    )
+    with sp_api_job_lock(owner="listings"):
+        return _sp_report_main(
+            argv,
+            report_type=LISTING_REPORT_TYPE,
+            parser=parse_listing_tsv,
+            writer="write_listings",
+            description="Load daily Amazon listing snapshots.",
+        )
 
 
 def inventory_age_main(argv: Sequence[str] | None = None) -> int:
-    return _sp_report_main(
-        argv,
-        report_type=INVENTORY_AGE_REPORT_TYPE,
-        parser=parse_inventory_age_tsv,
-        writer="write_inventory_age",
-        description="Load observed Amazon FBA inventory age snapshots.",
-    )
+    with sp_api_job_lock(owner="inventory_age"):
+        return _sp_report_main(
+            argv,
+            report_type=INVENTORY_AGE_REPORT_TYPE,
+            parser=parse_inventory_age_tsv,
+            writer="write_inventory_age",
+            description="Load observed Amazon FBA inventory age snapshots.",
+        )
 
 
 def inventory_main(argv: Sequence[str] | None = None) -> int:
+    with sp_api_job_lock(owner="fba_inventory"):
+        return _inventory_main(argv)
+
+
+def _inventory_main(argv: Sequence[str] | None = None) -> int:
     args = _common_parser("Load exact Amazon FBA inventory summaries.").parse_args(argv)
     marketplace, store = _store(args)
     snapshot_date = args.snapshot_date or _yesterday()
@@ -94,6 +102,11 @@ def inventory_main(argv: Sequence[str] | None = None) -> int:
 
 
 def orders_main(argv: Sequence[str] | None = None) -> int:
+    with sp_api_job_lock(owner="orders"):
+        return _orders_main(argv)
+
+
+def _orders_main(argv: Sequence[str] | None = None) -> int:
     parser = _common_parser("Load FBA orders through Orders API 2026-01-01.")
     parser.add_argument("--start-date", type=date.fromisoformat, required=True)
     parser.add_argument("--end-date", type=date.fromisoformat, required=True)
@@ -128,6 +141,11 @@ def orders_main(argv: Sequence[str] | None = None) -> int:
 
 
 def brand_analytics_main(argv: Sequence[str] | None = None) -> int:
+    with sp_api_job_lock(owner="brand_analytics"):
+        return _brand_analytics_main(argv)
+
+
+def _brand_analytics_main(argv: Sequence[str] | None = None) -> int:
     parser = _common_parser("Load optional Brand Analytics catalog performance.")
     parser.add_argument("--start-date", type=date.fromisoformat, required=True)
     parser.add_argument("--end-date", type=date.fromisoformat, required=True)

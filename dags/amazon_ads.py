@@ -59,6 +59,7 @@ def amazon_ads():
         task_id="refresh_ads",
         cmds=["bash", "-lc"],
         arguments=[ADS_COMMAND],
+        sp_api=False,
     )
 
 

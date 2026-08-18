@@ -8,7 +8,7 @@ writes.
 Production image:
 
 ```text
-us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.1
+us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.2
 ```
 
 Build and push from the merino repo root. The tag defaults to
@@ -17,7 +17,7 @@ Build and push from the merino repo root. The tag defaults to
 ```bash
 bash scripts/deployment/docker-build-amazon-jobs.sh
 bash scripts/deployment/docker-build-amazon-jobs.sh --no-push
-bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.1
+bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.2
 ```
 
 After a tag bump, point `AMAZON_IMAGE` in `jobs/airflow/dags/amazon_k8s.py` at
@@ -72,6 +72,15 @@ account key, seller ID, brand key, and brand name.
   configured Ads profile; profiles are never reused across marketplaces.
 
 All DAGs use `max_active_runs=1`, retry failed pods twice, and disable catchup.
+The four SP-API DAGs (`amazon_sales_traffic`, `amazon_inventory`,
+`amazon_orders`, `amazon_brand_analytics`) also share Airflow pool
+`amazon_sp_api` (1 slot) and a Redis job lock so they cannot all call
+`createReport` at once. Amazon Ads does not use that pool.
+
+Pods receive MCP Redis (`MERINO_REDIS_HOST` plus
+`merino-mcp-redis-password`) so the lock and `createReport` pacing
+(1 request / 60s globally, 3 Sales & Traffic reports / 5 minutes) survive
+across pods. On 429 the runtime waits 60s, then doubles.
 
 Manual triggers accept `start`, `end`, and `marketplaces` where the runtime
 supports them. `marketplaces` can be a comma-separated string or a JSON list.
@@ -94,6 +103,7 @@ Inventory accepts `end` or `snapshot_date` for the snapshot date and
 The image exposes:
 
 ```text
+merino-amazon-with-lock
 merino-amazon-jobs
 merino-amazon-listings
 merino-amazon-fba-inventory

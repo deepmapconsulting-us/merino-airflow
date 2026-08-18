@@ -114,9 +114,12 @@ amazon_ads              Daily attribution-window refresh
 Shared pod configuration is in `dags/amazon_k8s.py`. It injects the
 `merino_analytics` Airflow connection, SP-API Variables, seller identity, and
 optional Amazon Ads Variables into
-`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.1`.
+`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.2`.
 Seller identity Variables are required. Amazon Ads profile Variables are
 marketplace-scoped so a profile cannot be reused for another country.
 Credentials remain environment values and are not included in task commands.
-The inventory DAG records current observed snapshots against the
+SP-API pods take Airflow pool `amazon_sp_api` (1 slot), wrap the command with
+`merino-amazon-with-lock`, and pace `createReport` through MCP Redis so the
+four SP-API DAGs cannot exhaust the shared Reports quota at once. Amazon Ads
+skips that lock. The inventory DAG records current observed snapshots against the
 `data_interval_end` calendar date.

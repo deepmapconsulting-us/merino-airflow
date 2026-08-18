@@ -11,10 +11,44 @@ except ImportError:  # pragma: no cover - older provider layout
         KubernetesPodOperator,
     )
 
-AMAZON_IMAGE = "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.1"
+AMAZON_IMAGE = "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.2"
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
 POSTGRES_CONN_ID = "merino_analytics"
+AMAZON_SP_API_POOL = "amazon_sp_api"
+SP_API_LOCK_CMD = "merino-amazon-with-lock"
+REDIS_HOST = "merino-mcp-redis.merino-mcp.svc.cluster.local"
+REDIS_SECRET_NAME = "merino-mcp-redis-password"
+REDIS_SECRET_KEY = "password"
+
+
+def ensure_amazon_sp_api_pool() -> None:
+    """Create the one-slot SP-API pool so overlapping Amazon DAGs queue."""
+    try:
+        from airflow.models.pool import Pool
+    except ImportError:
+        return
+    try:
+        Pool.create_or_update_pool(
+            name=AMAZON_SP_API_POOL,
+            slots=1,
+            description="Serialize Amazon SP-API pods onto shared Reports/Orders quota.",
+            include_deferred=False,
+        )
+    except TypeError:
+        try:
+            Pool.create_or_update_pool(
+                name=AMAZON_SP_API_POOL,
+                slots=1,
+                description="Serialize Amazon SP-API pods onto shared Reports/Orders quota.",
+            )
+        except Exception:
+            return
+    except Exception:
+        return
+
+
+ensure_amazon_sp_api_pool()
 
 
 def amazon_pod_env() -> list[k8s.V1EnvVar]:
@@ -86,6 +120,18 @@ def amazon_pod_env() -> list[k8s.V1EnvVar]:
             name="AMAZON_ADS_PROFILE_ID_AU",
             value="{{ var.value.get('amazon_ads_profile_id_au', '') }}",
         ),
+        k8s.V1EnvVar(name="MERINO_REDIS_HOST", value=REDIS_HOST),
+        k8s.V1EnvVar(name="MERINO_REDIS_PORT", value="6379"),
+        k8s.V1EnvVar(name="MERINO_REDIS_DB", value="0"),
+        k8s.V1EnvVar(
+            name="MERINO_REDIS_PASSWORD",
+            value_from=k8s.V1EnvVarSource(
+                secret_key_ref=k8s.V1SecretKeySelector(
+                    name=REDIS_SECRET_NAME,
+                    key=REDIS_SECRET_KEY,
+                ),
+            ),
+        ),
     ]
 
 
@@ -94,8 +140,20 @@ def amazon_pod(
     task_id: str,
     cmds: list[str] | None = None,
     arguments: list[str] | None = None,
+    sp_api: bool = True,
 ) -> KubernetesPodOperator:
-    """Launch one Amazon runtime pod."""
+    """Launch one Amazon runtime pod.
+
+    SP-API tasks take the `amazon_sp_api` pool (1 slot) and wrap the command
+    with `merino-amazon-with-lock` so overlapping DAGs cannot burn the same
+    Reports/Orders quota. Amazon Ads uses a different API and skips both.
+    """
+    command = list(cmds or ["merino-amazon-jobs"])
+    operator_kwargs: dict[str, object] = {}
+    if sp_api:
+        command = [SP_API_LOCK_CMD, *command]
+        operator_kwargs["pool"] = AMAZON_SP_API_POOL
+        operator_kwargs["pool_slots"] = 1
     return KubernetesPodOperator(
         task_id=task_id,
         name=task_id.replace("_", "-"),
@@ -108,11 +166,12 @@ def amazon_pod(
         on_finish_action="delete_pod",
         is_delete_operator_pod=True,
         startup_timeout_seconds=600,
-        cmds=cmds or ["merino-amazon-jobs"],
+        cmds=command,
         arguments=arguments or [],
         env_vars=amazon_pod_env(),
         container_resources=k8s.V1ResourceRequirements(
             requests={"cpu": "500m", "memory": "1Gi"},
             limits={"cpu": "2000m", "memory": "2Gi"},
         ),
+        **operator_kwargs,
     )

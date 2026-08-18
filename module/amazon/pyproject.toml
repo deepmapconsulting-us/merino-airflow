@@ -4,15 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "merino-amazon-jobs"
-version = "0.1.1"
+version = "0.1.2"
 requires-python = ">=3.10"
 dependencies = [
     "amzn-sp-api>=1.11.0",
     "psycopg[binary]>=3.3.0",
+    "redis>=5.0.0",
     "requests>=2.32.0",
 ]
 
 [project.scripts]
+merino-amazon-with-lock = "merino_amazon_jobs.quota:locked_cli"
 merino-amazon-jobs = "merino_amazon_jobs.cli:main"
 merino-amazon-listings = "merino_amazon_jobs.source_cli:listings_main"
 merino-amazon-fba-inventory = "merino_amazon_jobs.source_cli:inventory_main"
