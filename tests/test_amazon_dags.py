@@ -228,7 +228,9 @@ def load_k8s_module():
             self.value_from = value_from
 
     class FakeEnvVarSource:
-        def __init__(self, secret_key_ref: object | None = None, **_kwargs: object) -> None:
+        def __init__(
+            self, secret_key_ref: object | None = None, **_kwargs: object
+        ) -> None:
             self.secret_key_ref = secret_key_ref
 
     class FakeSecretKeySelector:
@@ -276,7 +278,7 @@ class AmazonKubernetesTest(unittest.TestCase):
 
         self.assertEqual(
             pod["image"],
-            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.3",
+            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.4",
         )
         self.assertEqual(pod["namespace"], "airflow")
         self.assertEqual(pod["service_account_name"], "merino-airflow-task-runner")
@@ -322,8 +324,14 @@ class AmazonKubernetesTest(unittest.TestCase):
             env["SP_API_CLIENT_SECRET"], "{{ var.value.sp_api_client_secret }}"
         )
         self.assertEqual(
-            env["SP_API_REFRESH_TOKEN"], "{{ var.value.sp_api_refresh_token }}"
+            env["SP_API_NA_REFRESH_TOKEN"],
+            "{{ var.value.get('sp_api_na_refresh_token', var.value.get('sp_api_refresh_token', '')) }}",
         )
+        self.assertEqual(
+            env["SP_API_OC_REFRESH_TOKEN"],
+            "{{ var.value.get('sp_api_oc_refresh_token', '') }}",
+        )
+        self.assertNotIn("SP_API_REFRESH_TOKEN", env)
         self.assertEqual(
             env["AMAZON_ACCOUNT_KEY"],
             "{{ var.value.amazon_account_key }}",

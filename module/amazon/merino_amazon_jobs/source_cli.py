@@ -85,9 +85,9 @@ def _inventory_main(argv: Sequence[str] | None = None) -> int:
         period_end=snapshot_date,
     )
     try:
-        payload = FbaInventorySummaries(fba_inventory_api(marketplace.region)).all(
-            marketplace.marketplace_id
-        )
+        payload = FbaInventorySummaries(
+            fba_inventory_api(marketplace.region, marketplace.credential_group)
+        ).all(marketplace.marketplace_id)
         rows = parse_inventory_summaries(
             payload,
             marketplace=marketplace.code,
@@ -123,7 +123,9 @@ def _orders_main(argv: Sequence[str] | None = None) -> int:
         period_end=args.end_date,
     )
     try:
-        payload = Orders(search_orders_api(marketplace.region)).all(
+        payload = Orders(
+            search_orders_api(marketplace.region, marketplace.credential_group)
+        ).all(
             marketplace_id=marketplace.marketplace_id,
             created_after=datetime.combine(args.start_date, time.min, zone),
             created_before=datetime.combine(args.end_date, time.max, zone),
@@ -162,7 +164,9 @@ def _brand_analytics_main(argv: Sequence[str] | None = None) -> int:
     )
     try:
         try:
-            document = SpApiReports(reports_api(marketplace.region)).download(
+            document = SpApiReports(
+                reports_api(marketplace.region, marketplace.credential_group)
+            ).download(
                 report_type=BRAND_REPORT_TYPE,
                 marketplace_id=marketplace.marketplace_id,
                 start_time=datetime.combine(
@@ -284,7 +288,9 @@ def _sp_report_main(
         period_end=snapshot_date,
     )
     try:
-        document = SpApiReports(reports_api(marketplace.region)).download(
+        document = SpApiReports(
+            reports_api(marketplace.region, marketplace.credential_group)
+        ).download(
             report_type=report_type,
             marketplace_id=marketplace.marketplace_id,
         )

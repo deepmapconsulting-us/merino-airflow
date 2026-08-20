@@ -8,7 +8,7 @@ writes.
 Production image:
 
 ```text
-us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.3
+us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.4
 ```
 
 Build and push from the merino repo root. The tag defaults to
@@ -17,7 +17,7 @@ Build and push from the merino repo root. The tag defaults to
 ```bash
 bash scripts/deployment/docker-build-amazon-jobs.sh
 bash scripts/deployment/docker-build-amazon-jobs.sh --no-push
-bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.3
+bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.4
 ```
 
 After a tag bump, point `AMAZON_IMAGE` in `jobs/airflow/dags/amazon_k8s.py` at
@@ -27,8 +27,10 @@ the same version.
 
 The Amazon pods use Airflow connection `merino_analytics` and these Variables:
 
-- Required SP-API credentials: `sp_api_client_id`, `sp_api_client_secret`,
-  `sp_api_refresh_token`
+- Required shared SP-API credentials: `sp_api_client_id` and
+  `sp_api_client_secret`
+- Required regional SP-API refresh tokens: `sp_api_na_refresh_token` for US,
+  CA, MX, and BR; `sp_api_oc_refresh_token` for AU
 - Required seller identity: `amazon_account_key`, `amazon_seller_id`, and
   `amazon_seller_display_name`
 - Required brand identity: `amazon_brand_key` and `amazon_brand_name`
@@ -46,11 +48,20 @@ Credentials are passed as pod environment variables. DAG commands do not echo
 them or enable shell tracing.
 
 Local Sales & Traffic backfill (`init_batch_job/scripts/load_amazon_sales_traffic_sample.sh`)
-loads SP-API credentials from GSM (`airflow-variables-sp_api_*`), falling back to
+loads the regional tokens from GSM
+(`airflow-variables-sp_api_na_refresh_token` and
+`airflow-variables-sp_api_oc_refresh_token`), falling back to
 `terraform/.secrets/amazon_giagio.env`, and builds `AMAZON_DATABASE_URL` via the
 Metabase Postgres port-forward. Giagio brand/account defaults are applied
 automatically. `AMAZON_SELLER_ID` is loaded from GSM
 (`airflow-variables-sp_api_seller_id`, with `amazon_seller_id` as alias).
+
+Until the NA-specific secret is provisioned, Airflow and the local loader accept
+`airflow-variables-sp_api_refresh_token` as the NA token only. AU never falls
+back to that token.
+
+`OC` is the credential group for Australia. Amazon's SDK and database still use
+the official `FE` endpoint region for AU.
 
 Each seller account belongs to one brand. Giagio uses `giagio` / `Giagio`.
 A second brand with separate Seller Central credentials must use a distinct

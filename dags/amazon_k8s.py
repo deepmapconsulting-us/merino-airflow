@@ -11,7 +11,7 @@ except ImportError:  # pragma: no cover - older provider layout
         KubernetesPodOperator,
     )
 
-AMAZON_IMAGE = "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.3"
+AMAZON_IMAGE = "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.4"
 AIRFLOW_NAMESPACE = "airflow"
 TASK_RUNNER_KSA = "merino-airflow-task-runner"
 POSTGRES_CONN_ID = "merino_analytics"
@@ -65,8 +65,12 @@ def amazon_pod_env() -> list[k8s.V1EnvVar]:
             value="{{ var.value.sp_api_client_secret }}",
         ),
         k8s.V1EnvVar(
-            name="SP_API_REFRESH_TOKEN",
-            value="{{ var.value.sp_api_refresh_token }}",
+            name="SP_API_NA_REFRESH_TOKEN",
+            value="{{ var.value.get('sp_api_na_refresh_token', var.value.get('sp_api_refresh_token', '')) }}",
+        ),
+        k8s.V1EnvVar(
+            name="SP_API_OC_REFRESH_TOKEN",
+            value="{{ var.value.get('sp_api_oc_refresh_token', '') }}",
         ),
         k8s.V1EnvVar(
             name="AMAZON_ACCOUNT_KEY",

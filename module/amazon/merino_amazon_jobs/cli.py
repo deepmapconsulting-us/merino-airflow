@@ -129,12 +129,18 @@ def main(argv: Sequence[str] | None = None) -> int:
                 display_name=args.seller_display_name,
                 marketplaces=marketplaces,
             )
-            reports_by_region: dict[str, SalesTrafficReports] = {}
+            reports_by_region: dict[tuple[str, str], SalesTrafficReports] = {}
             for marketplace in marketplaces:
-                reports = reports_by_region.get(marketplace.region)
+                client_key = (marketplace.region, marketplace.credential_group)
+                reports = reports_by_region.get(client_key)
                 if reports is None:
-                    reports = SalesTrafficReports(reports_api(marketplace.region))
-                    reports_by_region[marketplace.region] = reports
+                    reports = SalesTrafficReports(
+                        reports_api(
+                            marketplace.region,
+                            marketplace.credential_group,
+                        )
+                    )
+                    reports_by_region[client_key] = reports
                 for granularity in granularities:
                     total += load_sales_traffic(
                         reports,
