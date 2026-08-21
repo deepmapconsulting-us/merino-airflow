@@ -102,17 +102,32 @@ def _datetime(value: str | None) -> datetime | None:
         return None
     timestamp, separator, abbreviation = value.rpartition(" ")
     utc_offsets = {
-        "PST": -8,
-        "PDT": -7,
-        "MST": -7,
-        "MDT": -6,
-        "CST": -6,
-        "CDT": -5,
-        "EST": -5,
-        "EDT": -4,
+        "HST": timedelta(hours=-10),
+        "AKST": timedelta(hours=-9),
+        "AKDT": timedelta(hours=-8),
+        "PST": timedelta(hours=-8),
+        "PDT": timedelta(hours=-7),
+        "MST": timedelta(hours=-7),
+        "MDT": timedelta(hours=-6),
+        "CST": timedelta(hours=-6),
+        "CDT": timedelta(hours=-5),
+        "EST": timedelta(hours=-5),
+        "EDT": timedelta(hours=-4),
+        "AST": timedelta(hours=-4),
+        "ADT": timedelta(hours=-3),
+        "NST": timedelta(hours=-3, minutes=-30),
+        "NDT": timedelta(hours=-2, minutes=-30),
+        "BRT": timedelta(hours=-3),
+        "BRST": timedelta(hours=-2),
+        "AWST": timedelta(hours=8),
+        "ACST": timedelta(hours=9, minutes=30),
+        "ACDT": timedelta(hours=10, minutes=30),
+        "AEST": timedelta(hours=10),
+        "AEDT": timedelta(hours=11),
     }
     if separator and abbreviation in utc_offsets:
-        return datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S").replace(
-            tzinfo=timezone(timedelta(hours=utc_offsets[abbreviation]))
+        date_format = "%d/%m/%Y %H:%M:%S" if "/" in timestamp else "%Y-%m-%d %H:%M:%S"
+        return datetime.strptime(timestamp, date_format).replace(
+            tzinfo=timezone(utc_offsets[abbreviation])
         )
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
