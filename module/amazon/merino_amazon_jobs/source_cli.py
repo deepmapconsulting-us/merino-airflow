@@ -65,6 +65,7 @@ def inventory_age_main(argv: Sequence[str] | None = None) -> int:
             parser=parse_inventory_age_tsv,
             writer="write_inventory_age",
             description="Load observed Amazon FBA inventory age snapshots.",
+            cancelled_as_empty=True,
         )
 
 
@@ -276,6 +277,7 @@ def _sp_report_main(
     parser: Callable[..., list[Any]],
     writer: str,
     description: str,
+    cancelled_as_empty: bool = False,
 ) -> int:
     args = _common_parser(description).parse_args(argv)
     marketplace, store = _store(args)
@@ -293,6 +295,7 @@ def _sp_report_main(
         ).download(
             report_type=report_type,
             marketplace_id=marketplace.marketplace_id,
+            cancelled_as_empty=cancelled_as_empty,
         )
         payload = document.content.decode("utf-8-sig")
         rows = parser(

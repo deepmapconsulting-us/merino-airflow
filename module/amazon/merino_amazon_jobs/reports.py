@@ -34,7 +34,7 @@ class DownloadedReport:
 class DownloadedDocument:
     content: bytes
     report_id: str
-    report_document_id: str
+    report_document_id: str | None
 
 
 class ReportFailed(RuntimeError):
@@ -172,6 +172,7 @@ class SpApiReports:
         end_time: datetime | None = None,
         report_options: dict[str, str] | None = None,
         on_status: Callable[[str, str | None, str], None] | None = None,
+        cancelled_as_empty: bool = False,
     ) -> DownloadedDocument:
         from spapi.models.reports_v2021_06_30 import CreateReportSpecification
 
@@ -186,7 +187,16 @@ class SpApiReports:
         report_id = created.report_id
         if on_status:
             on_status(report_id, None, "requested")
-        report = self.lifecycle._wait(report_id, on_status=on_status)
+        try:
+            report = self.lifecycle._wait(report_id, on_status=on_status)
+        except ReportFailed as error:
+            if error.status != "CANCELLED" or not cancelled_as_empty:
+                raise
+            return DownloadedDocument(
+                content=b"",
+                report_id=report_id,
+                report_document_id=None,
+            )
         document = self.lifecycle._call(
             self.lifecycle.api.get_report_document,
             report.report_document_id,
