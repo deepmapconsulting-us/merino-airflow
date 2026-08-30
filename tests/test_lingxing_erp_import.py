@@ -25,6 +25,7 @@ from merino_erp_jobs.lingxing import (  # noqa: E402  # type: ignore[import-not-
     post_form,
 )
 from merino_erp_jobs.logistics_import import (  # noqa: E402  # type: ignore[import-not-found]
+    products_missing_model,
     update_product_model,
     upsert_product,
     warehouse_code,
@@ -300,6 +301,7 @@ class LingXingDagTest(unittest.TestCase):
         self.assertIn("max_active_runs=1", source)
         self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
         self.assertEqual(module.DEFAULT_PRODUCT_ENDPOINT, "/erp/sc/routing/data/local_inventory/productList")
+        self.assertEqual(module.PRODUCT_DETAIL_ENDPOINT, "/erp/sc/routing/data/local_inventory/productInfo")
         self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站,SH-Blue")
         self.assertEqual(module.DEFAULT_FBA_STORE_IDS.count(","), 21)
 
@@ -368,17 +370,6 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(enriched[1].get("spu"), None)
         self.assertNotIn("spu", stock_rows[0])
 
-    def test_adds_model_from_product_list_rows(self) -> None:
-        module = load_dag_module()
-        stock_row = {"product_id": 243225, "sku": "10004"}
-
-        module.add_missing_product_fields(
-            stock_row,
-            {"product_id": 243225, "sku": "10004", "model": "ZS05"},
-        )
-
-        self.assertEqual(stock_row["model"], "ZS05")
-
     def test_scheduled_import_fetches_product_list(self) -> None:
         module = load_dag_module()
         calls: list[tuple[str, dict[str, Any], int]] = []
@@ -392,13 +383,75 @@ class LingXingDagTest(unittest.TestCase):
                 page_size: int,
             ) -> list[dict[str, Any]]:
                 calls.append((endpoint, params, page_size))
-                return [{"id": 243225, "sku": "10004", "model": "ZS05"}]
+                return [{"id": 243225, "sku": "10004"}]
 
         rows, source = module.product_rows(FakeClient(), {}, page_size=500)
 
-        self.assertEqual(rows[0]["model"], "ZS05")
+        self.assertEqual(rows, [{"id": 243225, "sku": "10004"}])
         self.assertEqual(calls, [(module.DEFAULT_PRODUCT_ENDPOINT, {}, 500)])
         self.assertEqual(source, f"lingxing-api:{module.DEFAULT_PRODUCT_ENDPOINT}")
+
+    def test_fetches_model_from_product_details(self) -> None:
+        module = load_dag_module()
+        calls: list[tuple[str, dict[str, Any]]] = []
+        sleeps: list[float] = []
+
+        class FakeClient:
+            def post(self, endpoint: str, body: dict[str, Any]) -> dict[str, Any]:
+                calls.append((endpoint, body))
+                return {
+                    "code": 0,
+                    "data": {
+                        "id": body["id"],
+                        "sku": "10004",
+                        "model": "ZS05",
+                    },
+                }
+
+            def sleep(self, seconds: float) -> None:
+                sleeps.append(seconds)
+
+        rows = module.product_detail_rows(
+            FakeClient(),
+            [{"id": 243225, "sku": "10004"}],
+        )
+
+        self.assertEqual(rows, [{"id": 243225, "sku": "10004", "model": "ZS05"}])
+        self.assertEqual(calls, [(module.PRODUCT_DETAIL_ENDPOINT, {"id": 243225})])
+        self.assertEqual(sleeps, [module.DEFAULT_PAGE_DELAY_SECONDS])
+
+    def test_selects_only_database_products_missing_model(self) -> None:
+        executed: list[tuple[str, tuple[Any, ...]]] = []
+
+        class Result:
+            def fetchall(self) -> list[dict[str, str]]:
+                return [{"sku": "10004"}]
+
+        class FakeConnection:
+            def __enter__(self) -> "FakeConnection":
+                return self
+
+            def __exit__(self, *_args: Any) -> None:
+                return None
+
+            def execute(self, sql: str, params: tuple[Any, ...]) -> Result:
+                executed.append((sql, params))
+                return Result()
+
+        with patch(
+            "merino_erp_jobs.logistics_import.psycopg.connect",
+            return_value=FakeConnection(),
+        ):
+            rows = products_missing_model(
+                "postgresql://example",
+                [
+                    {"id": 243225, "sku": "10004"},
+                    {"id": 243226, "sku": "10005"},
+                ],
+            )
+
+        self.assertEqual(rows, [{"id": 243225, "sku": "10004"}])
+        self.assertIn("model is null", executed[0][0])
 
     def test_upsert_product_writes_model(self) -> None:
         calls: list[tuple[str, tuple[Any, ...]]] = []

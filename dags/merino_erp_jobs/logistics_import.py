@@ -50,6 +50,31 @@ def use_erp_logistics_schema(conn: Connection[dict[str, Any]]) -> None:
     conn.execute(f"set local search_path to {ERP_LOGISTICS_SCHEMA}, public")
 
 
+def products_missing_model(
+    database_url: str,
+    rows: Iterable[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = list(rows)
+    skus = [sku for row in rows if (sku := text(row.get("sku")))]
+    if not skus:
+        return []
+
+    with psycopg.connect(database_url, row_factory=dict_row) as conn:
+        missing_skus = {
+            row["sku"]
+            for row in conn.execute(
+                """
+                select sku
+                from erp_logistics.product
+                where sku = any(%s)
+                  and (model is null or btrim(model) = '')
+                """,
+                (skus,),
+            ).fetchall()
+        }
+    return [row for row in rows if text(row.get("sku")) in missing_skus]
+
+
 def import_product_rows(
     conn: Connection[dict[str, Any]],
     rows: Iterable[dict[str, Any]],
