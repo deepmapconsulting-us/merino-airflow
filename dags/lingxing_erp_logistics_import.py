@@ -58,6 +58,7 @@ ERP_LOGISTICS_DB = "merino-analytics"
 TOKEN_CACHE_VARIABLE = "erp_lingxing_oauth_cache"
 STOCK_ENDPOINT_VARIABLE = "erp_lingxing_stock_endpoint"
 STOCK_LIST_ENDPOINT_VARIABLE = "erp_lingxing_stock_list_endpoint"
+PRODUCT_ENDPOINT_VARIABLE = "erp_lingxing_product_endpoint"
 STORE_IDS_VARIABLE = "erp_lingxing_stock_list_store_ids"
 LISTING_ENDPOINT_VARIABLE = "erp_lingxing_listing_endpoint"
 PAGE_SIZE_VARIABLE = "erp_lingxing_page_size"
@@ -69,6 +70,7 @@ ORDER_PROFIT_STORE_IDS_VARIABLE = "erp_lingxing_order_profit_store_ids"
 
 DEFAULT_STOCK_ENDPOINT = "/erp/sc/routing/data/local_inventory/inventoryDetails"
 DEFAULT_STOCK_LIST_ENDPOINT = "/erp/sc/routing/fba/fbaStock/fbaList"
+DEFAULT_PRODUCT_ENDPOINT = "/erp/sc/routing/data/local_inventory/productList"
 SELLER_LIST_ENDPOINT = "/erp/sc/data/seller/lists"
 DEFAULT_WAREHOUSE_ENDPOINT = "/erp/sc/data/local_inventory/warehouse"
 DEFAULT_WAREHOUSE_NAMES = DEFAULT_INVENTORY_WAREHOUSE_NAMES
@@ -304,6 +306,16 @@ def stock_spu_rows(
     )
 
 
+def product_rows(
+    client: LingXingOpenApi,
+    conf: dict[str, Any],
+    *,
+    page_size: int,
+) -> tuple[list[dict[str, Any]], str]:
+    endpoint = config_value(conf, "product_endpoint", PRODUCT_ENDPOINT_VARIABLE, DEFAULT_PRODUCT_ENDPOINT)
+    return client.fetch_all(endpoint, {}, page_size=page_size), f"lingxing-api:{endpoint}"
+
+
 def stock_list_page_size(page_size: int) -> int:
     for allowed_size in reversed(STOCK_LIST_PAGE_SIZES):
         if page_size >= allowed_size:
@@ -342,7 +354,15 @@ def stock_rows_with_spu(
 
 
 def add_missing_product_fields(stock_row: dict[str, Any], spu_row: dict[str, Any]) -> None:
-    for field in ("seller_sku", "spu", "spu_name", "product_name", "product_brand_text", "category_text"):
+    for field in (
+        "seller_sku",
+        "spu",
+        "spu_name",
+        "product_name",
+        "product_brand_text",
+        "category_text",
+        "model",
+    ):
         if not lingxing_text(stock_row.get(field)) and lingxing_text(spu_row.get(field)):
             stock_row[field] = spu_row[field]
 
@@ -358,6 +378,8 @@ def fetch_lingxing_rows(
     list[dict[str, Any]],
     list[dict[str, Any]],
     list[dict[str, Any]],
+    list[dict[str, Any]],
+    str | None,
     str | None,
     str | None,
     str | None,
@@ -365,6 +387,7 @@ def fetch_lingxing_rows(
 ]:
     client = lingxing_client(conf)
     size = page_size(conf)
+    products, product_source = product_rows(client, conf, page_size=size)
     warehouse_endpoint = config_value(conf, "warehouse_endpoint", WAREHOUSE_ENDPOINT_VARIABLE, DEFAULT_WAREHOUSE_ENDPOINT)
     warehouse_rows = all_warehouses(client, conf, page_size=size)
     stock_endpoint = config_value(conf, "stock_endpoint", STOCK_ENDPOINT_VARIABLE, DEFAULT_STOCK_ENDPOINT)
@@ -392,10 +415,12 @@ def fetch_lingxing_rows(
         )
 
     return (
+        products,
         warehouse_rows,
         stock_rows,
         fba_stock_rows,
         listing_rows,
+        product_source,
         f"lingxing-api:{warehouse_endpoint}",
         f"lingxing-api:{stock_endpoint}",
         f"lingxing-api:{stock_list_endpoint}" if stock_list_endpoint else None,
@@ -421,9 +446,39 @@ def lingxing_erp_logistics_import():
     @task
     def import_lingxing_logistics() -> dict[str, int]:
         conf = current_dag_conf()
-        warehouse_rows, stock_rows, fba_stock_rows, listing_rows, warehouse_source, stock_source, fba_stock_source, listing_source = fetch_lingxing_rows(conf)
+        database_url = postgres_database_url(POSTGRES_CONN_ID, ERP_LOGISTICS_DB)
+        if str(conf.get("products_only", "")).lower() in {"1", "true", "yes"}:
+            products, product_source = product_rows(lingxing_client(conf), conf, page_size=page_size(conf))
+            return import_lingxing_rows(
+                database_url=database_url,
+                product_rows=products,
+                product_source=product_source,
+                warehouse_rows=[],
+                stock_rows=[],
+                fba_stock_rows=[],
+                listing_rows=[],
+                warehouse_source=None,
+                stock_source=None,
+                fba_stock_source=None,
+                listing_source=None,
+            )
+
+        (
+            products,
+            warehouse_rows,
+            stock_rows,
+            fba_stock_rows,
+            listing_rows,
+            product_source,
+            warehouse_source,
+            stock_source,
+            fba_stock_source,
+            listing_source,
+        ) = fetch_lingxing_rows(conf)
         return import_lingxing_rows(
-            database_url=postgres_database_url(POSTGRES_CONN_ID, ERP_LOGISTICS_DB),
+            database_url=database_url,
+            product_rows=products,
+            product_source=product_source,
             warehouse_rows=warehouse_rows,
             stock_rows=stock_rows,
             fba_stock_rows=fba_stock_rows,

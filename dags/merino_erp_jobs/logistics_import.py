@@ -22,6 +22,8 @@ def import_lingxing_rows(
     listing_rows: Iterable[dict[str, Any]],
     stock_source: str | None,
     listing_source: str | None,
+    product_rows: Iterable[dict[str, Any]] | None = None,
+    product_source: str | None = None,
     warehouse_rows: Iterable[dict[str, Any]] | None = None,
     warehouse_source: str | None = None,
     fba_stock_rows: Iterable[dict[str, Any]] | None = None,
@@ -30,11 +32,13 @@ def import_lingxing_rows(
     with psycopg.connect(database_url, row_factory=dict_row) as conn:
         with conn.transaction():
             use_erp_logistics_schema(conn)
+            product_count = import_product_rows(conn, product_rows or [], product_source)
             warehouse_count = import_warehouse_rows(conn, warehouse_rows or [], warehouse_source)
             stock_count = import_stock_rows(conn, stock_rows, stock_source)
             fba_stock_count = import_fba_stock_rows(conn, fba_stock_rows or [], fba_stock_source)
             listing_count = import_listing_rows(conn, listing_rows, listing_source)
     return {
+        "product_rows": product_count,
         "warehouse_rows": warehouse_count,
         "stock_rows": stock_count,
         "fba_stock_rows": fba_stock_count,
@@ -44,6 +48,29 @@ def import_lingxing_rows(
 
 def use_erp_logistics_schema(conn: Connection[dict[str, Any]]) -> None:
     conn.execute(f"set local search_path to {ERP_LOGISTICS_SCHEMA}, public")
+
+
+def import_product_rows(
+    conn: Connection[dict[str, Any]],
+    rows: Iterable[dict[str, Any]],
+    source_file: str | None,
+) -> int:
+    rows = list(rows)
+    if not rows:
+        return 0
+
+    import_run_id = create_import_run(
+        conn,
+        source_object="product",
+        source_file=source_file,
+        row_count=len(rows),
+    )
+    imported = 0
+    for row in rows:
+        if update_product_model(conn, row) is not None:
+            imported += 1
+    finish_import_run(conn, import_run_id, imported)
+    return imported
 
 
 def import_warehouse_rows(
@@ -699,6 +726,7 @@ def upsert_product_from_stock(
         product_name=text(row.get("product_name")),
         brand=text(row.get("product_brand_text")),
         category=text(row.get("category_text")),
+        model=text(row.get("model")),
         api_product_id=integer(row.get("product_id")),
     )
 
@@ -719,8 +747,31 @@ def upsert_product_from_listing(
         product_name=text(row.get("local_name")) or text(row.get("item_name")),
         brand=text(row.get("product_brand_text")),
         category=text(row.get("category_text")),
+        model=text(row.get("model")),
         api_product_id=integer(row.get("product_relation_id")) or integer(row.get("pid")),
     )
+
+
+def update_product_model(
+    conn: Connection[dict[str, Any]],
+    row: dict[str, Any],
+) -> int | None:
+    sku = text(row.get("sku"))
+    model = text(row.get("model"))
+    if not sku or not model:
+        return None
+    existing = conn.execute(
+        """
+        update product
+        set model = %s,
+            updated_at = now()
+        where sku = %s
+          and model is distinct from %s
+        returning product_id
+        """,
+        (model, sku, model),
+    ).fetchone()
+    return int(existing["product_id"]) if existing else None
 
 
 def upsert_product(
@@ -733,12 +784,26 @@ def upsert_product(
     product_name: str | None,
     brand: str | None,
     category: str | None,
+    model: str | None,
     api_product_id: int | None,
 ) -> int:
     if not api_product_id:
         existing = conn.execute(
-            "select product_id from product where sku = %s",
-            (sku,),
+            """
+            update product
+            set seller_sku = coalesce(%s, seller_sku),
+                spu = coalesce(%s, spu),
+                spu_name = coalesce(%s, spu_name),
+                product_name = coalesce(%s, product_name),
+                brand = coalesce(%s, brand),
+                category = coalesce(%s, category),
+                model = coalesce(%s, model),
+                active = true,
+                updated_at = now()
+            where sku = %s
+            returning product_id
+            """,
+            (seller_sku, spu, spu_name, product_name, brand, category, model, sku),
         ).fetchone()
         if existing:
             return int(existing["product_id"])
@@ -764,9 +829,9 @@ def upsert_product(
         """
         insert into product (
             product_id, sku, seller_sku, spu, spu_name, product_name,
-            brand, category, source_system, updated_at
+            brand, category, model, source_system, updated_at
         )
-        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+        values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
         on conflict (product_id)
         do update set
             sku = excluded.sku,
@@ -776,6 +841,7 @@ def upsert_product(
             product_name = coalesce(excluded.product_name, product.product_name),
             brand = coalesce(excluded.brand, product.brand),
             category = coalesce(excluded.category, product.category),
+            model = coalesce(excluded.model, product.model),
             source_system = excluded.source_system,
             active = true,
             updated_at = now()
@@ -790,6 +856,7 @@ def upsert_product(
             product_name,
             brand,
             category,
+            model,
             SOURCE_SYSTEM,
         ),
     ).fetchone()

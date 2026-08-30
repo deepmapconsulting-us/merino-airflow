@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 import types
 import unittest
@@ -23,7 +24,11 @@ from merino_erp_jobs.lingxing import (  # noqa: E402  # type: ignore[import-not-
     parse_store_ids,
     post_form,
 )
-from merino_erp_jobs.logistics_import import warehouse_code  # noqa: E402  # type: ignore[import-not-found]
+from merino_erp_jobs.logistics_import import (  # noqa: E402  # type: ignore[import-not-found]
+    update_product_model,
+    upsert_product,
+    warehouse_code,
+)
 
 
 class FakeVariableStore:
@@ -294,6 +299,7 @@ class LingXingDagTest(unittest.TestCase):
         self.assertIn('schedule="30 */4 * * *"', source)
         self.assertIn("max_active_runs=1", source)
         self.assertEqual(module.DEFAULT_STOCK_ENDPOINT, "/erp/sc/routing/data/local_inventory/inventoryDetails")
+        self.assertEqual(module.DEFAULT_PRODUCT_ENDPOINT, "/erp/sc/routing/data/local_inventory/productList")
         self.assertEqual(module.DEFAULT_WAREHOUSE_NAMES, "梦迪仓库,独立站,SH-Blue")
         self.assertEqual(module.DEFAULT_FBA_STORE_IDS.count(","), 21)
 
@@ -361,6 +367,106 @@ class LingXingDagTest(unittest.TestCase):
         self.assertEqual(enriched[0]["seller_sku"], "MT10004")
         self.assertEqual(enriched[1].get("spu"), None)
         self.assertNotIn("spu", stock_rows[0])
+
+    def test_adds_model_from_product_list_rows(self) -> None:
+        module = load_dag_module()
+        stock_row = {"product_id": 243225, "sku": "10004"}
+
+        module.add_missing_product_fields(
+            stock_row,
+            {"product_id": 243225, "sku": "10004", "model": "ZS05"},
+        )
+
+        self.assertEqual(stock_row["model"], "ZS05")
+
+    def test_scheduled_import_fetches_product_list(self) -> None:
+        module = load_dag_module()
+        calls: list[tuple[str, dict[str, Any], int]] = []
+
+        class FakeClient:
+            def fetch_all(
+                self,
+                endpoint: str,
+                params: dict[str, Any],
+                *,
+                page_size: int,
+            ) -> list[dict[str, Any]]:
+                calls.append((endpoint, params, page_size))
+                return [{"id": 243225, "sku": "10004", "model": "ZS05"}]
+
+        rows, source = module.product_rows(FakeClient(), {}, page_size=500)
+
+        self.assertEqual(rows[0]["model"], "ZS05")
+        self.assertEqual(calls, [(module.DEFAULT_PRODUCT_ENDPOINT, {}, 500)])
+        self.assertEqual(source, f"lingxing-api:{module.DEFAULT_PRODUCT_ENDPOINT}")
+
+    def test_upsert_product_writes_model(self) -> None:
+        calls: list[tuple[str, tuple[Any, ...]]] = []
+
+        class Result:
+            def fetchone(self) -> dict[str, int]:
+                return {"product_id": 243225}
+
+        class FakeConnection:
+            def execute(self, sql: str, params: tuple[Any, ...]) -> Result:
+                calls.append((sql, params))
+                return Result()
+
+        product_id = upsert_product(
+            FakeConnection(),  # type: ignore[arg-type]
+            sku="10004",
+            seller_sku=None,
+            spu="MT01",
+            spu_name=None,
+            product_name="Merino shirt",
+            brand="Merino Protect",
+            category="Shirts",
+            model="ZS05",
+            api_product_id=243225,
+        )
+
+        self.assertEqual(product_id, 243225)
+        insert_sql, params = calls[-1]
+        self.assertIn("model", insert_sql)
+        self.assertIn("model = coalesce(excluded.model, product.model)", insert_sql)
+        self.assertIn("ZS05", params)
+
+    def test_product_catalog_updates_existing_sku_when_api_omits_id(self) -> None:
+        calls: list[tuple[str, tuple[Any, ...]]] = []
+
+        class Result:
+            def fetchone(self) -> dict[str, int]:
+                return {"product_id": 243225}
+
+        class FakeConnection:
+            def execute(self, sql: str, params: tuple[Any, ...]) -> Result:
+                calls.append((sql, params))
+                return Result()
+
+        product_id = update_product_model(
+            FakeConnection(),  # type: ignore[arg-type]
+            {"sku": "10004", "model": "ZS05"},
+        )
+
+        self.assertEqual(product_id, 243225)
+        update_sql, params = calls[0]
+        self.assertIn("update product", update_sql)
+        self.assertIn("model = %s", update_sql)
+        self.assertEqual(params, ("ZS05", "10004", "ZS05"))
+
+    def test_model_backfill_script_triggers_products_only_run(self) -> None:
+        script = REPO / "airflow" / "backfill_lingxing_product_models.sh"
+        result = subprocess.run(
+            ["bash", str(script), "--dry-run"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("lingxing_erp_logistics_import", result.stdout)
+        self.assertIn('"products_only":true', result.stdout)
+        self.assertIn('"skip_order_profit":true', result.stdout)
 
     def test_lingxing_dags_allow_only_one_active_run(self) -> None:
         for dag_file in (
