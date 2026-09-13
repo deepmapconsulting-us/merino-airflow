@@ -57,7 +57,7 @@ WHERE account.account_key = %s
         AND latest.marketplace_id = listing.marketplace_id
   )
   AND listing.asin IS NOT NULL
-  AND (%s IS NULL OR listing.asin = %s)
+  AND (%s::text IS NULL OR listing.asin = %s)
 ORDER BY listing.asin
 """
 

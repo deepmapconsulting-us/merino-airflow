@@ -410,4 +410,5 @@ def test_feedback_store_reads_distinct_asins_from_latest_listing_snapshot() -> N
     assert asins == ["B000000001", "B000000002"]
     sql, params = connection.cursor_instance.executions[-1]
     assert "MAX(latest.snapshot_date)" in sql
+    assert "%s::text IS NULL" in sql
     assert params == ("giagio", "ATVPDKIKX0DER", None, None)

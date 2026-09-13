@@ -292,7 +292,7 @@ class AmazonKubernetesTest(unittest.TestCase):
 
         self.assertEqual(
             pod["image"],
-            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.9",
+            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.10",
         )
         self.assertEqual(pod["namespace"], "airflow")
         self.assertEqual(pod["service_account_name"], "merino-airflow-task-runner")
