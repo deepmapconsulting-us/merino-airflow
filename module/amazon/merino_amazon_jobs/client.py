@@ -83,6 +83,30 @@ def sellers_api(
     return SellersApi(_api_client(region, credential_group, environ))
 
 
+def catalog_items_api(
+    region: str,
+    credential_group: str,
+    environ: Mapping[str, str] | None = None,
+) -> Any:
+    from spapi.api.catalogitems_v2022_04_01.catalog_api import (  # type: ignore[import-not-found]
+        CatalogApi,
+    )
+
+    return CatalogApi(_api_client(region, credential_group, environ))
+
+
+def customer_feedback_api(
+    region: str,
+    credential_group: str,
+    environ: Mapping[str, str] | None = None,
+) -> Any:
+    from spapi.api.customer_feedback_2024_06_01.customer_feedback_api import (  # type: ignore[import-not-found]
+        CustomerFeedbackApi,
+    )
+
+    return CustomerFeedbackApi(_api_client(region, credential_group, environ))
+
+
 def _refresh_token(environ: Mapping[str, str], credential_group: str) -> str:
     try:
         uppercase, lowercase = REFRESH_TOKEN_ENV[credential_group]

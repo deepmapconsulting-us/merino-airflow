@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "merino-amazon-jobs"
-version = "0.1.8"
+version = "0.1.9"
 requires-python = ">=3.10"
 dependencies = [
     "amzn-sp-api>=1.11.0",
@@ -21,6 +21,7 @@ merino-amazon-fba-inventory = "merino_amazon_jobs.source_cli:inventory_main"
 merino-amazon-fba-inventory-age = "merino_amazon_jobs.source_cli:inventory_age_main"
 merino-amazon-orders = "merino_amazon_jobs.source_cli:orders_main"
 merino-amazon-brand-analytics = "merino_amazon_jobs.source_cli:brand_analytics_main"
+merino-amazon-customer-feedback = "merino_amazon_jobs.source_cli:customer_feedback_main"
 merino-amazon-ads = "merino_amazon_jobs.source_cli:ads_main"
 
 [tool.setuptools.packages.find]

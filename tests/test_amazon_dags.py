@@ -141,6 +141,19 @@ class AmazonDagTest(unittest.TestCase):
         self.assertIn("merino-amazon-brand-analytics", command)
         self.assertIn("--period WEEK", command)
 
+    def test_customer_feedback_runs_us_weekly_and_accepts_smoke_asins(self) -> None:
+        module = load_dag_module("amazon_customer_feedback")
+
+        command = render(
+            module.CUSTOMER_FEEDBACK_COMMAND,
+            {"asins": ["B000000001", "B000000002"]},
+        )
+
+        self.assertIn("merino-amazon-customer-feedback", command)
+        self.assertIn("--marketplace US", command)
+        self.assertIn('--asin "B000000001"', command)
+        self.assertIn('--asin "B000000002"', command)
+
     def test_ads_renders_fourteen_day_refresh(self) -> None:
         module = load_dag_module("amazon_ads")
 
@@ -193,6 +206,7 @@ class AmazonDagTest(unittest.TestCase):
             "amazon_orders.py": 'schedule="0 10 * * *"',
             "amazon_brand_analytics.py": 'schedule="0 11 * * 1"',
             "amazon_ads.py": 'schedule="0 12 * * *"',
+            "amazon_customer_feedback.py": 'schedule="0 13 * * 1"',
         }
 
         for filename, schedule in expected.items():
@@ -278,7 +292,7 @@ class AmazonKubernetesTest(unittest.TestCase):
 
         self.assertEqual(
             pod["image"],
-            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.8",
+            "us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.9",
         )
         self.assertEqual(pod["namespace"], "airflow")
         self.assertEqual(pod["service_account_name"], "merino-airflow-task-runner")

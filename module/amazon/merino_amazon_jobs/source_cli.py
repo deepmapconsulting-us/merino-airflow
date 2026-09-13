@@ -25,9 +25,15 @@ from merino_amazon_jobs.brand_analytics import (
     raise_if_unauthorized,
 )
 from merino_amazon_jobs.client import (
+    catalog_items_api,
+    customer_feedback_api,
     fba_inventory_api,
     reports_api,
     search_orders_api,
+)
+from merino_amazon_jobs.customer_feedback import (
+    aggregate_brand_feedback,
+    fetch_customer_feedback,
 )
 from merino_amazon_jobs.inventory import (
     FbaInventorySummaries,
@@ -146,6 +152,63 @@ def _orders_main(argv: Sequence[str] | None = None) -> int:
 def brand_analytics_main(argv: Sequence[str] | None = None) -> int:
     with sp_api_job_lock(owner="brand_analytics"):
         return _brand_analytics_main(argv)
+
+
+def customer_feedback_main(argv: Sequence[str] | None = None) -> int:
+    with sp_api_job_lock(owner="customer_feedback"):
+        return _customer_feedback_main(argv)
+
+
+def _customer_feedback_main(argv: Sequence[str] | None = None) -> int:
+    parser = _common_parser("Load weekly Amazon Customer Feedback review topics.")
+    parser.add_argument(
+        "--asin",
+        action="append",
+        help="Fetch only this child ASIN; repeat to smoke-test more than one.",
+    )
+    args = parser.parse_args(argv)
+    if args.marketplace != "US":
+        raise ValueError("Customer Feedback ingestion currently supports US only")
+    marketplace, store = _store(args)
+    asins = sorted(
+        set(args.asin or store.current_listing_asins(marketplace.marketplace_id))
+    )
+    if not asins:
+        raise RuntimeError("no current US listing ASINs found")
+    snapshot_date = args.snapshot_date or _yesterday()
+    run_id = store.start_run(
+        marketplace_id=marketplace.marketplace_id,
+        source_system="sp_api",
+        report_type="CustomerFeedbackApi.get_item_review_topics",
+        period_start=snapshot_date,
+        period_end=snapshot_date,
+        granularity="WEEK",
+    )
+    try:
+        products, topics = fetch_customer_feedback(
+            catalog_items_api(
+                marketplace.region,
+                marketplace.credential_group,
+            ),
+            customer_feedback_api(
+                marketplace.region,
+                marketplace.credential_group,
+            ),
+            asins,
+            marketplace=marketplace.code,
+            marketplace_id=marketplace.marketplace_id,
+        )
+        summaries = aggregate_brand_feedback(products, topics)
+        loaded = store.write_customer_feedback(run_id, topics, summaries)
+        store.finish_run(
+            run_id,
+            source_rows=len(asins),
+            loaded_rows=loaded,
+        )
+    except Exception as error:
+        store.fail_run(run_id, error)
+        raise
+    return 0
 
 
 def _brand_analytics_main(argv: Sequence[str] | None = None) -> int:

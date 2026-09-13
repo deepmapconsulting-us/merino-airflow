@@ -7,6 +7,10 @@ from typing import Any
 
 from merino_amazon_jobs.ads import AdPerformance
 from merino_amazon_jobs.brand_analytics import SearchCatalogPerformance
+from merino_amazon_jobs.customer_feedback import (
+    BrandFeedbackWeekly,
+    ItemReviewTopic,
+)
 from merino_amazon_jobs.inventory import (
     FbaInventoryAgeSnapshot,
     FbaInventorySnapshot,
@@ -37,6 +41,24 @@ FAIL_SOURCE_RUN_SQL = """
 UPDATE amazon.ingestion_run
 SET status = 'failed', error_message = %s, completed_at = now()
 WHERE ingestion_run_id = %s
+"""
+
+CURRENT_LISTING_ASINS_SQL = """
+SELECT DISTINCT listing.asin
+FROM amazon.listing_snapshot listing
+JOIN amazon.seller_account account
+  ON account.seller_account_id = listing.seller_account_id
+WHERE account.account_key = %s
+  AND listing.marketplace_id = %s
+  AND listing.snapshot_date = (
+      SELECT MAX(latest.snapshot_date)
+      FROM amazon.listing_snapshot latest
+      WHERE latest.seller_account_id = listing.seller_account_id
+        AND latest.marketplace_id = listing.marketplace_id
+  )
+  AND listing.asin IS NOT NULL
+  AND (%s IS NULL OR listing.asin = %s)
+ORDER BY listing.asin
 """
 
 LISTING_SQL = """
@@ -227,6 +249,82 @@ ON CONFLICT (
     raw_payload = EXCLUDED.raw_payload, updated_at = now()
 """
 
+UPSERT_PRODUCT_BRAND_SQL = """
+INSERT INTO amazon.brand (brand_key, display_name)
+VALUES (%s, %s)
+ON CONFLICT (brand_key) DO UPDATE SET
+    active = true,
+    updated_at = now()
+RETURNING brand_id
+"""
+
+CUSTOMER_FEEDBACK_ITEM_TOPIC_SQL = """
+INSERT INTO amazon.customer_feedback_item_topic_weekly (
+    ingestion_run_id, seller_account_id, brand_id, marketplace_id,
+    period_start, period_end, asin, item_name, sentiment, topic_rank, topic,
+    number_of_mentions, occurrence_percentage, star_rating_impact,
+    parent_asin_metrics, browse_node_metrics, child_asin_metrics,
+    review_snippets, subtopics, raw_payload
+)
+SELECT %s, seller_account_id, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+       %s, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb, %s::jsonb
+FROM amazon.seller_account WHERE account_key = %s
+ON CONFLICT (
+    seller_account_id, marketplace_id, period_start, period_end, asin,
+    brand_id, sentiment, topic
+) DO UPDATE SET
+    ingestion_run_id = EXCLUDED.ingestion_run_id,
+    item_name = EXCLUDED.item_name,
+    topic_rank = EXCLUDED.topic_rank,
+    number_of_mentions = EXCLUDED.number_of_mentions,
+    occurrence_percentage = EXCLUDED.occurrence_percentage,
+    star_rating_impact = EXCLUDED.star_rating_impact,
+    parent_asin_metrics = EXCLUDED.parent_asin_metrics,
+    browse_node_metrics = EXCLUDED.browse_node_metrics,
+    child_asin_metrics = EXCLUDED.child_asin_metrics,
+    review_snippets = EXCLUDED.review_snippets,
+    subtopics = EXCLUDED.subtopics,
+    raw_payload = EXCLUDED.raw_payload,
+    updated_at = now()
+"""
+
+CUSTOMER_FEEDBACK_BRAND_SQL = """
+INSERT INTO amazon.customer_feedback_brand_weekly (
+    ingestion_run_id, seller_account_id, brand_id, marketplace_id,
+    period_start, period_end, catalog_asin_count, feedback_asin_count,
+    feedback_coverage_percentage, positive_topic_count, negative_topic_count,
+    positive_mention_count, negative_mention_count,
+    average_positive_occurrence_percentage,
+    average_negative_occurrence_percentage,
+    average_positive_star_rating_impact,
+    average_negative_star_rating_impact, raw_payload
+)
+SELECT %s, seller_account_id, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+       %s, %s, %s, %s, %s::jsonb
+FROM amazon.seller_account WHERE account_key = %s
+ON CONFLICT (
+    seller_account_id, marketplace_id, brand_id, period_start, period_end
+) DO UPDATE SET
+    ingestion_run_id = EXCLUDED.ingestion_run_id,
+    catalog_asin_count = EXCLUDED.catalog_asin_count,
+    feedback_asin_count = EXCLUDED.feedback_asin_count,
+    feedback_coverage_percentage = EXCLUDED.feedback_coverage_percentage,
+    positive_topic_count = EXCLUDED.positive_topic_count,
+    negative_topic_count = EXCLUDED.negative_topic_count,
+    positive_mention_count = EXCLUDED.positive_mention_count,
+    negative_mention_count = EXCLUDED.negative_mention_count,
+    average_positive_occurrence_percentage =
+        EXCLUDED.average_positive_occurrence_percentage,
+    average_negative_occurrence_percentage =
+        EXCLUDED.average_negative_occurrence_percentage,
+    average_positive_star_rating_impact =
+        EXCLUDED.average_positive_star_rating_impact,
+    average_negative_star_rating_impact =
+        EXCLUDED.average_negative_star_rating_impact,
+    raw_payload = EXCLUDED.raw_payload,
+    updated_at = now()
+"""
+
 
 class AmazonSourceStore:
     def __init__(self, connection: Any, *, account_key: str) -> None:
@@ -290,6 +388,19 @@ class AmazonSourceStore:
             cursor.execute(FAIL_SOURCE_RUN_SQL, (str(error)[:4000], run_id))
         self.connection.commit()
 
+    def current_listing_asins(
+        self,
+        marketplace_id: str,
+        *,
+        asin: str | None = None,
+    ) -> list[str]:
+        with self.connection.cursor() as cursor:
+            cursor.execute(
+                CURRENT_LISTING_ASINS_SQL,
+                (self.account_key, marketplace_id, asin, asin),
+            )
+            return [str(row[0]) for row in cursor.fetchall()]
+
     def write_listings(self, run_id: int, rows: Iterable[ListingSnapshot]) -> int:
         return self._write(LISTING_SQL, run_id, rows)
 
@@ -308,6 +419,92 @@ class AmazonSourceStore:
 
     def write_ads(self, run_id: int, rows: Iterable[AdPerformance]) -> int:
         return self._write(AD_PERFORMANCE_SQL, run_id, rows)
+
+    def write_customer_feedback(
+        self,
+        run_id: int,
+        topics: Iterable[ItemReviewTopic],
+        summaries: Iterable[BrandFeedbackWeekly],
+    ) -> int:
+        topic_rows = list(topics)
+        summary_rows = list(summaries)
+        brand_names = {
+            row.brand_key: row.brand_name for row in [*topic_rows, *summary_rows]
+        }
+        count = 0
+        try:
+            with self.connection.cursor() as cursor:
+                brand_ids = {}
+                for brand_key, brand_name in brand_names.items():
+                    cursor.execute(
+                        UPSERT_PRODUCT_BRAND_SQL,
+                        (brand_key, brand_name),
+                    )
+                    result = cursor.fetchone()
+                    if result is None:
+                        raise RuntimeError(
+                            f"brand {brand_key!r} could not be configured"
+                        )
+                    brand_ids[brand_key] = int(result[0])
+
+                for row in topic_rows:
+                    cursor.execute(
+                        CUSTOMER_FEEDBACK_ITEM_TOPIC_SQL,
+                        (
+                            run_id,
+                            brand_ids[row.brand_key],
+                            self._marketplace_id(row.marketplace),
+                            row.period_start,
+                            row.period_end,
+                            row.asin,
+                            row.item_name,
+                            row.sentiment,
+                            row.topic_rank,
+                            row.topic,
+                            row.number_of_mentions,
+                            row.occurrence_percentage,
+                            row.star_rating_impact,
+                            self._json(row.parent_asin_metrics),
+                            self._json(row.browse_node_metrics),
+                            self._json(row.child_asin_metrics),
+                            self._json(row.review_snippets),
+                            self._json(row.subtopics),
+                            self._json(row.raw),
+                            self.account_key,
+                        ),
+                    )
+                    count += 1
+
+                for row in summary_rows:
+                    cursor.execute(
+                        CUSTOMER_FEEDBACK_BRAND_SQL,
+                        (
+                            run_id,
+                            brand_ids[row.brand_key],
+                            self._marketplace_id(row.marketplace),
+                            row.period_start,
+                            row.period_end,
+                            row.catalog_asin_count,
+                            row.feedback_asin_count,
+                            row.feedback_coverage_percentage,
+                            row.positive_topic_count,
+                            row.negative_topic_count,
+                            row.positive_mention_count,
+                            row.negative_mention_count,
+                            row.average_positive_occurrence_percentage,
+                            row.average_negative_occurrence_percentage,
+                            row.average_positive_star_rating_impact,
+                            row.average_negative_star_rating_impact,
+                            self._json(row.raw),
+                            self.account_key,
+                        ),
+                    )
+                    count += 1
+        except Exception:
+            self.connection.rollback()
+            raise
+        self.connection.commit()
+        return count
 
     def write_orders(
         self,
@@ -373,3 +570,15 @@ class AmazonSourceStore:
             values[0] = MARKETPLACES[values[0]].marketplace_id
         values[-1] = json.dumps(values[-1], separators=(",", ":"), default=str)
         return tuple(values)
+
+    @staticmethod
+    def _marketplace_id(marketplace: str) -> str:
+        return (
+            MARKETPLACES[marketplace].marketplace_id
+            if marketplace in MARKETPLACES
+            else marketplace
+        )
+
+    @staticmethod
+    def _json(value: Any) -> str:
+        return json.dumps(value, separators=(",", ":"), default=str)

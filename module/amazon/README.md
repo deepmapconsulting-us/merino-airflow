@@ -8,7 +8,7 @@ writes.
 Production image:
 
 ```text
-us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.8
+us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.9
 ```
 
 Build and push from the merino repo root. The tag defaults to
@@ -17,7 +17,7 @@ Build and push from the merino repo root. The tag defaults to
 ```bash
 bash scripts/deployment/docker-build-amazon-jobs.sh
 bash scripts/deployment/docker-build-amazon-jobs.sh --no-push
-bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.8
+bash scripts/deployment/docker-build-amazon-jobs.sh 0.1.9
 ```
 
 After a tag bump, point `AMAZON_IMAGE` in `jobs/airflow/dags/amazon_k8s.py` at
@@ -81,10 +81,12 @@ account key, seller ID, brand key, and brand name.
 - `amazon_ads`: daily at 12:00 UTC; refreshes the latest 14 complete days.
   It considers all five marketplaces and skips any marketplace without its own
   configured Ads profile; profiles are never reused across marketplaces.
+- `amazon_customer_feedback`: Mondays at 13:00 UTC; loads US child-ASIN review
+  topics and product-brand aggregates. Amazon refreshes this API weekly.
 
 All DAGs use `max_active_runs=1`, retry failed pods twice, and disable catchup.
-The four SP-API DAGs (`amazon_sales_traffic`, `amazon_inventory`,
-`amazon_orders`, `amazon_brand_analytics`) also share Airflow pool
+The five SP-API DAGs (`amazon_sales_traffic`, `amazon_inventory`,
+`amazon_orders`, `amazon_brand_analytics`, `amazon_customer_feedback`) share Airflow pool
 `amazon_sp_api` (1 slot) and a Redis job lock so they cannot all call
 `createReport` at once. Amazon Ads does not use that pool.
 
@@ -108,6 +110,9 @@ Sales & Traffic also accepts `overwrite`.
 
 Inventory accepts `end` or `snapshot_date` for the snapshot date and
 `marketplaces` to select a subset of US, CA, MX, BR, and AU.
+Customer Feedback is US-only and accepts `asins` as a string or JSON list for
+targeted smoke tests. Full runs use child ASINs from the latest US listing
+snapshot. Access requires Brand Analytics or Selling Partner Insights.
 
 ## Console entrypoints
 
@@ -121,5 +126,6 @@ merino-amazon-fba-inventory
 merino-amazon-fba-inventory-age
 merino-amazon-orders
 merino-amazon-brand-analytics
+merino-amazon-customer-feedback
 merino-amazon-ads
 ```

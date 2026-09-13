@@ -100,7 +100,7 @@ This keeps responsibilities clear:
 
 ## Amazon Job Pattern
 
-The Amazon image exposes source-specific entrypoints and is launched by five
+The Amazon image exposes source-specific entrypoints and is launched by six
 thin production DAGs:
 
 ```text
@@ -109,12 +109,13 @@ amazon_inventory        Daily listings -> FBA inventory -> inventory age
 amazon_orders           Daily Orders API 2026 overlap refresh
 amazon_brand_analytics  Weekly previous complete Sunday-Saturday
 amazon_ads              Daily attribution-window refresh
+amazon_customer_feedback Weekly US child-ASIN review topics by product brand
 ```
 
 Shared pod configuration is in `dags/amazon_k8s.py`. It injects the
 `merino_analytics` Airflow connection, SP-API Variables, seller identity, and
 optional Amazon Ads Variables into
-`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.8`.
+`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.9`.
 Seller identity Variables are required. Amazon Ads profile Variables are
 marketplace-scoped so a profile cannot be reused for another country.
 Credentials remain environment values and are not included in task commands.
@@ -123,6 +124,6 @@ SP-API credentials use `sp_api_na_refresh_token` for US, CA, MX, and BR, and
 Amazon's official FE endpoint region.
 SP-API pods take Airflow pool `amazon_sp_api` (1 slot), wrap the command with
 `merino-amazon-with-lock`, and pace `createReport` through MCP Redis so the
-four SP-API DAGs cannot exhaust the shared Reports quota at once. Amazon Ads
+five SP-API DAGs cannot exhaust the shared quota at once. Amazon Ads
 skips that lock. The inventory DAG records current observed snapshots against the
 `data_interval_end` calendar date.
