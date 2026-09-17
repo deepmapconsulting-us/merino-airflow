@@ -22,7 +22,7 @@ OpenAI credentials are configured server-side on media-analysis-mcp (``OPENAI_AP
 
 | Env | Default |
 |-----|---------|
-| ``FACEBOOK_ACTIVE_ACCOUNTS`` | all accounts in snapshot |
+| ``facebook_active_accounts`` / ``FACEBOOK_ACTIVE_ACCOUNTS`` | all accounts in snapshot |
 | ``FACEBOOK_TRAFFIC_LOOKUP_WINDOWS`` | ``3`` days |
 | ``TEST_VIDEO_SAMPLE_SEC`` | ``3`` (``get_video_frame_in_sec``) |
 | ``TEST_SPLIT_FRAME_BY_SEC`` | ``1`` (``split_frame_by_sec``) |
@@ -63,6 +63,7 @@ from meta_gcs import (
     report_partition_datetime,
     resolve_logical_date_from_context,
     env_config_value,
+    variable_get,
 )
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "module" / "meta"
@@ -654,7 +655,10 @@ def _campaign_config_for_display() -> dict[str, Any]:
         lookup_window_days = int(
             env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
         )
-        active_accounts = env_config_value(ACTIVE_ACCOUNTS_ENV)
+        active_accounts = (
+            variable_get("facebook_active_accounts").strip()
+            or env_config_value(ACTIVE_ACCOUNTS_ENV)
+        )
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookup_window_days)
         accounts = traffic_accounts_from_config(
             snapshot,

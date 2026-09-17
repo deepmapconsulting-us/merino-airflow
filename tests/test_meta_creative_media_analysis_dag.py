@@ -22,6 +22,12 @@ class MetaCreativeMediaAnalysisDagTest(unittest.TestCase):
         self.assertIn("upsert_creative_media_preview(", source)
         self.assertIn("linked cached analysis media preview", source)
 
+    def test_active_accounts_prefers_airflow_variable(self) -> None:
+        dag_path = Path(__file__).resolve().parents[1] / "dags" / "meta_creative_media_analysis.py"
+        source = dag_path.read_text(encoding="utf-8")
+
+        self.assertIn('variable_get("facebook_active_accounts").strip()', source)
+
 
 if __name__ == "__main__":
     unittest.main()
