@@ -84,6 +84,7 @@ from merino_meta_jobs.media_analysis import (  # noqa: E402  # type: ignore[impo
     translate_creative_media_analysis_to_chinese,
     update_chinese_creative_media_analysis_snapshot,
     upsert_creative_media_analysis,
+    upsert_creative_media_preview,
     video_gcs_uri_from_download,
 )
 from merino_meta_jobs.traffic import (  # noqa: E402  # type: ignore[import-not-found]
@@ -278,9 +279,23 @@ def meta_creative_media_analysis():
                 continue
             target_audio_analysis = False if media_type == "image" else run_config["audio_analysis"]
             target_key = image_asset_id if media_type == "image" else video_id
+            if media_type == "image":
+                gcs_uri = image_gcs_uri_from_download(
+                    download_payload,
+                    ad_id=ad_id,
+                    image_asset_id=image_asset_id,
+                )
+            else:
+                gcs_uri = video_gcs_uri_from_download(
+                    download_payload,
+                    ad_id=ad_id,
+                    video_id=video_id,
+                )
+            preview_url = build_video_preview_url(gcs_uri) if gcs_uri else None
             if not run_config["analysis_force_refresh"]:
                 hook = PostgresHook(postgres_conn_id=POSTGRES_CONN_ID)
                 conn = hook.get_conn()
+                preview_snapshot_id = None
                 try:
                     already_processed = creative_media_analysis_target_already_processed(
                         conn,
@@ -292,12 +307,30 @@ def meta_creative_media_analysis():
                         audio_analysis=target_audio_analysis,
                         media_config=ad_config,
                     )
+                    if already_processed and gcs_uri and preview_url:
+                        preview_snapshot_id = upsert_creative_media_preview(
+                            conn,
+                            campaign_id=campaign_id,
+                            adset_id=adset_id,
+                            ad_id=ad_id,
+                            creative_id=target_creative_id,
+                            media_type=media_type,
+                            video_id=video_id,
+                            image_asset_id=image_asset_id,
+                            gcs_uri=gcs_uri,
+                            preview_url=preview_url,
+                        )
+                        conn.commit()
+                except Exception:
+                    conn.rollback()
+                    raise
                 finally:
                     conn.close()
                 if already_processed:
                     print(
-                        f"{DAG_ID}: skipping ad_id={ad_id} media_type={media_type} "
-                        f"key={target_key}: analysis_redis_cache_ready"
+                        f"{DAG_ID}: linked cached analysis media preview ad_id={ad_id} "
+                        f"media_type={media_type} key={target_key} "
+                        f"snapshot_id={preview_snapshot_id}; skipping OpenAI analysis"
                     )
                     results.append(
                         {
@@ -306,6 +339,7 @@ def meta_creative_media_analysis():
                             "image_asset_id": image_asset_id,
                             "already_processed": True,
                             "from_cache": True,
+                            "snapshot_id": preview_snapshot_id,
                         }
                     )
                     continue
@@ -340,19 +374,6 @@ def meta_creative_media_analysis():
                     }
                 )
                 continue
-            if media_type == "image":
-                gcs_uri = image_gcs_uri_from_download(
-                    download_payload,
-                    ad_id=ad_id,
-                    image_asset_id=image_asset_id,
-                )
-            else:
-                gcs_uri = video_gcs_uri_from_download(
-                    download_payload,
-                    ad_id=ad_id,
-                    video_id=video_id,
-                )
-            preview_url = build_video_preview_url(gcs_uri) if gcs_uri else None
             from_cache = bool(analysis.get("from_cache"))
 
             if from_cache:

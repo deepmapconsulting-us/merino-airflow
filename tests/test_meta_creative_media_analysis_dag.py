@@ -15,6 +15,13 @@ class MetaCreativeMediaAnalysisDagTest(unittest.TestCase):
         self.assertNotIn('task_id=f"analyze_ad_{ad_task_id}"', source)
         self.assertNotIn("downloaded >> analyzed", source)
 
+    def test_cached_analysis_still_updates_missing_media_preview(self) -> None:
+        dag_path = Path(__file__).resolve().parents[1] / "dags" / "meta_creative_media_analysis.py"
+        source = dag_path.read_text(encoding="utf-8")
+
+        self.assertIn("upsert_creative_media_preview(", source)
+        self.assertIn("linked cached analysis media preview", source)
+
 
 if __name__ == "__main__":
     unittest.main()
