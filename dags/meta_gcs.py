@@ -23,7 +23,12 @@ def variable_get(key: str, fallback: str = "") -> str:
     try:
         return str(Variable.get(key))
     except Exception:
-        return fallback
+        try:
+            from airflow.models import Variable as DatabaseVariable  # type: ignore[import-not-found]
+
+            return str(DatabaseVariable.get(key))
+        except Exception:
+            return fallback
 
 
 def env_config_value(name: str, default: str = "") -> str:
