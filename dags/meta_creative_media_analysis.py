@@ -104,19 +104,29 @@ FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
 DOWNLOAD_FORCE_REFRESH_ENV = "MEDIA_ANALYSIS_FORCE_REFRESH"
 ANALYSIS_FORCE_REFRESH_ENV = "MEDIA_ANALYSIS_ANALYSIS_FORCE_REFRESH"
 SAVE_TO_GCS_ENV = "MEDIA_ANALYSIS_SAVE_TO_GCS"
-DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
-ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
-SAVE_TO_GCS_VARIABLE = "media_analysis_save_to_gcs"
 LOG_GENERATION_INPUT_ENV = "META_CREATIVE_MEDIA_ANALYSIS_LOG_GENERATION_INPUT"
-LOG_GENERATION_INPUT_VARIABLE = "meta_creative_media_analysis_log_generation_input"
 MAX_ACTIVE_TASKS_ENV = "MEDIA_ANALYSIS_MAX_ACTIVE_TASKS"
 DEFAULT_MAX_ACTIVE_TASKS = 8
 DEFAULT_MAX_FRAMES = 20
 POSTGRES_CONN_ID = "merino_analytics"
 
 
+def _dag_setting(name: str, default: str = "") -> str:
+    return (
+        env_config_value(name).strip()
+        or variable_get(name).strip()
+        or variable_get(name.lower()).strip()
+        or default
+    )
+
+
+def _bool_setting(name: str, default: bool) -> bool:
+    raw = _dag_setting(name, "true" if default else "false").lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
 def _max_active_tasks() -> int:
-    raw = env_config_value(MAX_ACTIVE_TASKS_ENV, str(DEFAULT_MAX_ACTIVE_TASKS)).strip()
+    raw = _dag_setting(MAX_ACTIVE_TASKS_ENV, str(DEFAULT_MAX_ACTIVE_TASKS))
     try:
         value = int(raw)
     except ValueError:
@@ -613,45 +623,17 @@ def meta_creative_media_analysis():
 
 def _dag_run_params() -> dict[str, Any]:
     return {
-        "get_video_frame_in_sec": int(
-            env_config_value(SAMPLE_SEC_ENV, "3")
-        ),
-        "split_frame_by_sec": float(
-            env_config_value(FRAME_INTERVAL_ENV, "1")
-        ),
-        "download_force_refresh": _bool_config(
-            DOWNLOAD_FORCE_REFRESH_VARIABLE,
-            DOWNLOAD_FORCE_REFRESH_ENV,
-            False,
-        ),
-        "analysis_force_refresh": _bool_config(
-            ANALYSIS_FORCE_REFRESH_VARIABLE,
-            ANALYSIS_FORCE_REFRESH_ENV,
-            False,
-        ),
-        "save_to_gcs": _bool_config(
-            SAVE_TO_GCS_VARIABLE,
-            SAVE_TO_GCS_ENV,
-            True,
-        ),
+        "get_video_frame_in_sec": int(_dag_setting(SAMPLE_SEC_ENV, "3")),
+        "split_frame_by_sec": float(_dag_setting(FRAME_INTERVAL_ENV, "1")),
+        "download_force_refresh": _bool_setting(DOWNLOAD_FORCE_REFRESH_ENV, False),
+        "analysis_force_refresh": _bool_setting(ANALYSIS_FORCE_REFRESH_ENV, False),
+        "save_to_gcs": _bool_setting(SAVE_TO_GCS_ENV, True),
         "bucket_location": "meta_analysis",
         "max_frames": DEFAULT_MAX_FRAMES,
         "audio_analysis": True,
-        "log_generation_input": _bool_config(
-            LOG_GENERATION_INPUT_VARIABLE,
-            LOG_GENERATION_INPUT_ENV,
-            False,
-        ),
+        "log_generation_input": _bool_setting(LOG_GENERATION_INPUT_ENV, False),
         "media_analysis_config_by_ad": media_analysis_config_by_ad(),
     }
-
-
-def _bool_config(variable_name: str, env_name: str, default: bool) -> bool:
-    raw = (
-        variable_get(variable_name).strip()
-        or env_config_value(env_name, "true" if default else "false").strip()
-    ).lower()
-    return raw in {"1", "true", "yes", "on"}
 
 
 def _campaign_config_for_display() -> dict[str, Any]:
@@ -676,12 +658,9 @@ def _campaign_config_for_display() -> dict[str, Any]:
         snapshot_uri = str(pointer["final_output"])
         snapshot = read_json_from_gcs(storage_client, snapshot_uri)
         lookup_window_days = int(
-            env_config_value(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
+            _dag_setting(LOOKUP_WINDOW_ENV, str(DEFAULT_TRAFFIC_LOOKUP_WINDOW_DAYS))
         )
-        active_accounts = (
-            variable_get("facebook_active_accounts").strip()
-            or env_config_value(ACTIVE_ACCOUNTS_ENV)
-        )
+        active_accounts = _dag_setting(ACTIVE_ACCOUNTS_ENV)
         cutoff = datetime.now(timezone.utc) - timedelta(days=lookup_window_days)
         accounts = traffic_accounts_from_config(
             snapshot,
