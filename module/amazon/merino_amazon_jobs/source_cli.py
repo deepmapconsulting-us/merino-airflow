@@ -237,7 +237,7 @@ def _brand_analytics_main(argv: Sequence[str] | None = None) -> int:
                     args.start_date, time.min, ZoneInfo("UTC")
                 ),
                 end_time=datetime.combine(
-                    args.end_date, time.max, ZoneInfo("UTC")
+                    args.end_date, time.min, ZoneInfo("UTC")
                 ),
                 report_options={"reportPeriod": args.period},
             )

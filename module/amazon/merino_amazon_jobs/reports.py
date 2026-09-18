@@ -122,14 +122,36 @@ class SalesTrafficReports:
                     )
                 return report
             if status in FINISHED_STATUSES:
+                message = f"report {report_id} ended with status {status}"
+                if report.report_document_id:
+                    details = self._report_error_details(report.report_document_id)
+                    if details:
+                        message = f"{message}: {details}"
                 raise ReportFailed(
-                    f"report {report_id} ended with status {status}",
+                    message,
                     status=status,
                 )
             self.sleep(self.poll_seconds)
         raise TimeoutError(
             f"report {report_id} did not complete after {self.max_polls} polls"
         )
+
+    def _report_error_details(self, report_document_id: str) -> str | None:
+        try:
+            document = self._call(
+                self.api.get_report_document,
+                report_document_id,
+            )
+            response = self.session.get(document.url, timeout=(10, 120))
+            response.raise_for_status()
+            content = response.content
+            if (document.compression_algorithm or "").upper() == "GZIP":
+                content = gzip.decompress(content)
+            payload = json.loads(content.decode("utf-8-sig"))
+            details = payload.get("errorDetails")
+            return str(details) if details else None
+        except Exception:
+            return None
 
     def _call(self, method: Callable[..., Any], *args: Any) -> Any:
         for attempt in range(self.api_attempts):

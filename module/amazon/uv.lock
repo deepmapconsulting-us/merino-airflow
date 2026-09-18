@@ -208,7 +208,7 @@ wheels = [
 
 [[package]]
 name = "merino-amazon-jobs"
-version = "0.1.11"
+version = "0.1.12"
 source = { editable = "." }
 dependencies = [
     { name = "amzn-sp-api" },

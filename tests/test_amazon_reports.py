@@ -62,3 +62,29 @@ def test_fatal_report_still_fails_when_cancelled_is_empty() -> None:
             marketplace_id="A1AM78C64UM0Y8",
             cancelled_as_empty=True,
         )
+
+
+def test_fatal_report_includes_amazon_error_document() -> None:
+    api = MagicMock()
+    api.create_report.return_value = SimpleNamespace(report_id="report-1")
+    api.get_report.return_value = SimpleNamespace(
+        processing_status="FATAL",
+        report_document_id="document-1",
+    )
+    api.get_report_document.return_value = SimpleNamespace(
+        url="https://example.test/report",
+        compression_algorithm=None,
+    )
+    session = MagicMock()
+    session.get.return_value.content = (
+        b'{"errorDetails":"dataEndTime must be a Saturday when reportPeriod=WEEK"}'
+    )
+
+    with (
+        patch("merino_amazon_jobs.reports.wait_for_create_report"),
+        pytest.raises(ReportFailed, match="dataEndTime must be a Saturday"),
+    ):
+        SpApiReports(api, session=session, poll_seconds=0).download(
+            report_type="GET_BRAND_ANALYTICS_SEARCH_CATALOG_PERFORMANCE_REPORT",
+            marketplace_id="ATVPDKIKX0DER",
+        )
