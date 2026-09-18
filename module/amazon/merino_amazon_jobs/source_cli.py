@@ -234,10 +234,10 @@ def _brand_analytics_main(argv: Sequence[str] | None = None) -> int:
                 report_type=BRAND_REPORT_TYPE,
                 marketplace_id=marketplace.marketplace_id,
                 start_time=datetime.combine(
-                    args.start_date, time.min, ZoneInfo(marketplace.timezone)
+                    args.start_date, time.min, ZoneInfo("UTC")
                 ),
                 end_time=datetime.combine(
-                    args.end_date, time.max, ZoneInfo(marketplace.timezone)
+                    args.end_date, time.max, ZoneInfo("UTC")
                 ),
                 report_options={"reportPeriod": args.period},
             )
