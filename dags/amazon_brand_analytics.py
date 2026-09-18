@@ -17,7 +17,7 @@ set -euo pipefail
   data_interval_end if data_interval_end is defined and data_interval_end is not none
   else (logical_date if logical_date is defined and logical_date is not none else dag_run.run_after)
 ) -%}
-{% set current_week_start = interval_end.start_of("week") -%}
+{% set current_week_start = interval_end - macros.timedelta(days=interval_end.weekday()) -%}
 {% set requested_marketplaces = conf.get("marketplaces", ["US", "CA", "MX", "BR", "AU"]) -%}
 START_DATE="{{ conf.get("start") or (current_week_start - macros.timedelta(days=8)).strftime("%Y-%m-%d") }}"
 END_DATE="{{ conf.get("end") or (current_week_start - macros.timedelta(days=2)).strftime("%Y-%m-%d") }}"

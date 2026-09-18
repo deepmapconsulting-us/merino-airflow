@@ -4,7 +4,7 @@ import importlib.util
 import sys
 import types
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -45,14 +45,19 @@ def load_dag_module(name: str):
     return module
 
 
-def render(command: str, conf: dict[str, object] | None = None) -> str:
+def render(
+    command: str,
+    conf: dict[str, object] | None = None,
+    *,
+    run_after: datetime | None = None,
+) -> str:
     environment = jinja2.Environment(undefined=jinja2.StrictUndefined)
     environment.globals["macros"] = SimpleNamespace(timedelta=timedelta)
     template = environment.from_string(command)
     return template.render(
         dag_run=SimpleNamespace(
             conf=conf or {},
-            run_after=pendulum.datetime(2026, 8, 13, 9, 0, tz="UTC"),
+            run_after=run_after or pendulum.datetime(2026, 8, 13, 9, 0, tz="UTC"),
         )
     )
 
@@ -140,6 +145,17 @@ class AmazonDagTest(unittest.TestCase):
         self.assertIn('END_DATE="2026-08-08"', command)
         self.assertIn("merino-amazon-brand-analytics", command)
         self.assertIn("--period WEEK", command)
+
+    def test_brand_analytics_accepts_airflow_standard_datetime(self) -> None:
+        module = load_dag_module("amazon_brand_analytics")
+
+        command = render(
+            module.BRAND_ANALYTICS_COMMAND,
+            run_after=datetime(2026, 9, 18, 18, 26, tzinfo=timezone.utc),
+        )
+
+        self.assertIn('START_DATE="2026-09-06"', command)
+        self.assertIn('END_DATE="2026-09-12"', command)
 
     def test_customer_feedback_runs_us_weekly_and_accepts_smoke_asins(self) -> None:
         module = load_dag_module("amazon_customer_feedback")
