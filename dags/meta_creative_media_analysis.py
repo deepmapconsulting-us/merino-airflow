@@ -104,7 +104,11 @@ FRAME_INTERVAL_ENV = "TEST_SPLIT_FRAME_BY_SEC"
 DOWNLOAD_FORCE_REFRESH_ENV = "MEDIA_ANALYSIS_FORCE_REFRESH"
 ANALYSIS_FORCE_REFRESH_ENV = "MEDIA_ANALYSIS_ANALYSIS_FORCE_REFRESH"
 SAVE_TO_GCS_ENV = "MEDIA_ANALYSIS_SAVE_TO_GCS"
+DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"
+ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"
+SAVE_TO_GCS_VARIABLE = "media_analysis_save_to_gcs"
 LOG_GENERATION_INPUT_ENV = "META_CREATIVE_MEDIA_ANALYSIS_LOG_GENERATION_INPUT"
+LOG_GENERATION_INPUT_VARIABLE = "meta_creative_media_analysis_log_generation_input"
 MAX_ACTIVE_TASKS_ENV = "MEDIA_ANALYSIS_MAX_ACTIVE_TASKS"
 DEFAULT_MAX_ACTIVE_TASKS = 8
 DEFAULT_MAX_FRAMES = 20
@@ -615,19 +619,38 @@ def _dag_run_params() -> dict[str, Any]:
         "split_frame_by_sec": float(
             env_config_value(FRAME_INTERVAL_ENV, "1")
         ),
-        "download_force_refresh": _bool_env(DOWNLOAD_FORCE_REFRESH_ENV, False),
-        "analysis_force_refresh": _bool_env(ANALYSIS_FORCE_REFRESH_ENV, False),
-        "save_to_gcs": _bool_env(SAVE_TO_GCS_ENV, True),
+        "download_force_refresh": _bool_config(
+            DOWNLOAD_FORCE_REFRESH_VARIABLE,
+            DOWNLOAD_FORCE_REFRESH_ENV,
+            False,
+        ),
+        "analysis_force_refresh": _bool_config(
+            ANALYSIS_FORCE_REFRESH_VARIABLE,
+            ANALYSIS_FORCE_REFRESH_ENV,
+            False,
+        ),
+        "save_to_gcs": _bool_config(
+            SAVE_TO_GCS_VARIABLE,
+            SAVE_TO_GCS_ENV,
+            True,
+        ),
         "bucket_location": "meta_analysis",
         "max_frames": DEFAULT_MAX_FRAMES,
         "audio_analysis": True,
-        "log_generation_input": _bool_env(LOG_GENERATION_INPUT_ENV, False),
+        "log_generation_input": _bool_config(
+            LOG_GENERATION_INPUT_VARIABLE,
+            LOG_GENERATION_INPUT_ENV,
+            False,
+        ),
         "media_analysis_config_by_ad": media_analysis_config_by_ad(),
     }
 
 
-def _bool_env(name: str, default: bool) -> bool:
-    raw = env_config_value(name, "true" if default else "false").strip().lower()
+def _bool_config(variable_name: str, env_name: str, default: bool) -> bool:
+    raw = (
+        variable_get(variable_name).strip()
+        or env_config_value(env_name, "true" if default else "false").strip()
+    ).lower()
     return raw in {"1", "true", "yes", "on"}
 
 

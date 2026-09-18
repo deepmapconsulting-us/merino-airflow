@@ -28,6 +28,17 @@ class MetaCreativeMediaAnalysisDagTest(unittest.TestCase):
 
         self.assertIn('variable_get("facebook_active_accounts").strip()', source)
 
+    def test_media_refresh_flags_prefer_airflow_variables(self) -> None:
+        dag_path = Path(__file__).resolve().parents[1] / "dags" / "meta_creative_media_analysis.py"
+        source = dag_path.read_text(encoding="utf-8")
+
+        self.assertIn('DOWNLOAD_FORCE_REFRESH_VARIABLE = "media_analysis_force_refresh"', source)
+        self.assertIn(
+            'ANALYSIS_FORCE_REFRESH_VARIABLE = "media_analysis_analysis_force_refresh"',
+            source,
+        )
+        self.assertIn("variable_get(variable_name).strip()", source)
+
 
 if __name__ == "__main__":
     unittest.main()
