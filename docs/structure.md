@@ -115,7 +115,7 @@ amazon_customer_feedback Weekly US child-ASIN review topics by product brand
 Shared pod configuration is in `dags/amazon_k8s.py`. It injects the
 `merino_analytics` Airflow connection, SP-API Variables, seller identity, and
 optional Amazon Ads Variables into
-`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.10`.
+`us-west2-docker.pkg.dev/merino-agent/merino/merino-amazon-jobs:0.1.11`.
 Seller identity Variables are required. Amazon Ads profile Variables are
 marketplace-scoped so a profile cannot be reused for another country.
 Credentials remain environment values and are not included in task commands.
