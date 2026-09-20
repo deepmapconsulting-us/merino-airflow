@@ -19,6 +19,11 @@ def load_dag_module():
     mock_k8s = types.ModuleType("shopify_k8s")
     mock_k8s.shopify_import_pod = lambda **kwargs: None
     sys.modules["shopify_k8s"] = mock_k8s
+    mock_airflow = types.ModuleType("airflow")
+    mock_airflow_sdk = types.ModuleType("airflow.sdk")
+    mock_airflow_sdk.dag = lambda **_kwargs: lambda fn: fn
+    sys.modules["airflow"] = mock_airflow
+    sys.modules["airflow.sdk"] = mock_airflow_sdk
 
     spec = importlib.util.spec_from_file_location(
         "shopify_import_dag_for_test",
@@ -100,3 +105,14 @@ class ShopifyImportDagTest(unittest.TestCase):
         source = dag_path.read_text(encoding="utf-8")
         self.assertIn('schedule="0 */6 * * *"', source)
         self.assertIn("max_active_runs=1", source)
+
+    def test_pod_uses_client_credentials_without_browser_auth_config(self) -> None:
+        pod_path = REPO / "airflow" / "dags" / "shopify_k8s.py"
+        source = pod_path.read_text(encoding="utf-8")
+
+        self.assertIn('name="SHOPIFY_CLIENT_ID"', source)
+        self.assertIn('name="SHOPIFY_CLIENT_SECRET"', source)
+        self.assertIn('SHOPIFY_CREDENTIALS_SECRET = "shopify-client-credentials"', source)
+        self.assertIn("name=SHOPIFY_CREDENTIALS_SECRET", source)
+        self.assertNotIn("SHOPIFY_AUTH_INIT_CONTAINER", source)
+        self.assertNotIn("shopify-cli-store-auth", source)

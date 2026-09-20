@@ -15,9 +15,9 @@ Prerequisites:
 
 - Airflow connection ``merino_analytics`` (GSM: ``airflow-connections-merino_analytics``)
 - Airflow Variable ``google_geocoding_api_key`` (GSM: ``airflow-variables-google_geocoding_api_key``)
-- Kubernetes secret ``shopify-cli-store-auth`` in namespace ``airflow``::
+- Kubernetes secret ``shopify-client-credentials`` in namespace ``airflow``::
 
-    SHOPIFY_CLI_AUTH_NAMESPACES=airflow bash terraform/scripts/sync-shopify-cli-auth-secret.sh
+    SHOPIFY_CREDENTIAL_NAMESPACES=airflow bash terraform/scripts/sync-shopify-client-credentials-secret.sh
 
 Manual backfill (Trigger DAG w/ config):
 
