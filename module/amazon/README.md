@@ -76,7 +76,7 @@ account key, seller ID, brand key, and brand name.
   use the run's `data_interval_end` calendar date.
 - `amazon_orders`: daily at 10:00 UTC; reloads Orders API 2026 data with a
   three-day overlap.
-- `amazon_brand_analytics`: Mondays at 11:00 UTC; loads the previous complete
+- `amazon_brand_analytics`: Tuesdays at 11:00 UTC; loads the previous complete
   Sunday-Saturday week.
 - `amazon_ads`: daily at 12:00 UTC; refreshes the latest 14 complete days.
   It considers all five marketplaces and skips any marketplace without its own

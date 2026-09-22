@@ -39,7 +39,7 @@ done
 
 @dag(
     dag_id=DAG_ID,
-    schedule="0 11 * * 1",
+    schedule="0 11 * * 2",
     start_date=pendulum.datetime(2026, 1, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,

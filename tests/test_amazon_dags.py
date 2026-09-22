@@ -220,7 +220,7 @@ class AmazonDagTest(unittest.TestCase):
             "amazon_sales_traffic.py": 'schedule="0 8 * * *"',
             "amazon_inventory.py": 'schedule="0 9 * * *"',
             "amazon_orders.py": 'schedule="0 10 * * *"',
-            "amazon_brand_analytics.py": 'schedule="0 11 * * 1"',
+            "amazon_brand_analytics.py": 'schedule="0 11 * * 2"',
             "amazon_ads.py": 'schedule="0 12 * * *"',
             "amazon_customer_feedback.py": 'schedule="0 13 * * 1"',
         }
