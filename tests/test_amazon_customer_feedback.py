@@ -301,6 +301,45 @@ def test_fetch_customer_feedback_joins_catalog_brand_and_skips_204() -> None:
     )
 
 
+def test_fetch_customer_feedback_skips_catalog_items_missing_from_marketplace() -> None:
+    missing = RuntimeError("catalog item not found")
+    missing.status = 404  # type: ignore[attr-defined]
+    catalog_api = MagicMock()
+    catalog_api.get_catalog_item.side_effect = [
+        missing,
+        {
+            "asin": "B000000002",
+            "summaries": [
+                {
+                    "marketplaceId": "ATVPDKIKX0DER",
+                    "brandName": "GIAGIO",
+                    "itemName": "Available item",
+                }
+            ],
+        },
+    ]
+    feedback_api = MagicMock()
+    feedback_api.get_item_review_topics_with_http_info = None
+    feedback_api.get_item_review_topics.return_value = SimpleNamespace(status=204)
+
+    products, topics = fetch_customer_feedback(
+        catalog_api,
+        feedback_api,
+        ["B000000001", "B000000002"],
+        marketplace="US",
+        marketplace_id="ATVPDKIKX0DER",
+        sleep=lambda _seconds: None,
+    )
+
+    assert [product.asin for product in products] == ["B000000002"]
+    assert topics == []
+    feedback_api.get_item_review_topics.assert_called_once_with(
+        "B000000002",
+        "ATVPDKIKX0DER",
+        "MENTIONS",
+    )
+
+
 class FakeCursor:
     def __init__(self) -> None:
         self.executions: list[tuple[str, tuple[object, ...]]] = []

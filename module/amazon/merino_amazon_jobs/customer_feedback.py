@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import time
 import unicodedata
@@ -11,6 +12,7 @@ from decimal import Decimal
 from typing import Any
 
 CUSTOMER_FEEDBACK_INTERVAL_SECONDS = 1.05
+logger = logging.getLogger(__name__)
 
 
 class CustomerFeedbackAccessDenied(RuntimeError):
@@ -272,11 +274,21 @@ def fetch_customer_feedback(
     products = []
     topics = []
     for asin in asins:
-        catalog_response = catalog_api.get_catalog_item(
-            asin,
-            [marketplace_id],
-            included_data=["attributes", "summaries"],
-        )
+        try:
+            catalog_response = catalog_api.get_catalog_item(
+                asin,
+                [marketplace_id],
+                included_data=["attributes", "summaries"],
+            )
+        except Exception as error:
+            if getattr(error, "status", None) != 404:
+                raise
+            logger.warning(
+                "catalog item unavailable; skipping asin=%s marketplace_id=%s",
+                asin,
+                marketplace_id,
+            )
+            continue
         product = catalog_product(
             _mapping(catalog_response) or {},
             marketplace=marketplace,
